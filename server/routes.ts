@@ -2,14 +2,30 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema } from "@shared/schema";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  // Client Routes
-  app.get("/api/clients", async (_req, res) => {
+  // Setup authentication
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Client Routes (protected)
+  app.get("/api/clients", isAuthenticated, async (_req, res) => {
     try {
       const clients = await storage.getAllClients();
       res.json(clients);
@@ -18,7 +34,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clients/:id", async (req, res) => {
+  app.get("/api/clients/:id", isAuthenticated, async (req, res) => {
     try {
       const client = await storage.getClient(req.params.id);
       if (!client) {
@@ -30,7 +46,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients", async (req, res) => {
+  app.post("/api/clients", isAuthenticated, async (req, res) => {
     try {
       const validated = insertClientSchema.parse(req.body);
       const client = await storage.createClient(validated);
@@ -50,8 +66,8 @@ export async function registerRoutes(
     }
   });
 
-  // Message Routes
-  app.get("/api/clients/:clientId/messages", async (req, res) => {
+  // Message Routes (POST is public for mobile app, GET is protected)
+  app.get("/api/clients/:clientId/messages", isAuthenticated, async (req, res) => {
     try {
       const messages = await storage.getClientMessages(req.params.clientId);
       res.json(messages);
@@ -73,8 +89,8 @@ export async function registerRoutes(
     }
   });
 
-  // Insight Routes
-  app.get("/api/clients/:clientId/insights", async (req, res) => {
+  // Insight Routes (POST is public for AI, GET is protected)
+  app.get("/api/clients/:clientId/insights", isAuthenticated, async (req, res) => {
     try {
       const insights = await storage.getClientInsights(req.params.clientId);
       res.json(insights);
@@ -96,8 +112,8 @@ export async function registerRoutes(
     }
   });
 
-  // Sentiment Data Routes
-  app.get("/api/clients/:clientId/sentiment", async (req, res) => {
+  // Sentiment Data Routes (POST is public for AI, GET is protected)
+  app.get("/api/clients/:clientId/sentiment", isAuthenticated, async (req, res) => {
     try {
       const data = await storage.getClientSentimentData(req.params.clientId);
       res.json(data);

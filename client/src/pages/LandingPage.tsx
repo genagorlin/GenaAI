@@ -1,10 +1,11 @@
-import { Link } from "wouter";
-import { ArrowRight, Lock, Sparkles, Activity, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowRight, Sparkles, Activity, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export default function LandingPage() {
+  const handleLogin = () => {
+    window.location.href = "/api/login";
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 relative overflow-hidden">
       {/* Background Noise/Gradient */}
@@ -58,20 +59,17 @@ export default function LandingPage() {
              </div>
 
              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" placeholder="gena@coaching.com" className="bg-background/50" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" placeholder="••••••••" className="bg-background/50" />
-                </div>
+                <Button 
+                  onClick={handleLogin}
+                  className="w-full h-11 text-base bg-primary hover:bg-primary/90"
+                  data-testid="button-login"
+                >
+                  Sign in with Google <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
                 
-                <Link href="/coach">
-                  <Button className="w-full h-11 text-base mt-2 bg-primary hover:bg-primary/90">
-                    Enter Workspace <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
+                <p className="text-xs text-center text-muted-foreground">
+                  Secure authentication powered by Replit
+                </p>
              </div>
 
              <div className="mt-6 pt-6 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
