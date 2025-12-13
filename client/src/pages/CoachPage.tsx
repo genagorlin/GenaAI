@@ -45,6 +45,16 @@ interface SentimentDataPoint {
   intensityScore: number;
 }
 
+interface Message {
+  id: string;
+  clientId: string;
+  role: string;
+  content: string;
+  type: string;
+  duration: string | null;
+  timestamp: string;
+}
+
 export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
@@ -85,6 +95,22 @@ export default function CoachPage() {
     },
     enabled: !!selectedClient
   });
+
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["/api/clients", selectedClient?.id, "messages"],
+    queryFn: async () => {
+      if (!selectedClient) return [];
+      const res = await fetch(`/api/clients/${selectedClient.id}/messages`);
+      if (!res.ok) throw new Error("Failed to fetch messages");
+      return res.json();
+    },
+    enabled: !!selectedClient
+  });
+
+  const recentUserMessages = messages
+    .filter(m => m.role === "user")
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 5);
 
   return (
     <div className="flex h-screen w-full bg-background">
@@ -268,14 +294,24 @@ export default function CoachPage() {
                  <Button variant="ghost" size="sm" className="text-xs h-7">View Full Log</Button>
                </div>
                <div className="p-6 space-y-4 bg-background/50">
-                 <div className="pl-4 border-l-2 border-primary/20 space-y-1">
-                   <p className="text-xs text-muted-foreground font-mono">Today, 10:45 AM</p>
-                   <p className="text-sm italic text-foreground/80">"I just feel like if I don't check every PR, something will slip through and it will be my fault. I know that's irrational but..."</p>
-                 </div>
-                 <div className="pl-4 border-l-2 border-primary/20 space-y-1 opacity-70">
-                   <p className="text-xs text-muted-foreground font-mono">Yesterday, 4:20 PM</p>
-                   <p className="text-sm italic text-foreground/80">"Maybe David is right. I am bottlenecking the team. But letting go feels like jumping off a cliff."</p>
-                 </div>
+                 {recentUserMessages.length === 0 ? (
+                   <div className="text-center py-8 text-muted-foreground text-sm">
+                     No journal entries yet from this client
+                   </div>
+                 ) : (
+                   recentUserMessages.map((msg, index) => (
+                     <div 
+                       key={msg.id} 
+                       data-testid={`message-${msg.id}`}
+                       className={`pl-4 border-l-2 border-primary/20 space-y-1 ${index > 0 ? 'opacity-70' : ''}`}
+                     >
+                       <p className="text-xs text-muted-foreground font-mono">
+                         {new Date(msg.timestamp).toLocaleString()}
+                       </p>
+                       <p className="text-sm italic text-foreground/80">"{msg.content}"</p>
+                     </div>
+                   ))
+                 )}
                </div>
             </div>
 
