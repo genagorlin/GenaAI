@@ -33,6 +33,7 @@ export interface IStorage {
   getAllClients(): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
+  registerClient(data: { id: string; name: string; email: string; photoUrl?: string }): Promise<Client>;
   updateClientActivity(id: string, mobileAppConnected: number): Promise<void>;
 
   // Messages
@@ -93,6 +94,30 @@ export class DatabaseStorage implements IStorage {
   async createClient(insertClient: InsertClient): Promise<Client> {
     const result = await db.insert(clients).values(insertClient).returning();
     return result[0];
+  }
+
+  async registerClient(data: { id: string; name: string; email: string; photoUrl?: string }): Promise<Client> {
+    const [client] = await db
+      .insert(clients)
+      .values({
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        photoUrl: data.photoUrl,
+        mobileAppConnected: 1,
+      })
+      .onConflictDoUpdate({
+        target: clients.id,
+        set: {
+          name: data.name,
+          email: data.email,
+          photoUrl: data.photoUrl,
+          lastActive: new Date(),
+          mobileAppConnected: 1,
+        },
+      })
+      .returning();
+    return client;
   }
 
   async updateClientActivity(id: string, mobileAppConnected: number): Promise<void> {

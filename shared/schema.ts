@@ -32,6 +32,7 @@ export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
+  photoUrl: text("photo_url"),
   status: text("status").notNull().default("active"),
   lastActive: timestamp("last_active").defaultNow(),
   mobileAppConnected: integer("mobile_app_connected").notNull().default(0),
@@ -87,6 +88,12 @@ export const documentSections = pgTable("document_sections", {
 });
 
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, lastActive: true });
+export const registerClientSchema = z.object({
+  clientId: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  photoUrl: z.string().optional(),
+});
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true });
 export const insertInsightSchema = createInsertSchema(insights).omit({ id: true, timestamp: true });
 export const insertSentimentDataSchema = createInsertSchema(sentimentData).omit({ id: true });

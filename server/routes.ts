@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema } from "@shared/schema";
+import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema } from "@shared/schema";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { z } from "zod";
 
@@ -53,6 +53,23 @@ export async function registerRoutes(
       const client = await storage.createClient(validated);
       res.status(201).json(client);
     } catch (error) {
+      res.status(400).json({ error: "Invalid client data" });
+    }
+  });
+
+  // Public endpoint for mobile app to register clients
+  app.post("/api/clients/register", async (req, res) => {
+    try {
+      const validated = registerClientSchema.parse(req.body);
+      const client = await storage.registerClient({
+        id: validated.clientId,
+        name: validated.name,
+        email: validated.email,
+        photoUrl: validated.photoUrl,
+      });
+      res.status(201).json(client);
+    } catch (error) {
+      console.error("Client registration error:", error);
       res.status(400).json({ error: "Invalid client data" });
     }
   });
