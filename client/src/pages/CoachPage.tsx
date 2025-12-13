@@ -12,8 +12,10 @@ import {
   ArrowRight,
   Sparkles,
   Smartphone,
-  Wifi
+  Wifi,
+  LogOut
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -57,11 +59,16 @@ interface Message {
 
 export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const handleLogout = () => {
+    window.location.href = "/api/logout";
+  };
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
     queryFn: async () => {
-      const res = await fetch("/api/clients");
+      const res = await fetch("/api/clients", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch clients");
       return res.json();
     }
@@ -73,7 +80,7 @@ export default function CoachPage() {
     queryKey: ["/api/clients", selectedClient?.id, "insights"],
     queryFn: async () => {
       if (!selectedClient) return [];
-      const res = await fetch(`/api/clients/${selectedClient.id}/insights`);
+      const res = await fetch(`/api/clients/${selectedClient.id}/insights`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch insights");
       return res.json();
     },
@@ -84,7 +91,7 @@ export default function CoachPage() {
     queryKey: ["/api/clients", selectedClient?.id, "sentiment"],
     queryFn: async () => {
       if (!selectedClient) return [];
-      const res = await fetch(`/api/clients/${selectedClient.id}/sentiment`);
+      const res = await fetch(`/api/clients/${selectedClient.id}/sentiment`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch sentiment");
       const data = await res.json();
       return data.map((d: any) => ({
@@ -100,7 +107,7 @@ export default function CoachPage() {
     queryKey: ["/api/clients", selectedClient?.id, "messages"],
     queryFn: async () => {
       if (!selectedClient) return [];
-      const res = await fetch(`/api/clients/${selectedClient.id}/messages`);
+      const res = await fetch(`/api/clients/${selectedClient.id}/messages`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
@@ -182,6 +189,14 @@ export default function CoachPage() {
           </div>
           <Button variant="outline" className="w-full justify-start gap-2 text-muted-foreground">
             <Users className="h-4 w-4" /> Manage Clients
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={handleLogout}
+            className="w-full justify-start gap-2 text-muted-foreground mt-2"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" /> Sign Out
           </Button>
         </div>
       </div>
