@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import generatedImage from '@assets/generated_images/professional_headshot_of_a_female_coach.png';
 
 interface Message {
   id: string;
@@ -81,13 +80,13 @@ export function JournalInterface() {
       <div className="flex items-center justify-between border-b border-border/40 p-4 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="h-10 w-10 overflow-hidden rounded-full border border-border shadow-sm">
-              <img src={generatedImage} alt="Gena AI" className="h-full w-full object-cover" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+              <Sparkles className="h-5 w-5" />
             </div>
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background"></span>
+            <span className="absolute bottom-[-2px] right-[-2px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background"></span>
           </div>
           <div>
-            <h2 className="font-serif text-lg font-medium leading-none">Gena</h2>
+            <h2 className="font-serif text-lg font-medium leading-none">GenaGPT</h2>
             <p className="text-xs text-muted-foreground">Thinking Partner • Always here</p>
           </div>
         </div>

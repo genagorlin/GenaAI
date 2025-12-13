@@ -8,7 +8,8 @@ import {
   TrendingUp, 
   AlertCircle, 
   Repeat,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { InsightCard } from "@/components/dashboard/InsightCard";
 import { SentimentChart } from "@/components/dashboard/SentimentChart";
-import generatedImage from '@assets/generated_images/professional_headshot_of_a_female_coach.png';
 
 export default function CoachPage() {
   const [selectedClient, setSelectedClient] = useState("Sarah Miller");
@@ -28,8 +28,8 @@ export default function CoachPage() {
       <div className="w-80 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-6">
-             <div className="h-8 w-8 overflow-hidden rounded-full border border-border">
-                <img src={generatedImage} alt="Gena" className="h-full w-full object-cover" />
+             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <Sparkles className="h-4 w-4" />
              </div>
              <span className="font-serif font-medium">Coach Workspace</span>
           </div>
