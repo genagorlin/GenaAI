@@ -1,6 +1,8 @@
 import { Link } from "wouter";
-import { ArrowRight, Lock, Sparkles, Brain } from "lucide-react";
+import { ArrowRight, Lock, Sparkles, Activity, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LandingPage() {
   return (
@@ -11,48 +13,77 @@ export default function LandingPage() {
         <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-primary/10 blur-[120px]" />
       </div>
 
-      <div className="z-10 flex w-full max-w-md flex-col items-center text-center gap-12">
+      <div className="z-10 flex w-full max-w-5xl items-center gap-16">
         
-        <div className="flex flex-col items-center gap-6">
-           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xl">
-              <Sparkles className="h-10 w-10" />
+        {/* Left Side: Brand & Value */}
+        <div className="hidden lg:flex flex-1 flex-col gap-8">
+           <div className="flex items-center gap-3">
+             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+                <Sparkles className="h-5 w-5" />
+             </div>
+             <span className="font-serif text-2xl font-medium tracking-tight">GenaGPT</span>
            </div>
-           <div>
-             <h1 className="font-serif text-5xl font-medium tracking-tight text-foreground mb-2">
-               GenaGPT
-             </h1>
-             <p className="text-lg text-muted-foreground font-light tracking-wide">
-               Your private AI thinking partner.
-             </p>
+           
+           <h1 className="font-serif text-5xl font-medium leading-[1.1] text-foreground">
+             Command center for <br/>
+             <span className="text-primary italic">AI-Augmented</span> Coaching.
+           </h1>
+           
+           <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
+             Monitor client signals, track emotional velocity, and intervene when it matters most.
+           </p>
+
+           <div className="flex flex-col gap-4 mt-4">
+              <div className="flex items-center gap-3 text-sm text-foreground/80">
+                <Activity className="h-5 w-5 text-emerald-500" />
+                Real-time sentiment analysis
+              </div>
+              <div className="flex items-center gap-3 text-sm text-foreground/80">
+                <Smartphone className="h-5 w-5 text-blue-500" />
+                Live Mobile App Integration
+              </div>
+              <div className="flex items-center gap-3 text-sm text-foreground/80">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                Enterprise-grade security
+              </div>
            </div>
         </div>
 
-        {/* Client Entry - Center Stage */}
-        <Link href="/client" className="w-full">
-          <div className="group relative flex w-full cursor-pointer items-center gap-6 rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:border-primary/20">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-              <Brain className="h-7 w-7" />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-serif text-xl font-medium">Start Reflection</h3>
-              <p className="text-sm text-muted-foreground">Enter your private journal space.</p>
-            </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground/50 transition-all group-hover:translate-x-1 group-hover:text-primary" />
+        {/* Right Side: Login Card */}
+        <div className="w-full max-w-md flex-1">
+          <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
+             <div className="mb-8 text-center lg:text-left">
+                <h2 className="font-serif text-2xl font-medium">Coach Login</h2>
+                <p className="text-sm text-muted-foreground mt-1">Access your professional workspace</p>
+             </div>
+
+             <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" placeholder="gena@coaching.com" className="bg-background/50" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input id="password" type="password" placeholder="••••••••" className="bg-background/50" />
+                </div>
+                
+                <Link href="/coach">
+                  <Button className="w-full h-11 text-base mt-2 bg-primary hover:bg-primary/90">
+                    Enter Workspace <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+             </div>
+
+             <div className="mt-6 pt-6 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                <span>v2.4.0 (Stable)</span>
+                <span className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  API Gateway Active
+                </span>
+             </div>
           </div>
-        </Link>
-
-        <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground/60 uppercase tracking-widest">
-          <Lock className="h-3 w-3" /> Private & Secure Environment
         </div>
-      </div>
 
-      {/* Discreet Coach Login */}
-      <div className="absolute bottom-8 z-10">
-        <Link href="/coach">
-          <Button variant="link" className="text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors">
-            Log in as Coach
-          </Button>
-        </Link>
       </div>
     </div>
   );

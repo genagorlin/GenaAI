@@ -9,7 +9,9 @@ import {
   AlertCircle, 
   Repeat,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Smartphone,
+  Wifi
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +43,12 @@ export default function CoachPage() {
         
         <ScrollArea className="flex-1 px-4">
           <div className="space-y-1 pb-4">
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Clients</div>
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider flex justify-between items-center">
+              Active Clients
+              <Badge variant="outline" className="text-[10px] h-4 px-1 border-emerald-500/30 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">
+                API Online
+              </Badge>
+            </div>
             {["Sarah Miller", "David Chen", "Elena Rodriguez", "Marcus Johnson"].map((client) => (
               <button
                 key={client}
@@ -53,8 +60,19 @@ export default function CoachPage() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`h-2 w-2 rounded-full ${client === "Sarah Miller" ? "bg-red-400 animate-pulse" : "bg-emerald-400"}`} />
-                  {client}
+                  <div className={`relative h-8 w-8 rounded-full flex items-center justify-center ${selectedClient === client ? "bg-white/20" : "bg-sidebar-accent"}`}>
+                    <span className="text-xs font-medium">{client.split(' ').map(n => n[0]).join('')}</span>
+                    {/* Mobile App Connection Dot */}
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-background flex items-center justify-center">
+                      <span className={`h-1.5 w-1.5 rounded-full ${client === "Sarah Miller" ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-start">
+                    <span>{client}</span>
+                    <span className={`text-[10px] ${selectedClient === client ? "text-white/70" : "text-muted-foreground"}`}>
+                      {client === "Sarah Miller" ? "Mobile App Active" : "Last seen 2d ago"}
+                    </span>
+                  </div>
                 </div>
                 {client === "Sarah Miller" && (
                    <Badge variant="outline" className="bg-background/20 border-white/20 text-[10px] h-5 px-1.5">3 New</Badge>
@@ -65,6 +83,14 @@ export default function CoachPage() {
         </ScrollArea>
         
         <div className="p-4 border-t border-sidebar-border">
+          <div className="mb-4 rounded-lg bg-sidebar-accent p-3">
+             <div className="flex items-center gap-2 text-xs font-medium text-sidebar-foreground mb-1">
+               <Wifi className="h-3 w-3 text-emerald-500" /> API Status
+             </div>
+             <div className="text-[10px] text-muted-foreground">
+               Listening for incoming signals from React Native endpoints...
+             </div>
+          </div>
           <Button variant="outline" className="w-full justify-start gap-2 text-muted-foreground">
             <Users className="h-4 w-4" /> Manage Clients
           </Button>
@@ -77,7 +103,10 @@ export default function CoachPage() {
         <header className="flex h-16 items-center justify-between border-b border-border px-8">
           <div className="flex items-center gap-4">
             <h1 className="font-serif text-2xl font-medium text-foreground">{selectedClient}</h1>
-            <Badge variant="secondary" className="font-normal">Next Session: Tomorrow, 2:00 PM</Badge>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-900/30">
+               <Smartphone className="h-3 w-3" />
+               Client App Connected
+            </div>
           </div>
           <div className="flex items-center gap-4">
              <Button variant="ghost" size="icon" className="text-muted-foreground">
