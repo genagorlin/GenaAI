@@ -1,17 +1,20 @@
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const data = [
-  { date: "Mon", sentiment: 45, intensity: 30 },
-  { date: "Tue", sentiment: 35, intensity: 60 },
-  { date: "Wed", sentiment: 60, intensity: 40 },
-  { date: "Thu", sentiment: 75, intensity: 20 },
-  { date: "Fri", sentiment: 65, intensity: 35 },
-  { date: "Sat", sentiment: 80, intensity: 25 },
-  { date: "Sun", sentiment: 70, intensity: 30 },
-];
+interface SentimentChartProps {
+  data: Array<{
+    date: string;
+    sentimentScore: number;
+    intensityScore: number;
+  }>;
+}
 
-export function SentimentChart() {
+export function SentimentChart({ data }: SentimentChartProps) {
+  const chartData = data.map(d => ({
+    date: d.date,
+    sentiment: d.sentimentScore,
+    intensity: d.intensityScore
+  }));
   return (
     <Card className="border-border/50 shadow-sm">
       <CardHeader>
@@ -20,7 +23,7 @@ export function SentimentChart() {
       <CardContent>
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="date" 
