@@ -13,7 +13,9 @@ import {
   Sparkles,
   Smartphone,
   Wifi,
-  LogOut
+  LogOut,
+  FileText,
+  BarChart3
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { InsightCard } from "@/components/dashboard/InsightCard";
 import { SentimentChart } from "@/components/dashboard/SentimentChart";
+import { LivingDocument } from "@/components/dashboard/LivingDocument";
 
 interface Client {
   id: string;
@@ -57,8 +60,11 @@ interface Message {
   timestamp: string;
 }
 
+type ViewMode = "document" | "signals";
+
 export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("document");
   const { user } = useAuth();
 
   const handleLogout = () => {
@@ -215,6 +221,28 @@ export default function CoachPage() {
             )}
           </div>
           <div className="flex items-center gap-4">
+             <div className="flex items-center border rounded-lg p-1 bg-muted/30">
+               <Button
+                 variant={viewMode === "document" ? "secondary" : "ghost"}
+                 size="sm"
+                 onClick={() => setViewMode("document")}
+                 className="gap-2 h-8"
+                 data-testid="button-view-document"
+               >
+                 <FileText className="h-4 w-4" />
+                 Profile
+               </Button>
+               <Button
+                 variant={viewMode === "signals" ? "secondary" : "ghost"}
+                 size="sm"
+                 onClick={() => setViewMode("signals")}
+                 className="gap-2 h-8"
+                 data-testid="button-view-signals"
+               >
+                 <BarChart3 className="h-4 w-4" />
+                 Signals
+               </Button>
+             </div>
              <Button variant="ghost" size="icon" className="text-muted-foreground">
                <Bell className="h-5 w-5" />
              </Button>
@@ -228,107 +256,113 @@ export default function CoachPage() {
         <ScrollArea className="flex-1">
           <div className="p-8 max-w-6xl mx-auto space-y-8">
             
-            {/* Top Row: Mental Model & Velocity */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Mental Model Card */}
-              <div className="lg:col-span-1 rounded-xl border border-border bg-card p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain className="h-5 w-5 text-primary" />
-                  <h3 className="font-medium">AI Mental Model</h3>
-                </div>
-                <div className="space-y-4">
-                   <div className="space-y-2">
-                     <label className="text-xs text-muted-foreground uppercase tracking-wider">Core Values</label>
-                     <div className="flex flex-wrap gap-2">
-                       <Badge variant="outline" className="bg-background">Autonomy</Badge>
-                       <Badge variant="outline" className="bg-background">Competence</Badge>
-                       <Badge variant="outline" className="bg-background">Team Harmony</Badge>
-                     </div>
-                   </div>
-                   <Separator />
-                   <div className="space-y-2">
-                     <label className="text-xs text-muted-foreground uppercase tracking-wider">Current blockers</label>
-                     <p className="text-sm text-foreground/80 leading-relaxed">
-                       Struggling to delegate due to fear of quality drop. Feeling "imposter" syndrome about new VP title.
-                     </p>
-                   </div>
-                </div>
-              </div>
-
-              {/* Chart */}
-              <div className="lg:col-span-2">
-                 <SentimentChart data={sentimentData} />
-              </div>
-            </div>
-
-            {/* Signals Feed */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-muted-foreground" />
-                  Recent Signals
-                </h2>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="h-8 text-xs">Filter by Topic</Button>
-                  <Button variant="outline" size="sm" className="h-8 text-xs">Export Summary</Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {insights.length === 0 ? (
-                  <div className="col-span-full text-center py-12 text-muted-foreground">
-                    No insights yet for this client
+            {viewMode === "document" && selectedClient?.id ? (
+              <LivingDocument key={selectedClient.id} clientId={selectedClient.id} clientName={selectedClient.name} />
+            ) : (
+              <>
+                {/* Top Row: Mental Model & Velocity */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Mental Model Card */}
+                  <div className="lg:col-span-1 rounded-xl border border-border bg-card p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Brain className="h-5 w-5 text-primary" />
+                      <h3 className="font-medium">AI Mental Model</h3>
+                    </div>
+                    <div className="space-y-4">
+                       <div className="space-y-2">
+                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Core Values</label>
+                         <div className="flex flex-wrap gap-2">
+                           <Badge variant="outline" className="bg-background">Autonomy</Badge>
+                           <Badge variant="outline" className="bg-background">Competence</Badge>
+                           <Badge variant="outline" className="bg-background">Team Harmony</Badge>
+                         </div>
+                       </div>
+                       <Separator />
+                       <div className="space-y-2">
+                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Current blockers</label>
+                         <p className="text-sm text-foreground/80 leading-relaxed">
+                           Struggling to delegate due to fear of quality drop. Feeling "imposter" syndrome about new VP title.
+                         </p>
+                       </div>
+                    </div>
                   </div>
-                ) : (
-                  insights.map((insight) => {
-                    const iconMap = {
-                      "Emotional Spike": AlertCircle,
-                      "Recurring Theme": Repeat,
-                      "Shift": TrendingUp,
-                      "Contradiction": AlertCircle
-                    };
-                    return (
-                      <InsightCard 
-                        key={insight.id}
-                        category={insight.category}
-                        title={insight.title}
-                        description={insight.description}
-                        timestamp={new Date(insight.timestamp).toLocaleString()}
-                        icon={iconMap[insight.category]}
-                      />
-                    );
-                  })
-                )}
-              </div>
-            </div>
 
-            {/* Raw Journal Feed Preview */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-               <div className="px-6 py-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                 <h3 className="font-medium text-sm">Recent Journal Excerpts (Context)</h3>
-                 <Button variant="ghost" size="sm" className="text-xs h-7">View Full Log</Button>
-               </div>
-               <div className="p-6 space-y-4 bg-background/50">
-                 {recentUserMessages.length === 0 ? (
-                   <div className="text-center py-8 text-muted-foreground text-sm">
-                     No journal entries yet from this client
+                  {/* Chart */}
+                  <div className="lg:col-span-2">
+                     <SentimentChart data={sentimentData} />
+                  </div>
+                </div>
+
+                {/* Signals Feed */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-medium flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-muted-foreground" />
+                      Recent Signals
+                    </h2>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="h-8 text-xs">Filter by Topic</Button>
+                      <Button variant="outline" size="sm" className="h-8 text-xs">Export Summary</Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {insights.length === 0 ? (
+                      <div className="col-span-full text-center py-12 text-muted-foreground">
+                        No insights yet for this client
+                      </div>
+                    ) : (
+                      insights.map((insight) => {
+                        const iconMap = {
+                          "Emotional Spike": AlertCircle,
+                          "Recurring Theme": Repeat,
+                          "Shift": TrendingUp,
+                          "Contradiction": AlertCircle
+                        };
+                        return (
+                          <InsightCard 
+                            key={insight.id}
+                            category={insight.category}
+                            title={insight.title}
+                            description={insight.description}
+                            timestamp={new Date(insight.timestamp).toLocaleString()}
+                            icon={iconMap[insight.category]}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Raw Journal Feed Preview */}
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                   <div className="px-6 py-4 border-b border-border bg-muted/30 flex justify-between items-center">
+                     <h3 className="font-medium text-sm">Recent Journal Excerpts (Context)</h3>
+                     <Button variant="ghost" size="sm" className="text-xs h-7">View Full Log</Button>
                    </div>
-                 ) : (
-                   recentUserMessages.map((msg, index) => (
-                     <div 
-                       key={msg.id} 
-                       data-testid={`message-${msg.id}`}
-                       className={`pl-4 border-l-2 border-primary/20 space-y-1 ${index > 0 ? 'opacity-70' : ''}`}
-                     >
-                       <p className="text-xs text-muted-foreground font-mono">
-                         {new Date(msg.timestamp).toLocaleString()}
-                       </p>
-                       <p className="text-sm italic text-foreground/80">"{msg.content}"</p>
-                     </div>
-                   ))
-                 )}
-               </div>
-            </div>
+                   <div className="p-6 space-y-4 bg-background/50">
+                     {recentUserMessages.length === 0 ? (
+                       <div className="text-center py-8 text-muted-foreground text-sm">
+                         No journal entries yet from this client
+                       </div>
+                     ) : (
+                       recentUserMessages.map((msg, index) => (
+                         <div 
+                           key={msg.id} 
+                           data-testid={`message-${msg.id}`}
+                           className={`pl-4 border-l-2 border-primary/20 space-y-1 ${index > 0 ? 'opacity-70' : ''}`}
+                         >
+                           <p className="text-xs text-muted-foreground font-mono">
+                             {new Date(msg.timestamp).toLocaleString()}
+                           </p>
+                           <p className="text-sm italic text-foreground/80">"{msg.content}"</p>
+                         </div>
+                       ))
+                     )}
+                   </div>
+                </div>
+              </>
+            )}
 
           </div>
         </ScrollArea>

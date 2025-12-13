@@ -51,6 +51,7 @@ export interface IStorage {
   getClientDocument(clientId: string): Promise<ClientDocument | undefined>;
   getOrCreateClientDocument(clientId: string): Promise<ClientDocument>;
   getDocumentSections(documentId: string): Promise<DocumentSection[]>;
+  getSection(id: string): Promise<DocumentSection | undefined>;
   createSection(section: InsertDocumentSection): Promise<DocumentSection>;
   updateSection(id: string, updates: Partial<DocumentSection>): Promise<DocumentSection>;
   deleteSection(id: string): Promise<void>;
@@ -162,6 +163,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(documentSections)
       .where(eq(documentSections.documentId, documentId))
       .orderBy(asc(documentSections.sortOrder));
+  }
+
+  async getSection(id: string): Promise<DocumentSection | undefined> {
+    const [section] = await db.select().from(documentSections).where(eq(documentSections.id, id));
+    return section;
   }
 
   async createSection(section: InsertDocumentSection): Promise<DocumentSection> {
