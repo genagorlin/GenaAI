@@ -95,6 +95,14 @@
 
   --radius: 0.5rem;
   
+  /* WhatsApp Theme */
+  --wa-header: 166 100% 20%;      /* #008069 */
+  --wa-bg: 36 33% 90%;           /* #efe7dd */
+  --wa-outgoing: 108 85% 91%;    /* #d9fdd3 */
+  --wa-incoming: 0 0% 100%;      /* #ffffff */
+  --wa-accent: 164 100% 33%;     /* #00a884 */
+  --wa-mic: 164 100% 33%;        /* #00a884 */
+  
   --sidebar: 35 30% 95%;
   --sidebar-foreground: 220 15% 20%;
   --sidebar-primary: 160 30% 35%;
@@ -106,6 +114,14 @@
 }
 
 .dark {
+  /* WhatsApp Dark Theme */
+  --wa-header: 200 15% 15%;
+  --wa-bg: 200 20% 6%;
+  --wa-outgoing: 166 60% 20%;
+  --wa-incoming: 200 15% 15%;
+  --wa-accent: 164 60% 40%;
+  --wa-mic: 164 60% 40%;
+
   /* Deep Night Base */
   --background: 220 20% 12%;
   --foreground: 35 20% 90%;
