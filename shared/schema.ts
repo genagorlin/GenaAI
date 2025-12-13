@@ -64,10 +64,34 @@ export const sentimentData = pgTable("sentiment_data", {
   intensityScore: integer("intensity_score").notNull(), // 0-100
 });
 
+// Living Document - the evolving summary of everything known about a client
+export const clientDocuments = pgTable("client_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }).unique(),
+  title: text("title").notNull().default("Client Profile"),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Sections within a living document (coach can add/reorder)
+export const documentSections = pgTable("document_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => clientDocuments.id, { onDelete: "cascade" }),
+  sectionType: text("section_type").notNull().default("custom"), // "highlight", "focus", "context", "summary", "custom"
+  title: text("title").notNull(),
+  content: text("content").notNull().default(""), // Rich text content
+  sortOrder: integer("sort_order").notNull().default(0),
+  isCollapsed: integer("is_collapsed").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, lastActive: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true });
 export const insertInsightSchema = createInsertSchema(insights).omit({ id: true, timestamp: true });
 export const insertSentimentDataSchema = createInsertSchema(sentimentData).omit({ id: true });
+export const insertClientDocumentSchema = createInsertSchema(clientDocuments).omit({ id: true, lastUpdated: true, createdAt: true });
+export const insertDocumentSectionSchema = createInsertSchema(documentSections).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
@@ -80,3 +104,9 @@ export type Insight = typeof insights.$inferSelect;
 
 export type InsertSentimentData = z.infer<typeof insertSentimentDataSchema>;
 export type SentimentData = typeof sentimentData.$inferSelect;
+
+export type InsertClientDocument = z.infer<typeof insertClientDocumentSchema>;
+export type ClientDocument = typeof clientDocuments.$inferSelect;
+
+export type InsertDocumentSection = z.infer<typeof insertDocumentSectionSchema>;
+export type DocumentSection = typeof documentSections.$inferSelect;
