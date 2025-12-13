@@ -7,15 +7,22 @@ import {
   type InsertInsight,
   type SentimentData,
   type InsertSentimentData,
+  type User,
+  type UpsertUser,
   clients,
   messages,
   insights,
-  sentimentData
+  sentimentData,
+  users
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
+  // Users (Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+
   // Clients
   getAllClients(): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
@@ -36,6 +43,27 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Users (Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
   // Clients
   async getAllClients(): Promise<Client[]> {
     return await db.select().from(clients).orderBy(desc(clients.lastActive));
