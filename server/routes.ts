@@ -101,6 +101,45 @@ export async function registerRoutes(
         clientId: req.params.clientId
       });
       const message = await storage.createMessage(validated);
+      
+      if (validated.role === "user") {
+        const { promptAssembler } = await import("./promptAssembler");
+        const { routeMessage, generateAIResponse } = await import("./modelRouter");
+        
+        try {
+          const clientContext = await promptAssembler.getClientContext(req.params.clientId);
+          const recentMessages = await promptAssembler.getRecentMessages(req.params.clientId);
+          
+          const assembled = await promptAssembler.assemblePrompt({
+            clientId: req.params.clientId,
+            currentMessage: validated.content,
+            recentMessages,
+            documentSections: clientContext.documentSections,
+          });
+          
+          const routing = routeMessage(validated.content);
+          console.log(`[AI] Routing: ${routing.reasoning} -> ${routing.model}`);
+          
+          const aiResponseContent = await generateAIResponse({
+            systemPrompt: assembled.systemPrompt,
+            conversationHistory: assembled.conversationHistory,
+            model: routing.model,
+          });
+          
+          const aiMessage = await storage.createMessage({
+            clientId: req.params.clientId,
+            role: "ai",
+            content: aiResponseContent,
+            type: "text",
+          });
+          
+          return res.status(201).json({ userMessage: message, aiMessage });
+        } catch (aiError) {
+          console.error("AI response error:", aiError);
+          return res.status(201).json({ userMessage: message, aiError: "Failed to generate AI response" });
+        }
+      }
+      
       res.status(201).json(message);
     } catch (error) {
       res.status(400).json({ error: "Invalid message data" });

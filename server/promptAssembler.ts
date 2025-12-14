@@ -49,7 +49,15 @@ export class PromptAssembler {
 
     const roleSection = truncateToTokenLimit(rolePrompt.content, TOKEN_ALLOCATIONS.rolePrompt);
     
-    const methodologySection = "";
+    let methodologySection = "";
+    const clientMethodologies = await storage.getClientMethodologies(clientId);
+    const activeMethodologies = clientMethodologies.filter(cm => cm.isActive === 1);
+    if (activeMethodologies.length > 0) {
+      const methodologyContent = activeMethodologies
+        .map(cm => `## ${cm.methodology.name}\n${cm.methodology.content}`)
+        .join("\n\n");
+      methodologySection = truncateToTokenLimit(methodologyContent, TOKEN_ALLOCATIONS.methodologyFrame);
+    }
 
     let memorySection = "";
     if (documentSections && documentSections.length > 0) {
