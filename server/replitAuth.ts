@@ -110,9 +110,29 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`replitauth:${req.hostname}`, async (err: any, user: any) => {
+      if (err || !user) {
+        return res.redirect("/api/login");
+      }
+      
+      // Check if user is authorized
+      const email = user.claims?.email;
+      if (email) {
+        const authorizedUser = await storage.getAuthorizedUserByEmail(email);
+        if (!authorizedUser) {
+          // User is not in allowlist - redirect to unauthorized page
+          return res.redirect("/unauthorized");
+        }
+        // Update last login
+        await storage.updateAuthorizedUserLastLogin(email);
+      }
+      
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          return res.redirect("/api/login");
+        }
+        return res.redirect("/");
+      });
     })(req, res, next);
   });
 
@@ -137,6 +157,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
+    // Check if user is in authorized list
+    const email = user.claims?.email;
+    if (email) {
+      const authorizedUser = await storage.getAuthorizedUserByEmail(email);
+      if (!authorizedUser) {
+        return res.status(403).json({ message: "Not authorized to access this application" });
+      }
+    }
     return next();
   }
 
@@ -155,4 +183,24 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+};
+
+export const isAdmin: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+  
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  
+  const email = user.claims?.email;
+  if (!email) {
+    return res.status(403).json({ message: "No email found" });
+  }
+  
+  const authorizedUser = await storage.getAuthorizedUserByEmail(email);
+  if (!authorizedUser || authorizedUser.role !== "admin") {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  
+  return next();
 };

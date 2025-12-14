@@ -18,7 +18,8 @@ import {
   BarChart3,
   MessageSquare,
   Bot,
-  User
+  User,
+  Settings
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -205,6 +206,14 @@ export default function CoachPage() {
             data-testid="button-manage-clients"
           >
             <Users className="h-4 w-4" /> Manage Clients
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={() => window.location.href = "/admin"}
+            className="w-full justify-start gap-2 text-muted-foreground mt-2"
+            data-testid="button-admin-settings"
+          >
+            <Settings className="h-4 w-4" /> Settings
           </Button>
           <Button 
             variant="ghost" 

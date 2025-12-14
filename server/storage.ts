@@ -17,6 +17,7 @@ import {
   type TaskPrompt,
   type MethodologyFrame,
   type ClientMethodology,
+  type AuthorizedUser,
   clients,
   messages,
   insights,
@@ -27,7 +28,8 @@ import {
   rolePrompts,
   taskPrompts,
   methodologyFrames,
-  clientMethodologies
+  clientMethodologies,
+  authorizedUsers
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc } from "drizzle-orm";
@@ -74,6 +76,13 @@ export interface IStorage {
   getAllMethodologyFrames(): Promise<MethodologyFrame[]>;
   getActiveMethodologyFrames(): Promise<MethodologyFrame[]>;
   getClientMethodologies(clientId: string): Promise<(ClientMethodology & { methodology: MethodologyFrame })[]>;
+
+  // Authorized Users (login allowlist)
+  getAuthorizedUserByEmail(email: string): Promise<AuthorizedUser | undefined>;
+  getAllAuthorizedUsers(): Promise<AuthorizedUser[]>;
+  createAuthorizedUser(email: string, role: string): Promise<AuthorizedUser>;
+  deleteAuthorizedUser(id: string): Promise<void>;
+  updateAuthorizedUserLastLogin(email: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -312,6 +321,31 @@ export class DatabaseStorage implements IStorage {
       ...r.client_methodologies, 
       methodology: r.methodology_frames 
     }));
+  }
+
+  // Authorized Users (login allowlist)
+  async getAuthorizedUserByEmail(email: string): Promise<AuthorizedUser | undefined> {
+    const [user] = await db.select().from(authorizedUsers).where(eq(authorizedUsers.email, email.toLowerCase()));
+    return user;
+  }
+
+  async getAllAuthorizedUsers(): Promise<AuthorizedUser[]> {
+    return await db.select().from(authorizedUsers).orderBy(desc(authorizedUsers.createdAt));
+  }
+
+  async createAuthorizedUser(email: string, role: string): Promise<AuthorizedUser> {
+    const [user] = await db.insert(authorizedUsers).values({ email: email.toLowerCase(), role }).returning();
+    return user;
+  }
+
+  async deleteAuthorizedUser(id: string): Promise<void> {
+    await db.delete(authorizedUsers).where(eq(authorizedUsers.id, id));
+  }
+
+  async updateAuthorizedUserLastLogin(email: string): Promise<void> {
+    await db.update(authorizedUsers)
+      .set({ lastLogin: new Date() })
+      .where(eq(authorizedUsers.email, email.toLowerCase()));
   }
 }
 

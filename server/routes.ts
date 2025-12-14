@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema } from "@shared/schema";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -305,6 +305,42 @@ export async function registerRoutes(
       res.json(taskPrompt);
     } catch (error) {
       res.status(400).json({ error: "Invalid prompt data" });
+    }
+  });
+
+  // Admin Routes - User Management
+  app.get("/api/admin/users", isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const users = await storage.getAllAuthorizedUsers();
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { email, role } = z.object({ 
+        email: z.string().email(), 
+        role: z.enum(["admin", "user"]).default("user") 
+      }).parse(req.body);
+      const user = await storage.createAuthorizedUser(email, role);
+      res.status(201).json(user);
+    } catch (error: any) {
+      if (error.code === "23505") {
+        res.status(409).json({ error: "User with this email already exists" });
+      } else {
+        res.status(400).json({ error: "Invalid user data" });
+      }
+    }
+  });
+
+  app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      await storage.deleteAuthorizedUser(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 

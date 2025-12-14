@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/LandingPage";
 import CoachPage from "@/pages/CoachPage";
+import AdminPage from "@/pages/AdminPage";
+import UnauthorizedPage from "@/pages/UnauthorizedPage";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -21,10 +23,14 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/unauthorized" component={UnauthorizedPage} />
       {!isAuthenticated ? (
         <Route path="/" component={LandingPage} />
       ) : (
-        <Route path="/" component={CoachPage} />
+        <>
+          <Route path="/" component={CoachPage} />
+          <Route path="/admin" component={AdminPage} />
+        </>
       )}
       <Route component={NotFound} />
     </Switch>

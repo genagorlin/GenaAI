@@ -28,6 +28,19 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+// Authorized users allowlist for login restriction
+export const authorizedUsers = pgTable("authorized_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  role: text("role").notNull().default("user"), // "admin" or "user"
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAuthorizedUserSchema = createInsertSchema(authorizedUsers).omit({ id: true, lastLogin: true, createdAt: true });
+export type InsertAuthorizedUser = z.infer<typeof insertAuthorizedUserSchema>;
+export type AuthorizedUser = typeof authorizedUsers.$inferSelect;
+
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
