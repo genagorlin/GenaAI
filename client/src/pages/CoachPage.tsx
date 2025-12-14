@@ -29,6 +29,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { InsightCard } from "@/components/dashboard/InsightCard";
 import { SentimentChart } from "@/components/dashboard/SentimentChart";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
+import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 
 interface Client {
   id: string;
@@ -68,6 +69,7 @@ type ViewMode = "document" | "signals" | "messages";
 export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("document");
+  const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const { user } = useAuth();
 
   const handleLogout = () => {
@@ -196,7 +198,12 @@ export default function CoachPage() {
                Listening for incoming signals from React Native endpoints...
              </div>
           </div>
-          <Button variant="outline" className="w-full justify-start gap-2 text-muted-foreground">
+          <Button 
+            variant="outline" 
+            className="w-full justify-start gap-2 text-muted-foreground"
+            onClick={() => setIsManageClientsOpen(true)}
+            data-testid="button-manage-clients"
+          >
             <Users className="h-4 w-4" /> Manage Clients
           </Button>
           <Button 
@@ -471,6 +478,13 @@ export default function CoachPage() {
           </div>
         </ScrollArea>
       </div>
+
+      <ManageClientsDialog
+        open={isManageClientsOpen}
+        onOpenChange={setIsManageClientsOpen}
+        onClientSelect={(clientId) => setSelectedClientId(clientId)}
+        selectedClientId={selectedClientId}
+      />
     </div>
   );
 }
