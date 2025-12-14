@@ -81,10 +81,48 @@ export const documentSections = pgTable("document_sections", {
   sectionType: text("section_type").notNull().default("custom"), // "highlight", "focus", "context", "summary", "custom"
   title: text("title").notNull(),
   content: text("content").notNull().default(""), // Rich text content
+  coachNotes: text("coach_notes").default(""), // Private notes visible only to coach
   sortOrder: integer("sort_order").notNull().default(0),
   isCollapsed: integer("is_collapsed").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Role Prompts - AI personality/behavior per client (~500 tokens)
+export const rolePrompts = pgTable("role_prompts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }).unique(),
+  content: text("content").notNull().default("You are an empathetic thinking partner. Do not prescribe advice. Ask clarifying questions when needed."),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Task Prompts - Response instructions per client (~500 tokens)
+export const taskPrompts = pgTable("task_prompts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }).unique(),
+  content: text("content").notNull().default("Respond reflectively and explore meaning without telling the client what to do. If helpful, ask a clarifying question to deepen understanding."),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Methodology Frames - Coaching frameworks (one-to-many for future expansion, ~2000 tokens)
+export const methodologyFrames = pgTable("methodology_frames", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  content: text("content").notNull(), // The actual methodology prompt text
+  isActive: integer("is_active").notNull().default(1),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Junction table to assign methodologies to clients
+export const clientMethodologies = pgTable("client_methodologies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  methodologyId: varchar("methodology_id").notNull().references(() => methodologyFrames.id, { onDelete: "cascade" }),
+  isActive: integer("is_active").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, lastActive: true });
@@ -99,6 +137,10 @@ export const insertInsightSchema = createInsertSchema(insights).omit({ id: true,
 export const insertSentimentDataSchema = createInsertSchema(sentimentData).omit({ id: true });
 export const insertClientDocumentSchema = createInsertSchema(clientDocuments).omit({ id: true, lastUpdated: true, createdAt: true });
 export const insertDocumentSectionSchema = createInsertSchema(documentSections).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertRolePromptSchema = createInsertSchema(rolePrompts).omit({ id: true, updatedAt: true });
+export const insertTaskPromptSchema = createInsertSchema(taskPrompts).omit({ id: true, updatedAt: true });
+export const insertMethodologyFrameSchema = createInsertSchema(methodologyFrames).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertClientMethodologySchema = createInsertSchema(clientMethodologies).omit({ id: true, createdAt: true });
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
@@ -117,3 +159,15 @@ export type ClientDocument = typeof clientDocuments.$inferSelect;
 
 export type InsertDocumentSection = z.infer<typeof insertDocumentSectionSchema>;
 export type DocumentSection = typeof documentSections.$inferSelect;
+
+export type InsertRolePrompt = z.infer<typeof insertRolePromptSchema>;
+export type RolePrompt = typeof rolePrompts.$inferSelect;
+
+export type InsertTaskPrompt = z.infer<typeof insertTaskPromptSchema>;
+export type TaskPrompt = typeof taskPrompts.$inferSelect;
+
+export type InsertMethodologyFrame = z.infer<typeof insertMethodologyFrameSchema>;
+export type MethodologyFrame = typeof methodologyFrames.$inferSelect;
+
+export type InsertClientMethodology = z.infer<typeof insertClientMethodologySchema>;
+export type ClientMethodology = typeof clientMethodologies.$inferSelect;

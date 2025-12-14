@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PromptSettings } from "./PromptSettings";
 
 interface DocumentSection {
   id: string;
@@ -214,6 +215,8 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
           Add Section
         </Button>
       </div>
+
+      <PromptSettings clientId={clientId} />
 
       {isAddingSection && (
         <div className="rounded-lg border border-primary/50 bg-primary/5 p-4 space-y-3" data-testid="new-section-form">

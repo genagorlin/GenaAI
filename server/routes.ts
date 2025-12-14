@@ -238,5 +238,36 @@ export async function registerRoutes(
     }
   });
 
+  // Prompt Layer Routes
+  app.get("/api/clients/:clientId/prompts", isAuthenticated, async (req, res) => {
+    try {
+      const rolePrompt = await storage.getOrCreateRolePrompt(req.params.clientId);
+      const taskPrompt = await storage.getOrCreateTaskPrompt(req.params.clientId);
+      res.json({ rolePrompt, taskPrompt });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch prompts" });
+    }
+  });
+
+  app.patch("/api/clients/:clientId/prompts/role", isAuthenticated, async (req, res) => {
+    try {
+      const { content } = z.object({ content: z.string() }).parse(req.body);
+      const rolePrompt = await storage.updateRolePrompt(req.params.clientId, content);
+      res.json(rolePrompt);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid prompt data" });
+    }
+  });
+
+  app.patch("/api/clients/:clientId/prompts/task", isAuthenticated, async (req, res) => {
+    try {
+      const { content } = z.object({ content: z.string() }).parse(req.body);
+      const taskPrompt = await storage.updateTaskPrompt(req.params.clientId, content);
+      res.json(taskPrompt);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid prompt data" });
+    }
+  });
+
   return httpServer;
 }

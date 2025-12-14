@@ -13,13 +13,21 @@ import {
   type InsertClientDocument,
   type DocumentSection,
   type InsertDocumentSection,
+  type RolePrompt,
+  type TaskPrompt,
+  type MethodologyFrame,
+  type ClientMethodology,
   clients,
   messages,
   insights,
   sentimentData,
   users,
   clientDocuments,
-  documentSections
+  documentSections,
+  rolePrompts,
+  taskPrompts,
+  methodologyFrames,
+  clientMethodologies
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc } from "drizzle-orm";
@@ -57,6 +65,15 @@ export interface IStorage {
   updateSection(id: string, updates: Partial<DocumentSection>): Promise<DocumentSection>;
   deleteSection(id: string): Promise<void>;
   reorderSections(documentId: string, sectionIds: string[]): Promise<void>;
+
+  // Prompt Layers
+  getOrCreateRolePrompt(clientId: string): Promise<RolePrompt>;
+  updateRolePrompt(clientId: string, content: string): Promise<RolePrompt>;
+  getOrCreateTaskPrompt(clientId: string): Promise<TaskPrompt>;
+  updateTaskPrompt(clientId: string, content: string): Promise<TaskPrompt>;
+  getAllMethodologyFrames(): Promise<MethodologyFrame[]>;
+  getActiveMethodologyFrames(): Promise<MethodologyFrame[]>;
+  getClientMethodologies(clientId: string): Promise<(ClientMethodology & { methodology: MethodologyFrame })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -235,6 +252,66 @@ export class DatabaseStorage implements IStorage {
     await db.update(clientDocuments)
       .set({ lastUpdated: new Date() })
       .where(eq(clientDocuments.id, documentId));
+  }
+
+  // Prompt Layers
+  async getOrCreateRolePrompt(clientId: string): Promise<RolePrompt> {
+    const [existing] = await db.select().from(rolePrompts).where(eq(rolePrompts.clientId, clientId));
+    if (existing) return existing;
+    const [created] = await db.insert(rolePrompts).values({ clientId }).returning();
+    return created;
+  }
+
+  async updateRolePrompt(clientId: string, content: string): Promise<RolePrompt> {
+    const [result] = await db
+      .insert(rolePrompts)
+      .values({ clientId, content })
+      .onConflictDoUpdate({
+        target: rolePrompts.clientId,
+        set: { content, updatedAt: new Date() },
+      })
+      .returning();
+    return result;
+  }
+
+  async getOrCreateTaskPrompt(clientId: string): Promise<TaskPrompt> {
+    const [existing] = await db.select().from(taskPrompts).where(eq(taskPrompts.clientId, clientId));
+    if (existing) return existing;
+    const [created] = await db.insert(taskPrompts).values({ clientId }).returning();
+    return created;
+  }
+
+  async updateTaskPrompt(clientId: string, content: string): Promise<TaskPrompt> {
+    const [result] = await db
+      .insert(taskPrompts)
+      .values({ clientId, content })
+      .onConflictDoUpdate({
+        target: taskPrompts.clientId,
+        set: { content, updatedAt: new Date() },
+      })
+      .returning();
+    return result;
+  }
+
+  async getAllMethodologyFrames(): Promise<MethodologyFrame[]> {
+    return await db.select().from(methodologyFrames).orderBy(asc(methodologyFrames.sortOrder));
+  }
+
+  async getActiveMethodologyFrames(): Promise<MethodologyFrame[]> {
+    return await db.select().from(methodologyFrames)
+      .where(eq(methodologyFrames.isActive, 1))
+      .orderBy(asc(methodologyFrames.sortOrder));
+  }
+
+  async getClientMethodologies(clientId: string): Promise<(ClientMethodology & { methodology: MethodologyFrame })[]> {
+    const results = await db.select()
+      .from(clientMethodologies)
+      .innerJoin(methodologyFrames, eq(clientMethodologies.methodologyId, methodologyFrames.id))
+      .where(eq(clientMethodologies.clientId, clientId));
+    return results.map((r: { client_methodologies: ClientMethodology; methodology_frames: MethodologyFrame }) => ({ 
+      ...r.client_methodologies, 
+      methodology: r.methodology_frames 
+    }));
   }
 }
 
