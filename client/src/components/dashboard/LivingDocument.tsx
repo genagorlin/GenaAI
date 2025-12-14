@@ -14,7 +14,9 @@ import {
   Sparkles,
   Target,
   Star,
-  BookOpen
+  BookOpen,
+  LayoutList,
+  FileEdit
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PromptSettings } from "./PromptSettings";
+import { DocumentView } from "./DocumentView";
+
+type ProfileViewMode = "prompt-entry" | "document";
 
 interface DocumentSection {
   id: string;
@@ -73,6 +78,7 @@ const sectionTypeLabels: Record<string, string> = {
 
 export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
   const queryClient = useQueryClient();
+  const [profileViewMode, setProfileViewMode] = useState<ProfileViewMode>("prompt-entry");
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingContent, setEditingContent] = useState("");
@@ -204,19 +210,49 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
             </p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsAddingSection(true)}
-          className="gap-2"
-          data-testid="button-add-section"
-        >
-          <Plus className="h-4 w-4" />
-          Add Section
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center border rounded-lg p-1 bg-muted/30">
+            <Button
+              variant={profileViewMode === "prompt-entry" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setProfileViewMode("prompt-entry")}
+              className="gap-2 h-8"
+              data-testid="button-view-prompt-entry"
+            >
+              <LayoutList className="h-4 w-4" />
+              Prompt Entry
+            </Button>
+            <Button
+              variant={profileViewMode === "document" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setProfileViewMode("document")}
+              className="gap-2 h-8"
+              data-testid="button-view-document-unified"
+            >
+              <FileEdit className="h-4 w-4" />
+              Document
+            </Button>
+          </div>
+          {profileViewMode === "prompt-entry" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddingSection(true)}
+              className="gap-2"
+              data-testid="button-add-section"
+            >
+              <Plus className="h-4 w-4" />
+              Add Section
+            </Button>
+          )}
+        </div>
       </div>
 
-      <PromptSettings clientId={clientId} />
+      {profileViewMode === "document" ? (
+        <DocumentView clientId={clientId} clientName={clientName} />
+      ) : (
+        <>
+          <PromptSettings clientId={clientId} />
 
       {isAddingSection && (
         <div className="rounded-lg border border-primary/50 bg-primary/5 p-4 space-y-3" data-testid="new-section-form">
@@ -386,6 +422,8 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
           )}
         </div>
       </ScrollArea>
+        </>
+      )}
     </div>
   );
 }
