@@ -8,7 +8,20 @@ The v1 scope is intentionally narrow: no marketplace, no multi-coach features, n
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+**Communication Style:**
+- Simple, everyday language (non-technical)
+- Treat user as first-time product manager learning the ropes
+- Before building any feature: clarify and flesh out the request first
+- Be explicit about what will be built and why
+- Look for teaching opportunities about key terms and system design
+- Save preferences as they emerge from conversations
+
+**Working Process:**
+1. Receive feature request
+2. Clarify what user means in plain language
+3. Explain what will be built and the reasoning
+4. Get confirmation before building
+5. Build and demonstrate
 
 ## System Architecture
 
