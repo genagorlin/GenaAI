@@ -15,7 +15,10 @@ import {
   Wifi,
   LogOut,
   FileText,
-  BarChart3
+  BarChart3,
+  MessageSquare,
+  Bot,
+  User
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -60,7 +63,7 @@ interface Message {
   timestamp: string;
 }
 
-type ViewMode = "document" | "signals";
+type ViewMode = "document" | "signals" | "messages";
 
 export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -242,6 +245,16 @@ export default function CoachPage() {
                  <BarChart3 className="h-4 w-4" />
                  Signals
                </Button>
+               <Button
+                 variant={viewMode === "messages" ? "secondary" : "ghost"}
+                 size="sm"
+                 onClick={() => setViewMode("messages")}
+                 className="gap-2 h-8"
+                 data-testid="button-view-messages"
+               >
+                 <MessageSquare className="h-4 w-4" />
+                 Messages
+               </Button>
              </div>
              <Button variant="ghost" size="icon" className="text-muted-foreground">
                <Bell className="h-5 w-5" />
@@ -258,6 +271,61 @@ export default function CoachPage() {
             
             {viewMode === "document" && selectedClient?.id ? (
               <LivingDocument key={selectedClient.id} clientId={selectedClient.id} clientName={selectedClient.name} />
+            ) : viewMode === "messages" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                    Conversation History
+                  </h2>
+                  <div className="text-sm text-muted-foreground">
+                    {messages.length} messages
+                  </div>
+                </div>
+                
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="divide-y divide-border">
+                    {messages.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        No messages yet for this client
+                      </div>
+                    ) : (
+                      messages
+                        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                        .map((msg) => (
+                          <div 
+                            key={msg.id}
+                            data-testid={`message-feed-${msg.id}`}
+                            className={`p-4 ${msg.role === 'ai' ? 'bg-muted/30' : 'bg-background'}`}
+                          >
+                            <div className="flex gap-3">
+                              <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                                msg.role === 'ai' 
+                                  ? 'bg-primary/10 text-primary' 
+                                  : 'bg-secondary text-secondary-foreground'
+                              }`}>
+                                {msg.role === 'ai' ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm font-medium">
+                                    {msg.role === 'ai' ? 'AI Coach' : selectedClient?.name}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(msg.timestamp).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                                  {msg.content}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : (
               <>
                 {/* Top Row: Mental Model & Velocity */}
