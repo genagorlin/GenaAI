@@ -272,19 +272,32 @@ export default function CoachPage() {
             {viewMode === "document" && selectedClient?.id ? (
               <LivingDocument key={selectedClient.id} clientId={selectedClient.id} clientName={selectedClient.name} />
             ) : viewMode === "messages" ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                    Conversation History
-                  </h2>
-                  <div className="text-sm text-muted-foreground">
-                    {messages.length} messages
+              <div className="max-w-2xl mx-auto">
+                {/* Chat Header */}
+                <div className="flex items-center justify-center gap-4 mb-6 pb-4 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <span className="text-sm font-medium">AI Coach</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                      <User className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                    </div>
+                    <span className="text-sm font-medium">{selectedClient?.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 opacity-50">
+                    <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-xs font-medium text-primary">You</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">Observing</span>
                   </div>
                 </div>
-                
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  <div className="divide-y divide-border">
+
+                {/* Messages Container */}
+                <div className="rounded-2xl border border-border bg-stone-50 dark:bg-stone-900/50 p-4 min-h-[500px]">
+                  <div className="space-y-4">
                     {messages.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         No messages yet for this client
@@ -292,38 +305,61 @@ export default function CoachPage() {
                     ) : (
                       messages
                         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                        .map((msg) => (
-                          <div 
-                            key={msg.id}
-                            data-testid={`message-feed-${msg.id}`}
-                            className={`p-4 ${msg.role === 'ai' ? 'bg-muted/30' : 'bg-background'}`}
-                          >
-                            <div className="flex gap-3">
-                              <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
-                                msg.role === 'ai' 
-                                  ? 'bg-primary/10 text-primary' 
-                                  : 'bg-secondary text-secondary-foreground'
-                              }`}>
-                                {msg.role === 'ai' ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-sm font-medium">
-                                    {msg.role === 'ai' ? 'AI Coach' : selectedClient?.name}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {new Date(msg.timestamp).toLocaleString()}
+                        .map((msg, index) => {
+                          const isAI = msg.role === 'ai';
+                          const prevMsg = index > 0 ? messages[index - 1] : null;
+                          const showTimestamp = !prevMsg || 
+                            new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
+                          
+                          return (
+                            <div key={msg.id} data-testid={`message-feed-${msg.id}`}>
+                              {showTimestamp && (
+                                <div className="text-center mb-3">
+                                  <span className="text-[10px] text-muted-foreground bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded-full">
+                                    {new Date(msg.timestamp).toLocaleString([], { 
+                                      month: 'short', 
+                                      day: 'numeric',
+                                      hour: 'numeric', 
+                                      minute: '2-digit'
+                                    })}
                                   </span>
                                 </div>
-                                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                                  {msg.content}
-                                </p>
+                              )}
+                              <div className={`flex ${isAI ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex items-end gap-2 max-w-[80%] ${isAI ? 'flex-row-reverse' : ''}`}>
+                                  <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center ${
+                                    isAI 
+                                      ? 'bg-emerald-100 dark:bg-emerald-900/30' 
+                                      : 'bg-slate-200 dark:bg-slate-700'
+                                  }`}>
+                                    {isAI 
+                                      ? <Bot className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 
+                                      : <User className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+                                    }
+                                  </div>
+                                  <div className={`rounded-2xl px-4 py-2.5 ${
+                                    isAI 
+                                      ? 'bg-emerald-600 text-white rounded-br-md' 
+                                      : 'bg-white dark:bg-slate-800 text-foreground border border-stone-200 dark:border-slate-700 rounded-bl-md'
+                                  }`}>
+                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                      {msg.content}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                     )}
                   </div>
+                </div>
+
+                {/* Observer Notice */}
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    You're viewing the conversation between {selectedClient?.name} and the AI Coach
+                  </p>
                 </div>
               </div>
             ) : (
