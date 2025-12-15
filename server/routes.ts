@@ -740,19 +740,14 @@ export async function registerRoutes(
     }
   });
 
-  // Dynamic PWA manifest (customizes start_url based on referrer)
+  // Dynamic PWA manifest (customizes start_url based on query param)
   app.get("/api/manifest.json", (req, res) => {
-    const referer = req.get("Referer") || "";
     let startUrl = "/";
     
-    // Extract path from referer if it's a client chat URL
-    try {
-      const url = new URL(referer);
-      if (url.pathname.startsWith("/chat/")) {
-        startUrl = url.pathname;
-      }
-    } catch (e) {
-      // Invalid referer, use default
+    // Use query parameter if provided
+    const startParam = req.query.start as string;
+    if (startParam && startParam.startsWith("/chat/")) {
+      startUrl = startParam;
     }
 
     const manifest = {

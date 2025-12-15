@@ -14,7 +14,7 @@
     <meta name="twitter:description" content="A vertically integrated thinking partner for deep reflection and clarity." />
     <meta name="twitter:image" content="https://replit.com/public/images/opengraph.png" />
 
-    <link rel="manifest" href="/api/manifest.json">
+    <link rel="manifest" id="manifest-link" href="/api/manifest.json">
     <meta name="theme-color" content="#7c3aed">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -30,6 +30,12 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      (function() {
+        var manifestLink = document.getElementById('manifest-link');
+        if (manifestLink && window.location.pathname.startsWith('/chat/')) {
+          manifestLink.href = '/api/manifest.json?start=' + encodeURIComponent(window.location.pathname);
+        }
+      })();
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js');
