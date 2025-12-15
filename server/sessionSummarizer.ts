@@ -106,7 +106,7 @@ Based on this conversation, generate updates for the relevant document sections.
   try {
     console.log(`[SessionSummarizer] Calling AI to generate section updates for ${messages.length} messages...`);
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 4000,
       messages: [{ role: "user", content: userMessage }],
       system: systemPrompt,
@@ -192,7 +192,7 @@ Return a JSON array: [{"sectionId": "...", "newContent": "..."}]
 Return [] if no updates needed.`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 2000,
       messages: [{ 
         role: "user", 
