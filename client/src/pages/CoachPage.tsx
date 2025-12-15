@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
@@ -69,6 +69,7 @@ interface SentimentDataPoint {
 interface Message {
   id: string;
   clientId: string;
+  threadId: string | null;
   role: string;
   content: string;
   type: string;
@@ -76,15 +77,28 @@ interface Message {
   timestamp: string;
 }
 
+interface Thread {
+  id: string;
+  clientId: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string;
+}
+
 type ViewMode = "document" | "signals" | "messages";
 
 export default function CoachPage() {
   const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("document");
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { user } = useAuth();
+
+  useEffect(() => {
+    setSelectedThreadId(null);
+  }, [selectedClientId]);
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
@@ -136,15 +150,33 @@ export default function CoachPage() {
     enabled: !!selectedClient
   });
 
-  const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ["/api/clients", selectedClient?.id, "messages"],
+  const { data: threads = [] } = useQuery<Thread[]>({
+    queryKey: ["/api/clients", selectedClient?.id, "threads"],
     queryFn: async () => {
+      if (!selectedClient) return [];
+      const res = await fetch(`/api/clients/${selectedClient.id}/threads`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch threads");
+      return res.json();
+    },
+    enabled: !!selectedClient
+  });
+
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: selectedThreadId 
+      ? ["/api/threads", selectedThreadId, "messages"]
+      : ["/api/clients", selectedClient?.id, "messages"],
+    queryFn: async () => {
+      if (selectedThreadId) {
+        const res = await fetch(`/api/threads/${selectedThreadId}/messages`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch thread messages");
+        return res.json();
+      }
       if (!selectedClient) return [];
       const res = await fetch(`/api/clients/${selectedClient.id}/messages`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
-    enabled: !!selectedClient
+    enabled: !!selectedClient || !!selectedThreadId
   });
 
   const deleteClientMutation = useMutation({
@@ -377,105 +409,163 @@ export default function CoachPage() {
             {viewMode === "document" && selectedClient?.id ? (
               <LivingDocument key={selectedClient.id} clientId={selectedClient.id} clientName={selectedClient.name} />
             ) : viewMode === "messages" ? (
-              <div className="max-w-2xl mx-auto">
-                {/* Legend Header */}
-                <div className="flex items-center justify-center gap-6 mb-6 pb-4 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-sky-500" />
-                    <span className="text-sm font-medium">{selectedClient?.name}</span>
+              <div className="flex gap-6 h-[calc(100vh-220px)]">
+                {/* Left Column: Thread List */}
+                <div className="w-80 flex-shrink-0 rounded-xl border border-border bg-card overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-border bg-muted/30">
+                    <h3 className="font-medium text-sm">Conversations</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{threads.length} thread{threads.length !== 1 ? 's' : ''}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-stone-300 dark:bg-stone-600" />
-                    <span className="text-sm text-muted-foreground">AI</span>
-                  </div>
-                  <div className="flex items-center gap-2 opacity-50">
-                    <div className="h-3 w-3 rounded-full bg-violet-500" />
-                    <span className="text-sm text-muted-foreground">You (observing)</span>
-                  </div>
-                </div>
-
-                {/* Messages Container */}
-                <div className="rounded-2xl border border-border bg-stone-50 dark:bg-stone-900/50 p-4 min-h-[500px]">
-                  <div className="space-y-3">
-                    {messages.length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        No messages yet for this client
-                      </div>
-                    ) : (
-                      messages
-                        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                        .map((msg, index) => {
-                          const isAI = msg.role === 'ai';
-                          const isCoach = msg.role === 'coach';
-                          const isClient = msg.role === 'user';
-                          const prevMsg = index > 0 ? messages[index - 1] : null;
-                          const showTimestamp = !prevMsg || 
-                            new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
-                          
-                          return (
-                            <div key={msg.id} data-testid={`message-feed-${msg.id}`}>
-                              {showTimestamp && (
-                                <div className="text-center mb-3">
-                                  <span className="text-[10px] text-muted-foreground bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded-full">
-                                    {new Date(msg.timestamp).toLocaleString([], { 
-                                      month: 'short', 
-                                      day: 'numeric',
-                                      hour: 'numeric', 
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
+                  <ScrollArea className="flex-1">
+                    <div className="divide-y divide-border">
+                      {threads.length === 0 ? (
+                        <div className="p-8 text-center text-muted-foreground text-sm">
+                          No conversations yet
+                        </div>
+                      ) : (
+                        threads
+                          .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+                          .map((thread) => (
+                            <button
+                              key={thread.id}
+                              onClick={() => setSelectedThreadId(thread.id)}
+                              className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${
+                                selectedThreadId === thread.id ? 'bg-muted border-l-2 border-primary' : ''
+                              }`}
+                              data-testid={`coach-thread-${thread.id}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+                                  <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                 </div>
-                              )}
-                              <div className={`flex ${isCoach ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex items-start gap-2 max-w-[80%] ${isCoach ? 'flex-row-reverse' : ''}`}>
-                                  <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center mt-0.5 ${
-                                    isClient 
-                                      ? 'bg-sky-100 dark:bg-sky-900/40' 
-                                      : isAI
-                                      ? 'bg-stone-200 dark:bg-stone-700'
-                                      : 'bg-violet-100 dark:bg-violet-900/40'
-                                  }`}>
-                                    {isClient 
-                                      ? <User className="h-3 w-3 text-sky-600 dark:text-sky-400" />
-                                      : isAI
-                                      ? <Bot className="h-3 w-3 text-stone-500 dark:text-stone-400" /> 
-                                      : <span className="text-[9px] font-semibold text-violet-600 dark:text-violet-400">{(user as any)?.firstName?.[0] || 'C'}</span>
-                                    }
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h4 className="font-medium text-sm truncate">{thread.title}</h4>
+                                    <span className="text-[10px] text-muted-foreground shrink-0">
+                                      {new Date(thread.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                    </span>
                                   </div>
-                                  <div className={`rounded-2xl px-4 py-2.5 ${
-                                    isClient 
-                                      ? 'bg-sky-500 text-white rounded-tl-sm' 
-                                      : isAI
-                                      ? 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
-                                      : 'bg-violet-500 text-white rounded-tr-sm'
-                                  }`}>
-                                    {isClient && (
-                                      <p className="text-[10px] font-medium text-sky-100 mb-1">{selectedClient?.name}</p>
-                                    )}
-                                    {isAI && (
-                                      <p className="text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">GenaGPT</p>
-                                    )}
-                                    {isCoach && (
-                                      <p className="text-[10px] font-medium text-violet-100 mb-1">{(user as any)?.firstName || 'Coach'}</p>
-                                    )}
-                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                      {msg.content}
-                                    </p>
-                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                    {new Date(thread.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </div>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  </ScrollArea>
                 </div>
 
-                {/* Observer Notice */}
-                <div className="mt-4 text-center">
-                  <p className="text-xs text-muted-foreground">
-                    You're observing the conversation between {selectedClient?.name} and GenaGPT
-                  </p>
+                {/* Right Column: Thread Messages */}
+                <div className="flex-1 rounded-xl border border-border bg-card overflow-hidden flex flex-col">
+                  {!selectedThreadId ? (
+                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                        <p className="text-sm">Select a conversation to view messages</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Thread Header with Legend */}
+                      <div className="p-4 border-b border-border bg-muted/30">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-medium">
+                            {threads.find(t => t.id === selectedThreadId)?.title || 'Conversation'}
+                          </h3>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+                              <span className="text-xs">{selectedClient?.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full bg-stone-400" />
+                              <span className="text-xs text-muted-foreground">AI</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Messages */}
+                      <ScrollArea className="flex-1 p-4">
+                        <div className="space-y-3">
+                          {messages.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground text-sm">
+                              No messages in this thread
+                            </div>
+                          ) : (
+                            messages
+                              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                              .map((msg, index) => {
+                                const isAI = msg.role === 'ai';
+                                const isClient = msg.role === 'user';
+                                const isCoach = msg.role === 'coach';
+                                const prevMsg = index > 0 ? messages[index - 1] : null;
+                                const showTimestamp = !prevMsg || 
+                                  new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
+                                
+                                return (
+                                  <div key={msg.id} data-testid={`message-feed-${msg.id}`}>
+                                    {showTimestamp && (
+                                      <div className="text-center mb-3">
+                                        <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                          {new Date(msg.timestamp).toLocaleString([], { 
+                                            month: 'short', 
+                                            day: 'numeric',
+                                            hour: 'numeric', 
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className={`flex ${isCoach ? 'justify-end' : 'justify-start'}`}>
+                                      <div className={`flex items-start gap-2 max-w-[85%] ${isCoach ? 'flex-row-reverse' : ''}`}>
+                                        <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center mt-0.5 ${
+                                          isClient 
+                                            ? 'bg-sky-100 dark:bg-sky-900/40' 
+                                            : isCoach
+                                            ? 'bg-violet-100 dark:bg-violet-900/40'
+                                            : 'bg-stone-200 dark:bg-stone-700'
+                                        }`}>
+                                          {isClient 
+                                            ? <User className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                                            : isCoach
+                                            ? <span className="text-[9px] font-semibold text-violet-600 dark:text-violet-400">{(user as any)?.firstName?.[0] || 'C'}</span>
+                                            : <Bot className="h-3 w-3 text-stone-500 dark:text-stone-400" />
+                                          }
+                                        </div>
+                                        <div className={`rounded-2xl px-4 py-2.5 ${
+                                          isClient 
+                                            ? 'bg-sky-500 text-white rounded-tl-sm' 
+                                            : isCoach
+                                            ? 'bg-violet-500 text-white rounded-tr-sm'
+                                            : 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
+                                        }`}>
+                                          <p className={`text-[10px] font-medium mb-1 ${isCoach ? 'text-violet-100' : 'opacity-70'}`}>
+                                            {isClient ? selectedClient?.name : isCoach ? ((user as any)?.firstName || 'Coach') : 'GenaGPT'}
+                                          </p>
+                                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                            {msg.content}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                          )}
+                        </div>
+                      </ScrollArea>
+
+                      {/* Observer Footer */}
+                      <div className="p-3 border-t border-border bg-muted/30 text-center">
+                        <p className="text-xs text-muted-foreground">
+                          Observing conversation • {selectedClient?.name} ↔ GenaGPT
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
