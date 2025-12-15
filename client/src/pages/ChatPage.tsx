@@ -140,7 +140,6 @@ export default function ChatPage() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      setIsAiTyping(true);
       const res = await fetch(`/api/clients/${clientId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -149,11 +148,38 @@ export default function ChatPage() {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
+    onMutate: async (content: string) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId, "messages"] });
+      
+      const previousMessages = queryClient.getQueryData<Message[]>(["/api/clients", clientId, "messages"]);
+      
+      const optimisticMessage: Message = {
+        id: `temp-${Date.now()}`,
+        clientId: clientId!,
+        role: "user",
+        content,
+        type: "text",
+        duration: null,
+        timestamp: new Date().toISOString()
+      };
+      
+      queryClient.setQueryData<Message[]>(
+        ["/api/clients", clientId, "messages"],
+        (old) => [...(old || []), optimisticMessage]
+      );
+      
+      setIsAiTyping(true);
+      
+      return { previousMessages };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "messages"] });
       setIsAiTyping(false);
     },
-    onError: () => {
+    onError: (err, content, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(["/api/clients", clientId, "messages"], context.previousMessages);
+      }
       setIsAiTyping(false);
     }
   });
