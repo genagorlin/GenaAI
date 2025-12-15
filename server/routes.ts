@@ -304,6 +304,24 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/sections/:id/accept", isAuthenticated, async (req, res) => {
+    try {
+      const section = await storage.acceptSectionUpdate(req.params.id);
+      res.json(section);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to accept update" });
+    }
+  });
+
+  app.post("/api/sections/:id/revert", isAuthenticated, async (req, res) => {
+    try {
+      const section = await storage.revertSectionUpdate(req.params.id);
+      res.json(section);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to revert update" });
+    }
+  });
+
   // Prompt Layer Routes
   app.get("/api/clients/:clientId/prompts", isAuthenticated, async (req, res) => {
     try {

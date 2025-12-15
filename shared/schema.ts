@@ -95,6 +95,9 @@ export const documentSections = pgTable("document_sections", {
   sectionType: text("section_type").notNull().default("custom"), // "highlight", "focus", "context", "summary", "custom"
   title: text("title").notNull(),
   content: text("content").notNull().default(""), // Rich text content
+  previousContent: text("previous_content"), // Content before last AI update (for revert)
+  lastUpdatedBy: text("last_updated_by").default("coach"), // "ai" or "coach" - tracks who made the last edit
+  pendingReview: integer("pending_review").notNull().default(0), // 1 if AI update needs coach review
   coachNotes: text("coach_notes").default(""), // Private notes visible only to coach
   sortOrder: integer("sort_order").notNull().default(0),
   isCollapsed: integer("is_collapsed").notNull().default(0),

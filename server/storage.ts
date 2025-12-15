@@ -66,8 +66,11 @@ export interface IStorage {
   getSection(id: string): Promise<DocumentSection | undefined>;
   createSection(section: InsertDocumentSection): Promise<DocumentSection>;
   updateSection(id: string, updates: Partial<DocumentSection>): Promise<DocumentSection>;
+  updateSectionByAI(id: string, newContent: string): Promise<DocumentSection>;
   deleteSection(id: string): Promise<void>;
   reorderSections(documentId: string, sectionIds: string[]): Promise<void>;
+  acceptSectionUpdate(id: string): Promise<DocumentSection>;
+  revertSectionUpdate(id: string): Promise<DocumentSection>;
 
   // Prompt Layers
   getOrCreateRolePrompt(clientId: string): Promise<RolePrompt>;
@@ -243,7 +246,30 @@ export class DatabaseStorage implements IStorage {
 
   async updateSection(id: string, updates: Partial<DocumentSection>): Promise<DocumentSection> {
     const [result] = await db.update(documentSections)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date(), lastUpdatedBy: "coach", pendingReview: 0 })
+      .where(eq(documentSections.id, id))
+      .returning();
+    if (result) {
+      await db.update(clientDocuments)
+        .set({ lastUpdated: new Date() })
+        .where(eq(clientDocuments.id, result.documentId));
+    }
+    return result;
+  }
+
+  async updateSectionByAI(id: string, newContent: string): Promise<DocumentSection> {
+    const [section] = await db.select().from(documentSections).where(eq(documentSections.id, id));
+    if (!section) {
+      throw new Error("Section not found");
+    }
+    const [result] = await db.update(documentSections)
+      .set({ 
+        previousContent: section.content,
+        content: newContent,
+        lastUpdatedBy: "ai",
+        pendingReview: 1,
+        updatedAt: new Date()
+      })
       .where(eq(documentSections.id, id))
       .returning();
     if (result) {
@@ -273,6 +299,36 @@ export class DatabaseStorage implements IStorage {
     await db.update(clientDocuments)
       .set({ lastUpdated: new Date() })
       .where(eq(clientDocuments.id, documentId));
+  }
+
+  async acceptSectionUpdate(id: string): Promise<DocumentSection> {
+    const [result] = await db.update(documentSections)
+      .set({ 
+        pendingReview: 0,
+        previousContent: null,
+        updatedAt: new Date()
+      })
+      .where(eq(documentSections.id, id))
+      .returning();
+    return result;
+  }
+
+  async revertSectionUpdate(id: string): Promise<DocumentSection> {
+    const [section] = await db.select().from(documentSections).where(eq(documentSections.id, id));
+    if (!section || !section.previousContent) {
+      throw new Error("No previous content to revert to");
+    }
+    const [result] = await db.update(documentSections)
+      .set({ 
+        content: section.previousContent,
+        previousContent: null,
+        pendingReview: 0,
+        lastUpdatedBy: "coach",
+        updatedAt: new Date()
+      })
+      .where(eq(documentSections.id, id))
+      .returning();
+    return result;
   }
 
   // Prompt Layers

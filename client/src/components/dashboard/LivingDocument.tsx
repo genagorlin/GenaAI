@@ -13,7 +13,9 @@ import {
   Star,
   BookOpen,
   Clock,
-  RotateCcw
+  RotateCcw,
+  Undo2,
+  CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,9 @@ interface DocumentSection {
   sectionType: string;
   title: string;
   content: string;
+  previousContent: string | null;
+  lastUpdatedBy: string | null;
+  pendingReview: number;
   sortOrder: number;
   isCollapsed: number;
   createdAt: string;
@@ -255,6 +260,40 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
         delete updated[deletedId];
         return updated;
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
+    },
+  });
+
+  const acceptSectionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/sections/${id}/accept`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to accept update");
+      return res.json();
+    },
+    onSuccess: () => {
+      initializedSectionsRef.current = false;
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
+    },
+  });
+
+  const revertSectionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/sections/${id}/revert`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to revert update");
+      return res.json();
+    },
+    onSuccess: (updatedSection) => {
+      setSectionContents(prev => ({
+        ...prev,
+        [updatedSection.id]: { title: updatedSection.title, content: updatedSection.content }
+      }));
+      initializedSectionsRef.current = false;
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
     },
   });
@@ -520,11 +559,14 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
               const Icon = sectionTypeIcons[section.sectionType] || FileText;
               const isRecent = isRecentUpdate(section.updatedAt);
               const currentContent = sectionContents[section.id];
+              const hasAIUpdate = section.pendingReview === 1 && section.previousContent;
+              const isAIAuthored = section.lastUpdatedBy === "ai";
 
               return (
                 <div
                   key={section.id}
                   className={`rounded-xl border bg-card overflow-hidden transition-all ${
+                    hasAIUpdate ? "border-blue-400/50 shadow-md ring-1 ring-blue-400/20" : 
                     isRecent ? "border-primary/30 shadow-sm" : "border-border"
                   }`}
                   data-testid={`section-${section.id}`}
@@ -543,14 +585,52 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
                       <Badge variant="outline" className="text-[10px] h-5 px-1.5">
                         {sectionTypeLabels[section.sectionType] || "Custom"}
                       </Badge>
-                      {isRecent && (
+                      {hasAIUpdate && (
+                        <Badge className="text-[10px] h-5 px-1.5 gap-1 bg-blue-500 text-white">
+                          <Bot className="h-3 w-3" />
+                          AI updated
+                        </Badge>
+                      )}
+                      {isRecent && !hasAIUpdate && (
                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-1 bg-primary/10 text-primary border-primary/20">
                           <Clock className="h-3 w-3" />
                           {formatTimeAgo(section.updatedAt)}
                         </Badge>
                       )}
+                      {isAIAuthored && !hasAIUpdate && (
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 text-muted-foreground">
+                          <Bot className="h-3 w-3" />
+                          AI
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
+                      {hasAIUpdate && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => acceptSectionMutation.mutate(section.id)}
+                            disabled={acceptSectionMutation.isPending}
+                            data-testid={`button-accept-${section.id}`}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Accept
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs gap-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            onClick={() => revertSectionMutation.mutate(section.id)}
+                            disabled={revertSectionMutation.isPending}
+                            data-testid={`button-revert-${section.id}`}
+                          >
+                            <Undo2 className="h-3.5 w-3.5" />
+                            Revert
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
