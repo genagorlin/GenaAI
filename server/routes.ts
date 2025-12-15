@@ -740,6 +740,50 @@ export async function registerRoutes(
     }
   });
 
+  // Dynamic PWA manifest (customizes start_url based on referrer)
+  app.get("/api/manifest.json", (req, res) => {
+    const referer = req.get("Referer") || "";
+    let startUrl = "/";
+    
+    // Extract path from referer if it's a client chat URL
+    try {
+      const url = new URL(referer);
+      if (url.pathname.startsWith("/chat/")) {
+        startUrl = url.pathname;
+      }
+    } catch (e) {
+      // Invalid referer, use default
+    }
+
+    const manifest = {
+      name: "GenaGPT - AI Coaching Journal",
+      short_name: "GenaGPT",
+      description: "Your AI-powered coaching journal and thinking partner",
+      start_url: startUrl,
+      display: "standalone",
+      background_color: "#ffffff",
+      theme_color: "#7c3aed",
+      orientation: "portrait-primary",
+      icons: [
+        {
+          src: "/icon-192.png",
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "any maskable"
+        },
+        {
+          src: "/icon-512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "any maskable"
+        }
+      ]
+    };
+
+    res.setHeader("Content-Type", "application/manifest+json");
+    res.json(manifest);
+  });
+
   // Audio Transcription Route (public for client chat)
   app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     try {
