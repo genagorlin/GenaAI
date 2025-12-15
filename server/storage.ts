@@ -1,6 +1,8 @@
 import { 
   type Client, 
   type InsertClient, 
+  type Thread,
+  type InsertThread,
   type Message, 
   type InsertMessage,
   type Insight,
@@ -19,6 +21,7 @@ import {
   type ClientMethodology,
   type AuthorizedUser,
   clients,
+  threads,
   messages,
   insights,
   sentimentData,
@@ -47,8 +50,17 @@ export interface IStorage {
   updateClientAuth(id: string, data: { email: string; name: string; photoUrl?: string }): Promise<void>;
   updateClientActivity(id: string, mobileAppConnected: number): Promise<void>;
 
+  // Threads
+  getClientThreads(clientId: string): Promise<Thread[]>;
+  getThread(id: string): Promise<Thread | undefined>;
+  createThread(thread: InsertThread): Promise<Thread>;
+  updateThreadTitle(id: string, title: string): Promise<Thread>;
+  updateThreadLastMessage(id: string): Promise<void>;
+  getOrCreateDefaultThread(clientId: string): Promise<Thread>;
+
   // Messages
   getClientMessages(clientId: string): Promise<Message[]>;
+  getThreadMessages(threadId: string): Promise<Message[]>;
   getMessagesSinceSummarization(clientId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   
@@ -171,6 +183,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clients.id, id));
   }
 
+  // Threads
+  async getClientThreads(clientId: string): Promise<Thread[]> {
+    return await db.select().from(threads)
+      .where(eq(threads.clientId, clientId))
+      .orderBy(desc(threads.lastMessageAt));
+  }
+
+  async getThread(id: string): Promise<Thread | undefined> {
+    const [thread] = await db.select().from(threads).where(eq(threads.id, id));
+    return thread;
+  }
+
+  async createThread(insertThread: InsertThread): Promise<Thread> {
+    const [thread] = await db.insert(threads).values(insertThread).returning();
+    return thread;
+  }
+
+  async updateThreadTitle(id: string, title: string): Promise<Thread> {
+    const [thread] = await db.update(threads)
+      .set({ title })
+      .where(eq(threads.id, id))
+      .returning();
+    return thread;
+  }
+
+  async updateThreadLastMessage(id: string): Promise<void> {
+    await db.update(threads)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(threads.id, id));
+  }
+
+  async getOrCreateDefaultThread(clientId: string): Promise<Thread> {
+    const existingThreads = await this.getClientThreads(clientId);
+    if (existingThreads.length > 0) {
+      return existingThreads[0];
+    }
+    return await this.createThread({ clientId, title: "First conversation" });
+  }
+
   // Messages
   async getClientMessages(clientId: string): Promise<Message[]> {
     return await db.select().from(messages)
@@ -178,8 +229,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.timestamp);
   }
 
+  async getThreadMessages(threadId: string): Promise<Message[]> {
+    return await db.select().from(messages)
+      .where(eq(messages.threadId, threadId))
+      .orderBy(messages.timestamp);
+  }
+
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     const result = await db.insert(messages).values(insertMessage).returning();
+    if (insertMessage.threadId) {
+      await this.updateThreadLastMessage(insertMessage.threadId);
+    }
     return result[0];
   }
 

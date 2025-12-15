@@ -52,9 +52,19 @@ export const clients = pgTable("clients", {
   lastSummarizedAt: timestamp("last_summarized_at"),
 });
 
+// Conversation threads - each client can have multiple threads
+export const threads = pgTable("threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("New conversation"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+});
+
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
   role: text("role").notNull(), // "user" or "ai"
   content: text("content").notNull(),
   type: text("type").notNull().default("text"), // "text" or "audio"
@@ -149,6 +159,7 @@ export const registerClientSchema = z.object({
   email: z.string().email(),
   photoUrl: z.string().optional(),
 });
+export const insertThreadSchema = createInsertSchema(threads).omit({ id: true, createdAt: true, lastMessageAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true });
 export const insertInsightSchema = createInsertSchema(insights).omit({ id: true, timestamp: true });
 export const insertSentimentDataSchema = createInsertSchema(sentimentData).omit({ id: true });
@@ -161,6 +172,9 @@ export const insertClientMethodologySchema = createInsertSchema(clientMethodolog
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
+
+export type InsertThread = z.infer<typeof insertThreadSchema>;
+export type Thread = typeof threads.$inferSelect;
 
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
