@@ -299,7 +299,7 @@ export default function CoachPage() {
   return (
     <div className="flex h-screen w-full bg-background">
       {/* Sidebar - hidden on mobile when viewing client details */}
-      <div className={`w-full md:w-80 flex-shrink-0 border-r border-border bg-sidebar flex flex-col ${showMobileDetail ? 'hidden md:flex' : 'flex'}`}>
+      <div className={showMobileDetail ? 'hidden md:flex md:w-80 flex-shrink-0 border-r border-border bg-sidebar md:flex-col' : 'flex w-full md:w-80 flex-shrink-0 border-r border-border bg-sidebar flex-col'}>
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-6">
              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -395,7 +395,7 @@ export default function CoachPage() {
       </div>
 
       {/* Main Content - hidden on mobile when viewing client list */}
-      <div className={`flex-1 flex flex-col overflow-hidden bg-background ${showMobileDetail ? 'flex' : 'hidden md:flex'}`}>
+      <div className={showMobileDetail ? 'flex flex-1 flex-col overflow-hidden bg-background' : 'hidden md:flex flex-1 md:flex-col overflow-hidden bg-background'}>
         {/* Top Bar */}
         <header className="flex h-16 items-center justify-between border-b border-border px-4 md:px-8">
           <div className="flex items-center gap-2 md:gap-4">
