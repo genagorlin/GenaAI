@@ -43,6 +43,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 
 interface Client {
@@ -85,6 +90,22 @@ interface Thread {
   title: string;
   createdAt: string;
   lastMessageAt: string;
+}
+
+interface Mention {
+  id: string;
+  messageId: string;
+  clientId: string;
+  threadId: string;
+  isRead: number;
+  createdAt: string;
+  message?: {
+    content: string;
+    timestamp: string;
+  };
+  client?: {
+    name: string;
+  };
 }
 
 type ViewMode = "document" | "signals" | "messages";
@@ -173,6 +194,16 @@ export default function CoachPage() {
       if (!res.ok) return 0;
       const data = await res.json();
       return data.count || 0;
+    },
+    refetchInterval: 30000
+  });
+
+  const { data: mentions = [] } = useQuery<Mention[]>({
+    queryKey: ["/api/coach/mentions"],
+    queryFn: async () => {
+      const res = await fetch("/api/coach/mentions", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
     },
     refetchInterval: 30000
   });
@@ -448,14 +479,59 @@ export default function CoachPage() {
                  Messages
                </Button>
              </div>
-             <Button variant="ghost" size="icon" className="text-muted-foreground relative" data-testid="button-mentions">
-               <Bell className="h-5 w-5" />
-               {mentionsCount > 0 && (
-                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] font-medium flex items-center justify-center">
-                   {mentionsCount > 9 ? '9+' : mentionsCount}
-                 </span>
-               )}
-             </Button>
+             <Popover>
+               <PopoverTrigger asChild>
+                 <Button variant="ghost" size="icon" className="text-muted-foreground relative" data-testid="button-mentions">
+                   <Bell className="h-5 w-5" />
+                   {mentionsCount > 0 && (
+                     <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] font-medium flex items-center justify-center">
+                       {mentionsCount > 9 ? '9+' : mentionsCount}
+                     </span>
+                   )}
+                 </Button>
+               </PopoverTrigger>
+               <PopoverContent className="w-80 p-0" align="end">
+                 <div className="p-3 border-b border-border">
+                   <h4 className="font-medium text-sm">Notifications</h4>
+                   <p className="text-xs text-muted-foreground">{mentionsCount} unread mention{mentionsCount !== 1 ? 's' : ''}</p>
+                 </div>
+                 <ScrollArea className="max-h-64">
+                   {mentions.length === 0 ? (
+                     <div className="p-4 text-center text-sm text-muted-foreground">
+                       No notifications
+                     </div>
+                   ) : (
+                     <div className="divide-y divide-border">
+                       {mentions.map((mention) => (
+                         <button
+                           key={mention.id}
+                           className="w-full text-left p-3 hover:bg-muted/50 transition-colors"
+                           onClick={() => {
+                             setSelectedClientId(mention.clientId);
+                             setViewMode("messages");
+                             setTimeout(() => setSelectedThreadId(mention.threadId), 100);
+                           }}
+                           data-testid={`mention-${mention.id}`}
+                         >
+                           <div className="flex items-start gap-2">
+                             <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                               <span className="text-xs font-medium text-red-600 dark:text-red-400">@</span>
+                             </div>
+                             <div className="flex-1 min-w-0">
+                               <p className="text-sm font-medium truncate">{mention.client?.name || 'Client'}</p>
+                               <p className="text-xs text-muted-foreground line-clamp-2">{mention.message?.content}</p>
+                               <p className="text-[10px] text-muted-foreground mt-1">
+                                 {mention.message?.timestamp && new Date(mention.message.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                               </p>
+                             </div>
+                           </div>
+                         </button>
+                       ))}
+                     </div>
+                   )}
+                 </ScrollArea>
+               </PopoverContent>
+             </Popover>
              <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                Prepare Session <ArrowRight className="h-4 w-4" />
              </Button>
