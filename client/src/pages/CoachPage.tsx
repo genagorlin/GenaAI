@@ -103,6 +103,19 @@ export default function CoachPage() {
     setSelectedThreadId(null);
   }, [selectedClientId]);
 
+  useEffect(() => {
+    if (selectedThreadId) {
+      fetch(`/api/coach/threads/${selectedThreadId}/mentions/read`, {
+        method: "PATCH",
+        credentials: "include",
+      }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/mentions/count"] });
+      }).catch(err => {
+        console.error("Failed to mark mentions as read:", err);
+      });
+    }
+  }, [selectedThreadId, queryClient]);
+
   const handleLogout = () => {
     window.location.href = "/api/logout";
   };
