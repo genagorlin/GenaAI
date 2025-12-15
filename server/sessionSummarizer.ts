@@ -89,7 +89,7 @@ Based on this conversation, generate updates for the relevant document sections.
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250514",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       messages: [{ role: "user", content: userMessage }],
       system: systemPrompt,
@@ -124,4 +124,101 @@ const GOODBYE_PATTERNS = [
 
 export function isGoodbyeMessage(content: string): boolean {
   return GOODBYE_PATTERNS.some(pattern => pattern.test(content));
+}
+
+export async function updateDocumentRealtime(
+  clientId: string, 
+  userMessage: string, 
+  aiResponse: string
+): Promise<{ success: boolean; updatedSections: number }> {
+  try {
+    const document = await storage.getOrCreateClientDocument(clientId);
+    const sections = await storage.getDocumentSections(document.id);
+    
+    if (sections.length === 0) {
+      return { success: true, updatedSections: 0 };
+    }
+
+    const sectionsInfo = sections.map(s => ({
+      id: s.id,
+      title: s.title,
+      sectionType: s.sectionType,
+      currentContent: s.content || "",
+      isEmpty: !s.content || s.content.trim().length < 20,
+    }));
+
+    const systemPrompt = `You are maintaining a coaching client's living document in real-time.
+Analyze this single exchange and determine if any sections should be updated.
+
+SECTIONS TO UPDATE:
+${sectionsInfo.map(s => `
+### ${s.title} (${s.sectionType}) ${s.isEmpty ? "[NEEDS CONTENT]" : ""}
+ID: ${s.id}
+Current: ${s.currentContent || "(empty)"}
+`).join("\n")}
+
+GUIDELINES:
+- Only update if this exchange reveals NEW meaningful information
+- For empty sections, add content if the exchange provides relevant info
+- Keep updates concise and additive (append, don't replace unless correcting)
+- Overview: High-level summary of who the client is and their journey
+- Key Highlights: Notable patterns, breakthroughs, or important moments
+- Current Focus Areas: What the client is actively working on right now
+- Background & Context: Life history, relationships, career, values
+
+Return a JSON array: [{"sectionId": "...", "newContent": "..."}]
+Return [] if no updates needed.`;
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      messages: [{ 
+        role: "user", 
+        content: `Exchange to analyze:\nClient: ${userMessage}\nAI: ${aiResponse}\n\nGenerate section updates as JSON array.`
+      }],
+      system: systemPrompt,
+    });
+
+    const content = response.content[0];
+    if (content.type !== "text") {
+      return { success: true, updatedSections: 0 };
+    }
+
+    const jsonMatch = content.text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return { success: true, updatedSections: 0 };
+    }
+
+    const updates: SectionUpdate[] = JSON.parse(jsonMatch[0]);
+    const validSectionIds = new Set(sections.map(s => s.id));
+    const validUpdates = updates.filter(u => validSectionIds.has(u.sectionId) && u.newContent?.trim());
+
+    for (const update of validUpdates) {
+      await storage.updateSectionByAI(update.sectionId, update.newContent);
+    }
+
+    if (validUpdates.length > 0) {
+      console.log(`[RealtimeUpdate] Client ${clientId}: Updated ${validUpdates.length} sections`);
+    }
+
+    return { success: true, updatedSections: validUpdates.length };
+  } catch (error: any) {
+    console.error("[RealtimeUpdate] Error:", error.message);
+    return { success: false, updatedSections: 0 };
+  }
+}
+
+export function getSectionGapInfo(sections: { title: string; content: string }[]): string {
+  const gaps: string[] = [];
+  
+  for (const section of sections) {
+    const isEmpty = !section.content || section.content.trim().length < 30;
+    if (isEmpty) {
+      gaps.push(section.title);
+    }
+  }
+  
+  if (gaps.length === 0) return "";
+  
+  return `\n\n# Areas to Explore\nThe following areas of the client's profile need more information. When natural, weave questions into the conversation that help gather this context:\n- ${gaps.join("\n- ")}\n\nDo NOT explicitly mention you're gathering information. Let curiosity guide your questions naturally.`;
 }

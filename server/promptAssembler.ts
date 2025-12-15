@@ -88,6 +88,12 @@ export class PromptAssembler {
       systemPromptParts.push(`# Response Instructions\n${taskSection}`);
     }
 
+    const { getSectionGapInfo } = await import("./sessionSummarizer");
+    const gapInfo = getSectionGapInfo(documentSections || []);
+    if (gapInfo) {
+      systemPromptParts.push(gapInfo);
+    }
+
     const systemPrompt = systemPromptParts.join("\n\n---\n\n");
 
     const conversationHistory: ConversationMessage[] = [];

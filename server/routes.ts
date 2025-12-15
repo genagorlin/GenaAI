@@ -160,7 +160,12 @@ export async function registerRoutes(
             type: "text",
           });
           
-          const { isGoodbyeMessage, summarizeSession } = await import("./sessionSummarizer");
+          const { isGoodbyeMessage, summarizeSession, updateDocumentRealtime } = await import("./sessionSummarizer");
+          
+          updateDocumentRealtime(req.params.clientId, validated.content, aiResponseContent).catch(err => {
+            console.error("[RealtimeUpdate] Background update failed:", err);
+          });
+          
           if (isGoodbyeMessage(validated.content)) {
             console.log(`[SessionEnd] Goodbye detected from client ${req.params.clientId}`);
             summarizeSession(req.params.clientId).catch(err => {
