@@ -478,6 +478,46 @@ export async function registerRoutes(
     }
   });
 
+  // Migration Route - Migrate existing messages to threads (one-time use)
+  app.post("/api/migrate/messages-to-threads", isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const allClients = await storage.getAllClients();
+      let migratedCount = 0;
+      
+      for (const client of allClients) {
+        const messages = await storage.getClientMessages(client.id);
+        const messagesWithoutThread = messages.filter(m => !m.threadId);
+        
+        if (messagesWithoutThread.length > 0) {
+          const thread = await storage.getOrCreateDefaultThread(client.id);
+          
+          // Update messages to belong to this thread using raw SQL
+          const { db } = await import("./db");
+          const { messages: messagesTable } = await import("@shared/schema");
+          const { eq, isNull, and } = await import("drizzle-orm");
+          
+          await db.update(messagesTable)
+            .set({ threadId: thread.id })
+            .where(and(eq(messagesTable.clientId, client.id), isNull(messagesTable.threadId)));
+          
+          // Auto-generate title from first message
+          const firstMessage = messagesWithoutThread.find(m => m.role === "user");
+          if (firstMessage) {
+            const title = firstMessage.content.slice(0, 50) + (firstMessage.content.length > 50 ? "..." : "");
+            await storage.updateThreadTitle(thread.id, title);
+          }
+          
+          migratedCount++;
+        }
+      }
+      
+      res.json({ success: true, clientsMigrated: migratedCount });
+    } catch (error: any) {
+      console.error("Migration error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Audio Transcription Route (public for client chat)
   app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     try {

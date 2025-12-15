@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Mic, MoreVertical, Smile, Loader2, Square } from "lucide-react";
+import { Send, Mic, MoreVertical, Smile, Loader2, Square, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -11,11 +11,20 @@ const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 interface Message {
   id: string;
   clientId: string;
+  threadId: string | null;
   role: "user" | "ai";
   content: string;
   type: string;
   duration: string | null;
   timestamp: string;
+}
+
+interface Thread {
+  id: string;
+  clientId: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string;
 }
 
 interface Client {
@@ -25,7 +34,7 @@ interface Client {
 }
 
 export default function ChatPage() {
-  const { clientId } = useParams<{ clientId: string }>();
+  const { clientId, threadId } = useParams<{ clientId: string; threadId: string }>();
   const [, setLocation] = useLocation();
   const [inputValue, setInputValue] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -65,6 +74,21 @@ export default function ChatPage() {
     enabled: !!clientId,
     retry: false
   });
+
+  const { data: thread } = useQuery<Thread>({
+    queryKey: ["/api/threads", threadId],
+    queryFn: async () => {
+      const res = await fetch(`/api/threads/${threadId}`);
+      if (!res.ok) throw new Error("Thread not found");
+      return res.json();
+    },
+    enabled: !!threadId,
+    retry: false
+  });
+
+  const handleBackToInbox = () => {
+    setLocation(`/chat/${clientId}`);
+  };
 
   const lastActivityRef = useRef<number>(Date.now());
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -128,13 +152,13 @@ export default function ChatPage() {
   }, [clientId, triggerSessionEnd, resetInactivityTimer]);
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ["/api/clients", clientId, "messages"],
+    queryKey: ["/api/threads", threadId, "messages"],
     queryFn: async () => {
-      const res = await fetch(`/api/clients/${clientId}/messages`);
+      const res = await fetch(`/api/threads/${threadId}/messages`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!clientId,
+    enabled: !!threadId,
     refetchInterval: 5000
   });
 
@@ -143,19 +167,20 @@ export default function ChatPage() {
       const res = await fetch(`/api/clients/${clientId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "user", content, type: "text" })
+        body: JSON.stringify({ role: "user", content, type: "text", threadId })
       });
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
     onMutate: async (content: string) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId, "messages"] });
+      await queryClient.cancelQueries({ queryKey: ["/api/threads", threadId, "messages"] });
       
-      const previousMessages = queryClient.getQueryData<Message[]>(["/api/clients", clientId, "messages"]);
+      const previousMessages = queryClient.getQueryData<Message[]>(["/api/threads", threadId, "messages"]);
       
       const optimisticMessage: Message = {
         id: `temp-${Date.now()}`,
         clientId: clientId!,
+        threadId: threadId || null,
         role: "user",
         content,
         type: "text",
@@ -164,7 +189,7 @@ export default function ChatPage() {
       };
       
       queryClient.setQueryData<Message[]>(
-        ["/api/clients", clientId, "messages"],
+        ["/api/threads", threadId, "messages"],
         (old) => [...(old || []), optimisticMessage]
       );
       
@@ -173,12 +198,12 @@ export default function ChatPage() {
       return { previousMessages };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/threads", threadId, "messages"] });
       setIsAiTyping(false);
     },
     onError: (err, content, context) => {
       if (context?.previousMessages) {
-        queryClient.setQueryData(["/api/clients", clientId, "messages"], context.previousMessages);
+        queryClient.setQueryData(["/api/threads", threadId, "messages"], context.previousMessages);
       }
       setIsAiTyping(false);
     }
@@ -307,6 +332,15 @@ export default function ChatPage() {
         <div className="absolute inset-0 z-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat"></div>
 
         <div className="z-10 flex items-center gap-3 bg-[hsl(var(--wa-header))] p-3 text-white shadow-md">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleBackToInbox}
+            className="h-8 w-8 text-white hover:bg-white/10 shrink-0"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
             <div className="flex h-full w-full items-center justify-center bg-emerald-100 text-emerald-800 font-bold text-lg">
               G

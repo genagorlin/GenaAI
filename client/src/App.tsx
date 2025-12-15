@@ -10,13 +10,15 @@ import CoachPage from "@/pages/CoachPage";
 import AdminPage from "@/pages/AdminPage";
 import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
+import InboxPage from "@/pages/InboxPage";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <Switch>
-      <Route path="/chat/:clientId" component={ChatPage} />
+      <Route path="/chat/:clientId/:threadId" component={ChatPage} />
+      <Route path="/chat/:clientId" component={InboxPage} />
       <Route path="/unauthorized" component={UnauthorizedPage} />
       {isLoading ? (
         <Route path="/">
