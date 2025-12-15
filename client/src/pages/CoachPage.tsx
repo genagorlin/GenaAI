@@ -321,31 +321,25 @@ export default function CoachPage() {
               <LivingDocument key={selectedClient.id} clientId={selectedClient.id} clientName={selectedClient.name} />
             ) : viewMode === "messages" ? (
               <div className="max-w-2xl mx-auto">
-                {/* Chat Header */}
-                <div className="flex items-center justify-center gap-4 mb-6 pb-4 border-b border-border">
+                {/* Legend Header */}
+                <div className="flex items-center justify-center gap-6 mb-6 pb-4 border-b border-border">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <span className="text-sm font-medium">AI Coach</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                      <User className="h-4 w-4 text-slate-600 dark:text-slate-300" />
-                    </div>
+                    <div className="h-3 w-3 rounded-full bg-sky-500" />
                     <span className="text-sm font-medium">{selectedClient?.name}</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-stone-300 dark:bg-stone-600" />
+                    <span className="text-sm text-muted-foreground">AI</span>
+                  </div>
                   <div className="flex items-center gap-2 opacity-50">
-                    <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-                      <span className="text-xs font-medium text-primary">You</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">Observing</span>
+                    <div className="h-3 w-3 rounded-full bg-violet-500" />
+                    <span className="text-sm text-muted-foreground">You (observing)</span>
                   </div>
                 </div>
 
                 {/* Messages Container */}
                 <div className="rounded-2xl border border-border bg-stone-50 dark:bg-stone-900/50 p-4 min-h-[500px]">
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {messages.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         No messages yet for this client
@@ -355,6 +349,8 @@ export default function CoachPage() {
                         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
                         .map((msg, index) => {
                           const isAI = msg.role === 'ai';
+                          const isCoach = msg.role === 'coach';
+                          const isClient = msg.role === 'user';
                           const prevMsg = index > 0 ? messages[index - 1] : null;
                           const showTimestamp = !prevMsg || 
                             new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
@@ -373,23 +369,38 @@ export default function CoachPage() {
                                   </span>
                                 </div>
                               )}
-                              <div className={`flex ${isAI ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex items-end gap-2 max-w-[80%] ${isAI ? 'flex-row-reverse' : ''}`}>
-                                  <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center ${
-                                    isAI 
-                                      ? 'bg-emerald-100 dark:bg-emerald-900/30' 
-                                      : 'bg-slate-200 dark:bg-slate-700'
+                              <div className={`flex ${isCoach ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex items-start gap-2 max-w-[80%] ${isCoach ? 'flex-row-reverse' : ''}`}>
+                                  <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center mt-0.5 ${
+                                    isClient 
+                                      ? 'bg-sky-100 dark:bg-sky-900/40' 
+                                      : isAI
+                                      ? 'bg-stone-200 dark:bg-stone-700'
+                                      : 'bg-violet-100 dark:bg-violet-900/40'
                                   }`}>
-                                    {isAI 
-                                      ? <Bot className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> 
-                                      : <User className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+                                    {isClient 
+                                      ? <User className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                                      : isAI
+                                      ? <Bot className="h-3 w-3 text-stone-500 dark:text-stone-400" /> 
+                                      : <span className="text-[9px] font-semibold text-violet-600 dark:text-violet-400">{(user as any)?.firstName?.[0] || 'C'}</span>
                                     }
                                   </div>
                                   <div className={`rounded-2xl px-4 py-2.5 ${
-                                    isAI 
-                                      ? 'bg-emerald-600 text-white rounded-br-md' 
-                                      : 'bg-white dark:bg-slate-800 text-foreground border border-stone-200 dark:border-slate-700 rounded-bl-md'
+                                    isClient 
+                                      ? 'bg-sky-500 text-white rounded-tl-sm' 
+                                      : isAI
+                                      ? 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
+                                      : 'bg-violet-500 text-white rounded-tr-sm'
                                   }`}>
+                                    {isClient && (
+                                      <p className="text-[10px] font-medium text-sky-100 mb-1">{selectedClient?.name}</p>
+                                    )}
+                                    {isAI && (
+                                      <p className="text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">GenaGPT</p>
+                                    )}
+                                    {isCoach && (
+                                      <p className="text-[10px] font-medium text-violet-100 mb-1">{(user as any)?.firstName || 'Coach'}</p>
+                                    )}
                                     <p className="text-sm leading-relaxed whitespace-pre-wrap">
                                       {msg.content}
                                     </p>
@@ -406,7 +417,7 @@ export default function CoachPage() {
                 {/* Observer Notice */}
                 <div className="mt-4 text-center">
                   <p className="text-xs text-muted-foreground">
-                    You're viewing the conversation between {selectedClient?.name} and the AI Coach
+                    You're observing the conversation between {selectedClient?.name} and GenaGPT
                   </p>
                 </div>
               </div>
