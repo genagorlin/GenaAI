@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
   Search, 
@@ -21,7 +21,9 @@ import {
   User,
   Settings,
   Link2,
-  Check
+  Check,
+  MoreVertical,
+  Trash2
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,13 @@ import { InsightCard } from "@/components/dashboard/InsightCard";
 import { SentimentChart } from "@/components/dashboard/SentimentChart";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 interface Client {
   id: string;
@@ -70,6 +79,7 @@ interface Message {
 type ViewMode = "document" | "signals" | "messages";
 
 export default function CoachPage() {
+  const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("document");
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
@@ -135,6 +145,30 @@ export default function CoachPage() {
       return res.json();
     },
     enabled: !!selectedClient
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete client");
+      return res.json();
+    },
+    onSuccess: (_, deletedClientId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast.success("Client deleted successfully");
+      const remainingClients = clients.filter(c => c.id !== deletedClientId);
+      if (remainingClients.length > 0) {
+        setSelectedClientId(remainingClients[0].id);
+      } else {
+        setSelectedClientId(null);
+      }
+    },
+    onError: () => {
+      toast.error("Failed to delete client. Please try again.");
+    },
   });
 
   const recentUserMessages = messages
@@ -243,6 +277,29 @@ export default function CoachPage() {
         <header className="flex h-16 items-center justify-between border-b border-border px-8">
           <div className="flex items-center gap-4">
             <h1 className="font-serif text-2xl font-medium text-foreground" data-testid="selected-client-name">{selectedClient?.name || "Loading..."}</h1>
+            {selectedClient && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-client-menu">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete ${selectedClient.name}?`)) {
+                        deleteClientMutation.mutate(selectedClient.id);
+                      }
+                    }}
+                    data-testid="menu-item-delete-client"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Client
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {selectedClient && (
               <Button
                 variant="outline"
