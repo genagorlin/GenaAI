@@ -182,7 +182,7 @@ export async function registerRoutes(
         
         const aiResponseContent = await generateAIResponse({
           systemPrompt,
-          conversationHistory: [{ role: "user", content: " " }],
+          conversationHistory: [{ role: "user", content: "." }],
           model: "claude-sonnet-4-5",
           provider: "anthropic",
         });

@@ -219,7 +219,7 @@ export class PromptAssembler {
     }
 
     const clientName = client?.name?.split(' ')[0] || 'there';
-    systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above for how to greet them. This is the start of a new conversation thread - there is no prior context from the user yet.`);
+    systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above exactly for how to greet them. This is the very start of a new conversation thread - there is no prior context from the user yet. Ignore any placeholder input and simply deliver your opening greeting as instructed.`);
 
     const systemPrompt = systemPromptParts.join("\n\n---\n\n");
 
