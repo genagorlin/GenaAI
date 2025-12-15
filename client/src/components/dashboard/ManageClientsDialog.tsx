@@ -332,20 +332,30 @@ export function ManageClientsDialog({ open, onOpenChange, onClientSelect, select
                 This defines who the AI is when talking to this client
               </p>
             </div>
-            <div className="flex justify-between pt-4">
-              <Button variant="ghost" onClick={() => setOnboardingStep("info")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                onClick={handleSaveRolePrompt}
-                disabled={updateRolePromptMutation.isPending}
-                className="gap-2"
-                data-testid="button-next-step"
+            <div className="flex flex-col gap-3 pt-4">
+              <div className="flex justify-between">
+                <Button variant="ghost" onClick={() => setOnboardingStep("info")} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  onClick={handleSaveRolePrompt}
+                  disabled={updateRolePromptMutation.isPending}
+                  className="gap-2"
+                  data-testid="button-next-step"
+                >
+                  {updateRolePromptMutation.isPending ? "Saving..." : "Next"}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={handleFinishOnboarding}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                data-testid="link-do-this-later"
               >
-                {updateRolePromptMutation.isPending ? "Saving..." : "Next"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+                Do this later
+              </button>
             </div>
           </div>
         );
@@ -375,20 +385,30 @@ export function ManageClientsDialog({ open, onOpenChange, onClientSelect, select
                 Instructions for how the AI structures its responses
               </p>
             </div>
-            <div className="flex justify-between pt-4">
-              <Button variant="ghost" onClick={() => setOnboardingStep("role-prompt")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                onClick={handleSaveTaskPrompt}
-                disabled={updateTaskPromptMutation.isPending}
-                className="gap-2"
-                data-testid="button-next-step"
+            <div className="flex flex-col gap-3 pt-4">
+              <div className="flex justify-between">
+                <Button variant="ghost" onClick={() => setOnboardingStep("role-prompt")} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  onClick={handleSaveTaskPrompt}
+                  disabled={updateTaskPromptMutation.isPending}
+                  className="gap-2"
+                  data-testid="button-next-step"
+                >
+                  {updateTaskPromptMutation.isPending ? "Saving..." : "Next"}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={handleFinishOnboarding}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                data-testid="link-do-this-later"
               >
-                {updateTaskPromptMutation.isPending ? "Saving..." : "Next"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+                Do this later
+              </button>
             </div>
           </div>
         );
@@ -415,20 +435,30 @@ export function ManageClientsDialog({ open, onOpenChange, onClientSelect, select
                 data-testid="textarea-onboarding-notes"
               />
             </div>
-            <div className="flex justify-between pt-4">
-              <Button variant="ghost" onClick={() => setOnboardingStep("task-prompt")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                onClick={handleSaveInitialNotes}
-                disabled={createSectionMutation.isPending}
-                className="gap-2"
-                data-testid="button-next-step"
+            <div className="flex flex-col gap-3 pt-4">
+              <div className="flex justify-between">
+                <Button variant="ghost" onClick={() => setOnboardingStep("task-prompt")} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  onClick={handleSaveInitialNotes}
+                  disabled={createSectionMutation.isPending}
+                  className="gap-2"
+                  data-testid="button-next-step"
+                >
+                  {createSectionMutation.isPending ? "Saving..." : "Finish Setup"}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={handleFinishOnboarding}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                data-testid="link-do-this-later"
               >
-                {createSectionMutation.isPending ? "Saving..." : "Finish Setup"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+                Do this later
+              </button>
             </div>
           </div>
         );
