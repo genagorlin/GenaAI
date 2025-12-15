@@ -218,15 +218,6 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/threads/:id", async (req, res) => {
-    try {
-      await storage.deleteThread(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete thread" });
-    }
-  });
-
   app.get("/api/threads/:threadId/messages", async (req, res) => {
     try {
       const messages = await storage.getThreadMessages(req.params.threadId);

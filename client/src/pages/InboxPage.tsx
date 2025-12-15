@@ -74,56 +74,12 @@ export default function InboxPage() {
     },
   });
 
-  const renameThreadMutation = useMutation({
-    mutationFn: async ({ threadId, title }: { threadId: string; title: string }) => {
-      const res = await fetch(`/api/threads/${threadId}/title`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-      if (!res.ok) throw new Error("Failed to rename thread");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-    },
-  });
-
-  const deleteThreadMutation = useMutation({
-    mutationFn: async (threadId: string) => {
-      const res = await fetch(`/api/threads/${threadId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete thread");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-    },
-  });
-
   const handleNewThread = () => {
     createThreadMutation.mutate();
   };
 
   const handleOpenThread = (threadId: string) => {
     setLocation(`/chat/${clientId}/${threadId}`);
-  };
-
-  const handleLongPress = (thread: Thread) => {
-    const action = window.prompt(
-      `"${thread.title}"\n\nType "rename" to rename or "delete" to delete this conversation:`
-    );
-    if (action?.toLowerCase() === "rename") {
-      const newTitle = window.prompt("Enter new title:", thread.title);
-      if (newTitle && newTitle.trim() && newTitle !== thread.title) {
-        renameThreadMutation.mutate({ threadId: thread.id, title: newTitle.trim() });
-      }
-    } else if (action?.toLowerCase() === "delete") {
-      if (window.confirm(`Delete "${thread.title}"? This cannot be undone.`)) {
-        deleteThreadMutation.mutate(thread.id);
-      }
-    }
   };
 
   if (!clientId) {
@@ -187,10 +143,6 @@ export default function InboxPage() {
                 <button
                   key={thread.id}
                   onClick={() => handleOpenThread(thread.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    handleLongPress(thread);
-                  }}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
                   data-testid={`thread-item-${thread.id}`}
                 >
@@ -232,10 +184,6 @@ export default function InboxPage() {
             )}
           </button>
         )}
-
-        <p className="text-xs text-center text-slate-400 py-2">
-          Long-press a conversation to rename or delete
-        </p>
       </div>
     </div>
   );
