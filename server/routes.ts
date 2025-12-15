@@ -150,6 +150,7 @@ export async function registerRoutes(
             systemPrompt: assembled.systemPrompt,
             conversationHistory: assembled.conversationHistory,
             model: routing.model,
+            provider: routing.provider,
           });
           
           const aiMessage = await storage.createMessage({

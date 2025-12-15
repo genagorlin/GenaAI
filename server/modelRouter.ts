@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 type ModelTier = "fast" | "balanced" | "deep";
+type Provider = "anthropic" | "openai";
 
 interface RoutingResult {
   tier: ModelTier;
   model: string;
-  provider: "anthropic";
+  provider: Provider;
   reasoning: string;
 }
 
@@ -69,9 +71,9 @@ export function routeMessage(content: string): RoutingResult {
   if (characteristics.isSimpleGreeting || characteristics.length < 20) {
     return {
       tier: "fast",
-      model: "claude-haiku-4-5",
-      provider: "anthropic",
-      reasoning: "Simple message - using fast model",
+      model: "gpt-4o-mini",
+      provider: "openai",
+      reasoning: "Simple message - using fast OpenAI model",
     };
   }
   
@@ -80,7 +82,7 @@ export function routeMessage(content: string): RoutingResult {
       tier: "deep",
       model: "claude-sonnet-4-5",
       provider: "anthropic",
-      reasoning: "Deep existential/complex question detected - using balanced model for thoughtful response",
+      reasoning: "Deep existential/complex question detected - using Anthropic for thoughtful response",
     };
   }
   
@@ -89,15 +91,15 @@ export function routeMessage(content: string): RoutingResult {
       tier: "balanced",
       model: "claude-sonnet-4-5",
       provider: "anthropic",
-      reasoning: "Emotional content detected - using balanced model for empathetic response",
+      reasoning: "Emotional content detected - using Anthropic for empathetic response",
     };
   }
   
   return {
     tier: "fast",
-    model: "claude-haiku-4-5",
-    provider: "anthropic",
-    reasoning: "Standard message - using fast model",
+    model: "gpt-4o-mini",
+    provider: "openai",
+    reasoning: "Standard message - using fast OpenAI model",
   };
 }
 
@@ -105,9 +107,20 @@ interface GenerateResponseParams {
   systemPrompt: string;
   conversationHistory: { role: "user" | "assistant"; content: string }[];
   model?: string;
+  provider?: Provider;
 }
 
 export async function generateAIResponse(params: GenerateResponseParams): Promise<string> {
+  const { systemPrompt, conversationHistory, model = "claude-sonnet-4-5", provider = "anthropic" } = params;
+  
+  if (provider === "openai") {
+    return generateOpenAIResponse({ systemPrompt, conversationHistory, model });
+  }
+  
+  return generateAnthropicResponse({ systemPrompt, conversationHistory, model });
+}
+
+async function generateAnthropicResponse(params: Omit<GenerateResponseParams, "provider">): Promise<string> {
   const { systemPrompt, conversationHistory, model = "claude-sonnet-4-5" } = params;
   
   const anthropic = new Anthropic({
@@ -128,4 +141,34 @@ export async function generateAIResponse(params: GenerateResponseParams): Promis
   }
   
   return textContent.text;
+}
+
+async function generateOpenAIResponse(params: Omit<GenerateResponseParams, "provider">): Promise<string> {
+  const { systemPrompt, conversationHistory, model = "gpt-4o" } = params;
+  
+  const openai = new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  });
+  
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory.map(msg => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+    })),
+  ];
+  
+  const response = await openai.chat.completions.create({
+    model,
+    max_tokens: 1024,
+    messages,
+  });
+  
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("No text response from AI");
+  }
+  
+  return content;
 }

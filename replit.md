@@ -82,8 +82,52 @@ Core tables:
 - esbuild for server bundling (production builds)
 - Custom Vite plugins for Replit deployment (meta images, cartographer, dev banner)
 
-### Potential AI Integrations (dependencies present but not yet wired)
-- OpenAI SDK (`openai`)
-- Google Generative AI (`@google/generative-ai`)
+### AI Integrations
 
-These packages are bundled but the actual AI conversation logic is not yet implemented in the codebase.
+The platform uses a multi-provider AI architecture with intelligent routing:
+
+**Providers (via Replit AI Integrations - no API keys required, billed to credits):**
+- **OpenAI GPT** - Used for fast tier (simple/standard messages)
+  - Environment: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
+  - Models: `gpt-4o-mini` (fast tier)
+- **Anthropic Claude** - Used for balanced/deep tier (emotional/complex content)
+  - Environment: `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY`
+  - Models: `claude-sonnet-4-5` (balanced/deep tier)
+
+**Model Router (`server/modelRouter.ts`):**
+The router analyzes each incoming message and selects the optimal model/provider:
+- **Fast tier** (OpenAI gpt-4o-mini) - Simple greetings, short messages (<20 chars), standard messages
+- **Balanced tier** (Anthropic claude-sonnet-4-5) - Emotional content, longer messages (>200 chars)
+- **Deep tier** (Anthropic claude-sonnet-4-5) - Existential questions, complex reasoning
+
+Message analysis includes:
+- Emotional keyword detection (feel, scared, overwhelmed, etc.)
+- Deep question pattern matching (why, meaning, purpose, etc.)
+- Simple greeting detection
+
+**Prompt Assembly (`server/promptAssembler.ts`):**
+Token budgets are allocated across prompt components (total budget: 30,000 tokens):
+- Role Prompt: 500 tokens (AI personality per client)
+- Methodology Frame: 2,000 tokens (coaching frameworks)
+- Memory Context: 15,000 tokens (living document sections)
+- Current Input: 1,000 tokens
+- Task Prompt: 500 tokens (response instructions)
+- Conversation Buffer: 11,000 tokens (recent messages)
+
+**Conversation Flow:**
+1. Client sends message via chat interface
+2. Model router analyzes message → selects tier/model/provider
+3. Prompt assembler builds system prompt from living document + prompts
+4. Request sent to AI provider
+5. Response saved to database and returned to client
+
+## Future Development Notes
+
+**Insight Generation (planned, not prioritized):**
+- Database schema exists for insights table
+- Categories: Emotional Spike, Recurring Theme, Shift, Contradiction
+- Will auto-extract from conversations when implemented
+
+**Sentiment Analysis (planned, not prioritized):**
+- Database schema exists for sentiment_data table
+- Will populate "Emotional Velocity" chart automatically when implemented
