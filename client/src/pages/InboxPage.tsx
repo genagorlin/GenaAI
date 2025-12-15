@@ -1,32 +1,7 @@
-import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
 
 interface Thread {
   id: string;
@@ -62,11 +37,6 @@ export default function InboxPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
-  const [newTitle, setNewTitle] = useState("");
 
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
@@ -116,9 +86,6 @@ export default function InboxPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-      setRenameDialogOpen(false);
-      setSelectedThread(null);
-      setNewTitle("");
     },
   });
 
@@ -132,8 +99,6 @@ export default function InboxPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-      setDeleteDialogOpen(false);
-      setSelectedThread(null);
     },
   });
 
@@ -145,28 +110,19 @@ export default function InboxPage() {
     setLocation(`/chat/${clientId}/${threadId}`);
   };
 
-  const handleRenameClick = (thread: Thread, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedThread(thread);
-    setNewTitle(thread.title);
-    setRenameDialogOpen(true);
-  };
-
-  const handleDeleteClick = (thread: Thread, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedThread(thread);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleRenameSubmit = () => {
-    if (selectedThread && newTitle.trim()) {
-      renameThreadMutation.mutate({ threadId: selectedThread.id, title: newTitle.trim() });
-    }
-  };
-
-  const handleDeleteConfirm = () => {
-    if (selectedThread) {
-      deleteThreadMutation.mutate(selectedThread.id);
+  const handleLongPress = (thread: Thread) => {
+    const action = window.prompt(
+      `"${thread.title}"\n\nType "rename" to rename or "delete" to delete this conversation:`
+    );
+    if (action?.toLowerCase() === "rename") {
+      const newTitle = window.prompt("Enter new title:", thread.title);
+      if (newTitle && newTitle.trim() && newTitle !== thread.title) {
+        renameThreadMutation.mutate({ threadId: thread.id, title: newTitle.trim() });
+      }
+    } else if (action?.toLowerCase() === "delete") {
+      if (window.confirm(`Delete "${thread.title}"? This cannot be undone.`)) {
+        deleteThreadMutation.mutate(thread.id);
+      }
     }
   };
 
@@ -228,10 +184,14 @@ export default function InboxPage() {
           ) : (
             <div className="divide-y divide-slate-100">
               {threads.map((thread) => (
-                <div
+                <button
                   key={thread.id}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => handleOpenThread(thread.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    handleLongPress(thread);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
                   data-testid={`thread-item-${thread.id}`}
                 >
                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
@@ -250,34 +210,8 @@ export default function InboxPage() {
                       Tap to continue...
                     </p>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <button 
-                        className="p-2 hover:bg-slate-200 rounded-full transition-colors"
-                        data-testid={`thread-menu-${thread.id}`}
-                      >
-                        <MoreVertical className="h-4 w-4 text-slate-400" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem 
-                        onClick={(e) => handleRenameClick(thread, e as any)}
-                        data-testid={`thread-rename-${thread.id}`}
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={(e) => handleDeleteClick(thread, e as any)}
-                        className="text-red-600 focus:text-red-600"
-                        data-testid={`thread-delete-${thread.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                  <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                </button>
               ))}
             </div>
           )}
@@ -298,63 +232,11 @@ export default function InboxPage() {
             )}
           </button>
         )}
+
+        <p className="text-xs text-center text-slate-400 py-2">
+          Long-press a conversation to rename or delete
+        </p>
       </div>
-
-      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename conversation</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Enter new title"
-            data-testid="input-rename-thread"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleRenameSubmit();
-            }}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleRenameSubmit} 
-              disabled={renameThreadMutation.isPending || !newTitle.trim()}
-              data-testid="button-confirm-rename"
-            >
-              {renameThreadMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Rename
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete "{selectedThread?.title}" and all its messages. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-red-600 hover:bg-red-700"
-              data-testid="button-confirm-delete"
-            >
-              {deleteThreadMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
