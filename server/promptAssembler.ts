@@ -160,6 +160,16 @@ export class PromptAssembler {
         content: m.content,
       }));
   }
+
+  async getThreadMessages(threadId: string, limit: number = 50): Promise<{ role: string; content: string }[]> {
+    const messages = await storage.getThreadMessages(threadId);
+    return messages
+      .slice(-limit)
+      .map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+  }
 }
 
 export const promptAssembler = new PromptAssembler();

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema } from "@shared/schema";
+import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { z } from "zod";
 import multer from "multer";
@@ -110,6 +110,60 @@ export async function registerRoutes(
     }
   });
 
+  // Thread Routes (public for client chat interface)
+  app.get("/api/clients/:clientId/threads", async (req, res) => {
+    try {
+      const threads = await storage.getClientThreads(req.params.clientId);
+      res.json(threads);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch threads" });
+    }
+  });
+
+  app.get("/api/threads/:id", async (req, res) => {
+    try {
+      const thread = await storage.getThread(req.params.id);
+      if (!thread) {
+        return res.status(404).json({ error: "Thread not found" });
+      }
+      res.json(thread);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch thread" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/threads", async (req, res) => {
+    try {
+      const validated = insertThreadSchema.parse({
+        ...req.body,
+        clientId: req.params.clientId
+      });
+      const thread = await storage.createThread(validated);
+      res.status(201).json(thread);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid thread data" });
+    }
+  });
+
+  app.patch("/api/threads/:id/title", async (req, res) => {
+    try {
+      const { title } = z.object({ title: z.string() }).parse(req.body);
+      const thread = await storage.updateThreadTitle(req.params.id, title);
+      res.json(thread);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid title" });
+    }
+  });
+
+  app.get("/api/threads/:threadId/messages", async (req, res) => {
+    try {
+      const messages = await storage.getThreadMessages(req.params.threadId);
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
   // Message Routes (public for client chat interface)
   app.get("/api/clients/:clientId/messages", async (req, res) => {
     try {
@@ -134,7 +188,9 @@ export async function registerRoutes(
         
         try {
           const clientContext = await promptAssembler.getClientContext(req.params.clientId);
-          const recentMessages = await promptAssembler.getRecentMessages(req.params.clientId);
+          const recentMessages = validated.threadId 
+            ? await promptAssembler.getThreadMessages(validated.threadId)
+            : await promptAssembler.getRecentMessages(req.params.clientId);
           
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
@@ -155,6 +211,7 @@ export async function registerRoutes(
           
           const aiMessage = await storage.createMessage({
             clientId: req.params.clientId,
+            threadId: validated.threadId,
             role: "ai",
             content: aiResponseContent,
             type: "text",
