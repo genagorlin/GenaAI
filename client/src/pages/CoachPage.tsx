@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
@@ -10,6 +10,7 @@ import {
   AlertCircle, 
   Repeat,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Smartphone,
   Wifi,
@@ -27,6 +28,19 @@ import {
   Send,
   Loader2
 } from "lucide-react";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  return isMobile;
+}
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,6 +132,8 @@ export default function CoachPage() {
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [coachMessage, setCoachMessage] = useState("");
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const isMobile = useIsMobile();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -294,10 +310,14 @@ export default function CoachPage() {
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 5);
 
+  const showSidebar = !isMobile || !mobileShowDetail;
+  const showMainContent = !isMobile || mobileShowDetail;
+
   return (
     <div className="flex h-screen w-full bg-background">
       {/* Sidebar */}
-      <div className="w-80 flex-shrink-0 border-r border-border bg-sidebar flex flex-col">
+      {showSidebar && (
+      <div className={`${isMobile ? 'w-full' : 'w-80'} flex-shrink-0 border-r border-border bg-sidebar flex flex-col`}>
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3 mb-6">
              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -323,7 +343,10 @@ export default function CoachPage() {
               <button
                 key={client.id}
                 data-testid={`client-${client.id}`}
-                onClick={() => setSelectedClientId(client.id)}
+                onClick={() => {
+                  setSelectedClientId(client.id);
+                  if (isMobile) setMobileShowDetail(true);
+                }}
                 className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors ${
                   selectedClient?.id === client.id 
                     ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm" 
@@ -388,13 +411,25 @@ export default function CoachPage() {
           </Button>
         </div>
       </div>
+      )}
 
       {/* Main Content */}
+      {showMainContent && (
       <div className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Top Bar */}
-        <header className="flex h-16 items-center justify-between border-b border-border px-8">
-          <div className="flex items-center gap-4">
-            <h1 className="font-serif text-2xl font-medium text-foreground" data-testid="selected-client-name">{selectedClient?.name || "Loading..."}</h1>
+        <header className="flex h-16 items-center justify-between border-b border-border px-4 md:px-8">
+          <div className="flex items-center gap-2 md:gap-4">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileShowDetail(false)}
+                data-testid="button-back-to-clients"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            <h1 className="font-serif text-xl md:text-2xl font-medium text-foreground" data-testid="selected-client-name">{selectedClient?.name || "Loading..."}</h1>
             {selectedClient && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -842,6 +877,7 @@ export default function CoachPage() {
           </div>
         </ScrollArea>
       </div>
+      )}
 
       <ManageClientsDialog
         open={isManageClientsOpen}
