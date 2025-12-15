@@ -49,6 +49,7 @@ export const clients = pgTable("clients", {
   status: text("status").notNull().default("active"),
   lastActive: timestamp("last_active").defaultNow(),
   mobileAppConnected: integer("mobile_app_connected").notNull().default(0),
+  lastSummarizedAt: timestamp("last_summarized_at"),
 });
 
 export const messages = pgTable("messages", {
