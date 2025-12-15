@@ -9,22 +9,24 @@ import LandingPage from "@/pages/LandingPage";
 import CoachPage from "@/pages/CoachPage";
 import AdminPage from "@/pages/AdminPage";
 import UnauthorizedPage from "@/pages/UnauthorizedPage";
+import ChatPage from "@/pages/ChatPage";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <Switch>
+      <Route path="/chat/:clientId" component={ChatPage} />
       <Route path="/unauthorized" component={UnauthorizedPage} />
-      {!isAuthenticated ? (
+      {isLoading ? (
+        <Route path="/">
+          {() => (
+            <div className="flex min-h-screen items-center justify-center">
+              <div className="animate-pulse text-muted-foreground">Loading...</div>
+            </div>
+          )}
+        </Route>
+      ) : !isAuthenticated ? (
         <Route path="/" component={LandingPage} />
       ) : (
         <>

@@ -57,6 +57,19 @@ export async function registerRoutes(
     }
   });
 
+  // Public endpoint for chat interface - returns limited client info
+  app.get("/api/chat/:clientId/info", async (req, res) => {
+    try {
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      res.json({ id: client.id, name: client.name });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch client" });
+    }
+  });
+
   // Public endpoint for mobile app to register clients
   app.post("/api/clients/register", async (req, res) => {
     try {
@@ -84,8 +97,8 @@ export async function registerRoutes(
     }
   });
 
-  // Message Routes (POST is public for mobile app, GET is protected)
-  app.get("/api/clients/:clientId/messages", isAuthenticated, async (req, res) => {
+  // Message Routes (public for client chat interface)
+  app.get("/api/clients/:clientId/messages", async (req, res) => {
     try {
       const messages = await storage.getClientMessages(req.params.clientId);
       res.json(messages);

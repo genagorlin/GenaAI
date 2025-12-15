@@ -19,7 +19,9 @@ import {
   MessageSquare,
   Bot,
   User,
-  Settings
+  Settings,
+  Link2,
+  Check
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -71,10 +73,19 @@ export default function CoachPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("document");
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { user } = useAuth();
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
+  };
+
+  const handleCopyLink = () => {
+    if (!selectedClient) return;
+    const chatUrl = `${window.location.origin}/chat/${selectedClient.id}`;
+    navigator.clipboard.writeText(chatUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const { data: clients = [] } = useQuery<Client[]>({
@@ -232,6 +243,27 @@ export default function CoachPage() {
         <header className="flex h-16 items-center justify-between border-b border-border px-8">
           <div className="flex items-center gap-4">
             <h1 className="font-serif text-2xl font-medium text-foreground" data-testid="selected-client-name">{selectedClient?.name || "Loading..."}</h1>
+            {selectedClient && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyLink}
+                className="gap-2 text-muted-foreground"
+                data-testid="button-copy-chat-link"
+              >
+                {linkCopied ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-500" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="h-4 w-4" />
+                    Copy Chat Link
+                  </>
+                )}
+              </Button>
+            )}
             {selectedClient?.mobileAppConnected === 1 && (
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-900/30">
                  <Smartphone className="h-3 w-3" />
