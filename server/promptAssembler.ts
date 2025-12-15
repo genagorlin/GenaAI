@@ -170,6 +170,61 @@ export class PromptAssembler {
         content: m.content,
       }));
   }
+
+  async assembleOpeningPrompt(clientId: string): Promise<{ systemPrompt: string }> {
+    const rolePrompt = await storage.getOrCreateRolePrompt(clientId);
+    const taskPrompt = await storage.getOrCreateTaskPrompt(clientId);
+    const client = await storage.getClient(clientId);
+
+    const roleSection = truncateToTokenLimit(rolePrompt.content, TOKEN_ALLOCATIONS.rolePrompt);
+    
+    let methodologySection = "";
+    const clientMethodologies = await storage.getClientMethodologies(clientId);
+    const activeMethodologies = clientMethodologies.filter(cm => cm.isActive === 1);
+    if (activeMethodologies.length > 0) {
+      const methodologyContent = activeMethodologies
+        .map(cm => `## ${cm.methodology.name}\n${cm.methodology.content}`)
+        .join("\n\n");
+      methodologySection = truncateToTokenLimit(methodologyContent, TOKEN_ALLOCATIONS.methodologyFrame);
+    }
+
+    const clientContext = await this.getClientContext(clientId);
+    let memorySection = "";
+    if (clientContext.documentSections && clientContext.documentSections.length > 0) {
+      const goalsContent = clientContext.documentSections
+        .filter(s => s.content && s.content.trim())
+        .map(s => `## ${s.title}\n${s.content}`)
+        .join("\n\n");
+      memorySection = truncateToTokenLimit(goalsContent, TOKEN_ALLOCATIONS.memoryContext);
+    }
+
+    const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
+
+    const systemPromptParts: string[] = [];
+
+    if (roleSection) {
+      systemPromptParts.push(`# Your Role\n${roleSection}`);
+    }
+
+    if (methodologySection) {
+      systemPromptParts.push(`# Coaching Framework\n${methodologySection}`);
+    }
+
+    if (memorySection) {
+      systemPromptParts.push(`# Client Context\n${memorySection}`);
+    }
+
+    if (taskSection) {
+      systemPromptParts.push(`# Response Instructions\n${taskSection}`);
+    }
+
+    const clientName = client?.name?.split(' ')[0] || 'there';
+    systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above for how to greet them. This is the start of a new conversation thread - there is no prior context from the user yet.`);
+
+    const systemPrompt = systemPromptParts.join("\n\n---\n\n");
+
+    return { systemPrompt };
+  }
 }
 
 export const promptAssembler = new PromptAssembler();

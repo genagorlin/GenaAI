@@ -151,6 +151,9 @@ export default function ChatPage() {
     };
   }, [clientId, triggerSessionEnd, resetInactivityTimer]);
 
+  const [openingTimeout, setOpeningTimeout] = useState(false);
+  const [hasMessages, setHasMessages] = useState(false);
+  
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/threads", threadId, "messages"],
     queryFn: async () => {
@@ -159,8 +162,23 @@ export default function ChatPage() {
       return res.json();
     },
     enabled: !!threadId,
-    refetchInterval: 5000
+    refetchInterval: hasMessages ? 5000 : 1000
   });
+  
+  useEffect(() => {
+    if (messages.length > 0) {
+      setHasMessages(true);
+      setOpeningTimeout(false);
+      return;
+    }
+    
+    // Show fallback after 10 seconds of waiting
+    const timeout = setTimeout(() => {
+      setOpeningTimeout(true);
+    }, 10000);
+    
+    return () => clearTimeout(timeout);
+  }, [messages.length]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -372,16 +390,26 @@ export default function ChatPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : messages.length === 0 ? (
-              <div className="self-start bg-white text-slate-900 rounded-lg rounded-tl-none px-3 py-2 shadow-sm max-w-[85%]">
-                <p className="text-[15px] leading-relaxed">
-                  Hi {client ? getFirstName(client.name) : 'there'}! I'm here whenever you want to think something through. What's on your mind?
-                </p>
-                <div className="flex justify-end mt-1">
-                  <span className="text-[10px] text-slate-500/80">
-                    {formatTime(new Date().toISOString())}
-                  </span>
+              openingTimeout ? (
+                <div className="self-start bg-white text-slate-900 rounded-lg rounded-tl-none px-3 py-2 shadow-sm max-w-[85%]">
+                  <p className="text-[15px] leading-relaxed">
+                    Hi {client ? getFirstName(client.name) : 'there'}! I'm here whenever you want to think something through. What's on your mind?
+                  </p>
+                  <div className="flex justify-end mt-1">
+                    <span className="text-[10px] text-slate-500/80">
+                      {formatTime(new Date().toISOString())}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="self-start bg-white text-slate-900 rounded-lg rounded-tl-none px-4 py-3 shadow-sm">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                </div>
+              )
             ) : (
               messages.map((message) => (
                 <div

@@ -172,6 +172,35 @@ export async function registerRoutes(
         clientId: req.params.clientId
       });
       const thread = await storage.createThread(validated);
+      
+      // Generate AI opening message for the new thread
+      try {
+        const { promptAssembler } = await import("./promptAssembler");
+        const { generateAIResponse } = await import("./modelRouter");
+        
+        const { systemPrompt } = await promptAssembler.assembleOpeningPrompt(req.params.clientId);
+        
+        const aiResponseContent = await generateAIResponse({
+          systemPrompt,
+          conversationHistory: [{ role: "user", content: " " }],
+          model: "claude-sonnet-4-5",
+          provider: "anthropic",
+        });
+        
+        await storage.createMessage({
+          clientId: req.params.clientId,
+          threadId: thread.id,
+          role: "ai",
+          content: aiResponseContent,
+          type: "text",
+        });
+        
+        console.log(`[Thread] Created opening message for thread ${thread.id}`);
+      } catch (aiError) {
+        console.error("[Thread] Failed to generate opening message:", aiError);
+        // Thread is still created, just without opening message
+      }
+      
       res.status(201).json(thread);
     } catch (error) {
       res.status(400).json({ error: "Invalid thread data" });
