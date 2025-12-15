@@ -121,13 +121,20 @@ Token budgets are allocated across prompt components (total budget: 30,000 token
 4. Request sent to AI provider
 5. Response saved to database and returned to client
 
-## Future Development Notes
+## Session Conclusion & AI Document Updates
 
-**Session Conclusion & AI Document Updates (NEXT):**
 A client session is concluded when:
-1. Client closes the app or says goodbye (explicit end)
-2. Client is inactive for 5+ minutes (timeout)
-Whichever comes first triggers AI to analyze the conversation and update living document sections.
+1. **Goodbye detection** - Pattern matching triggers when client says farewell ("goodbye", "see you", "thanks, bye", etc.)
+2. **Inactivity timeout** - Frontend detects 5+ minutes of no messages
+3. **App close/tab switch** - Visibility change or beforeunload events trigger session end
+
+**Implementation:**
+- `server/sessionSummarizer.ts` - AI analyzes messages since `lastSummarizedAt` and updates document sections
+- `POST /api/clients/:clientId/session-end` - Endpoint triggers summarization
+- Frontend ChatPage.tsx tracks inactivity and visibility changes
+- AI updates are marked with `pendingReview=1` for coach approval (accept/revert controls)
+
+## Future Development Notes
 
 **Insight Generation (planned, not prioritized):**
 - Database schema exists for insights table
