@@ -65,11 +65,22 @@ export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
-  role: text("role").notNull(), // "user" or "ai"
+  role: text("role").notNull(), // "user", "ai", or "coach"
   content: text("content").notNull(),
   type: text("type").notNull().default("text"), // "text" or "audio"
   duration: text("duration"), // for audio messages
+  mentionsCoach: integer("mentions_coach").notNull().default(0), // 1 if message contains @gena or @coach
   timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+// Coach mentions - tracks when coach is tagged in conversations
+export const coachMentions = pgTable("coach_mentions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
+  isRead: integer("is_read").notNull().default(0), // 0 = unread, 1 = read
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insights = pgTable("insights", {
@@ -169,6 +180,7 @@ export const insertRolePromptSchema = createInsertSchema(rolePrompts).omit({ id:
 export const insertTaskPromptSchema = createInsertSchema(taskPrompts).omit({ id: true, updatedAt: true });
 export const insertMethodologyFrameSchema = createInsertSchema(methodologyFrames).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientMethodologySchema = createInsertSchema(clientMethodologies).omit({ id: true, createdAt: true });
+export const insertCoachMentionSchema = createInsertSchema(coachMentions).omit({ id: true, createdAt: true });
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
@@ -202,3 +214,6 @@ export type MethodologyFrame = typeof methodologyFrames.$inferSelect;
 
 export type InsertClientMethodology = z.infer<typeof insertClientMethodologySchema>;
 export type ClientMethodology = typeof clientMethodologies.$inferSelect;
+
+export type InsertCoachMention = z.infer<typeof insertCoachMentionSchema>;
+export type CoachMention = typeof coachMentions.$inferSelect;

@@ -20,6 +20,8 @@ import {
   type MethodologyFrame,
   type ClientMethodology,
   type AuthorizedUser,
+  type CoachMention,
+  type InsertCoachMention,
   clients,
   threads,
   messages,
@@ -32,7 +34,8 @@ import {
   taskPrompts,
   methodologyFrames,
   clientMethodologies,
-  authorizedUsers
+  authorizedUsers,
+  coachMentions
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -103,6 +106,13 @@ export interface IStorage {
   createAuthorizedUser(email: string, role: string): Promise<AuthorizedUser>;
   deleteAuthorizedUser(id: string): Promise<void>;
   updateAuthorizedUserLastLogin(email: string): Promise<void>;
+
+  // Coach Mentions
+  createCoachMention(mention: InsertCoachMention): Promise<CoachMention>;
+  getUnreadMentions(): Promise<(CoachMention & { message: Message; client: Client })[]>;
+  getUnreadMentionCount(): Promise<number>;
+  markMentionRead(id: string): Promise<CoachMention>;
+  markThreadMentionsRead(threadId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -501,6 +511,47 @@ export class DatabaseStorage implements IStorage {
     await db.update(authorizedUsers)
       .set({ lastLogin: new Date() })
       .where(eq(authorizedUsers.email, email.toLowerCase()));
+  }
+
+  // Coach Mentions
+  async createCoachMention(mention: InsertCoachMention): Promise<CoachMention> {
+    const [result] = await db.insert(coachMentions).values(mention).returning();
+    return result;
+  }
+
+  async getUnreadMentions(): Promise<(CoachMention & { message: Message; client: Client })[]> {
+    const results = await db.select()
+      .from(coachMentions)
+      .innerJoin(messages, eq(coachMentions.messageId, messages.id))
+      .innerJoin(clients, eq(coachMentions.clientId, clients.id))
+      .where(eq(coachMentions.isRead, 0))
+      .orderBy(desc(coachMentions.createdAt));
+    return results.map((r: { coach_mentions: CoachMention; messages: Message; clients: Client }) => ({
+      ...r.coach_mentions,
+      message: r.messages,
+      client: r.clients
+    }));
+  }
+
+  async getUnreadMentionCount(): Promise<number> {
+    const results = await db.select()
+      .from(coachMentions)
+      .where(eq(coachMentions.isRead, 0));
+    return results.length;
+  }
+
+  async markMentionRead(id: string): Promise<CoachMention> {
+    const [result] = await db.update(coachMentions)
+      .set({ isRead: 1 })
+      .where(eq(coachMentions.id, id))
+      .returning();
+    return result;
+  }
+
+  async markThreadMentionsRead(threadId: string): Promise<void> {
+    await db.update(coachMentions)
+      .set({ isRead: 1 })
+      .where(eq(coachMentions.threadId, threadId));
   }
 }
 

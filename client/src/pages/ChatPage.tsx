@@ -12,7 +12,7 @@ interface Message {
   id: string;
   clientId: string;
   threadId: string | null;
-  role: "user" | "ai";
+  role: "user" | "ai" | "coach";
   content: string;
   type: string;
   duration: string | null;
@@ -419,14 +419,24 @@ export default function ChatPage() {
                     "flex max-w-[85%] flex-col rounded-lg px-2 pt-2 pb-1 shadow-sm relative",
                     message.role === "user"
                       ? "self-end bg-[hsl(var(--wa-outgoing))] text-slate-900 rounded-tr-none"
+                      : message.role === "coach"
+                      ? "self-start bg-violet-500 text-white rounded-tl-none"
                       : "self-start bg-white text-slate-900 rounded-tl-none"
                   )}
                 >
+                  {message.role === "coach" && (
+                    <div className="text-[10px] font-medium text-violet-100 px-1 mb-0.5">
+                      Coach Gena
+                    </div>
+                  )}
                   <div className="text-[15px] leading-relaxed break-words whitespace-pre-wrap px-1">
                     {message.content}
                   </div>
                   <div className="flex items-center justify-end gap-1 mt-0.5">
-                    <span className="text-[10px] text-slate-500/80">
+                    <span className={cn(
+                      "text-[10px]",
+                      message.role === "coach" ? "text-violet-100/80" : "text-slate-500/80"
+                    )}>
                       {formatTime(message.timestamp)}
                     </span>
                     {message.role === "user" && (

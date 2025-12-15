@@ -23,7 +23,9 @@ import {
   Link2,
   Check,
   MoreVertical,
-  Trash2
+  Trash2,
+  Send,
+  Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -94,6 +96,7 @@ export default function CoachPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("document");
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [coachMessage, setCoachMessage] = useState("");
   const { user } = useAuth();
 
   useEffect(() => {
@@ -150,6 +153,17 @@ export default function CoachPage() {
     enabled: !!selectedClient
   });
 
+  const { data: mentionsCount = 0 } = useQuery<number>({
+    queryKey: ["/api/coach/mentions/count"],
+    queryFn: async () => {
+      const res = await fetch("/api/coach/mentions/count", { credentials: "include" });
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return data.count || 0;
+    },
+    refetchInterval: 30000
+  });
+
   const { data: threads = [] } = useQuery<Thread[]>({
     queryKey: ["/api/clients", selectedClient?.id, "threads"],
     queryFn: async () => {
@@ -202,6 +216,33 @@ export default function CoachPage() {
       toast.error("Failed to delete client. Please try again.");
     },
   });
+
+  const sendCoachMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!selectedThreadId) throw new Error("No thread selected");
+      const res = await fetch(`/api/coach/threads/${selectedThreadId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      return res.json();
+    },
+    onSuccess: () => {
+      setCoachMessage("");
+      queryClient.invalidateQueries({ queryKey: ["/api/threads", selectedThreadId, "messages"] });
+      toast.success("Message sent");
+    },
+    onError: () => {
+      toast.error("Failed to send message. Please try again.");
+    },
+  });
+
+  const handleSendCoachMessage = () => {
+    if (!coachMessage.trim() || sendCoachMessageMutation.isPending) return;
+    sendCoachMessageMutation.mutate(coachMessage.trim());
+  };
 
   const recentUserMessages = messages
     .filter(m => m.role === "user")
@@ -393,8 +434,13 @@ export default function CoachPage() {
                  Messages
                </Button>
              </div>
-             <Button variant="ghost" size="icon" className="text-muted-foreground">
+             <Button variant="ghost" size="icon" className="text-muted-foreground relative" data-testid="button-mentions">
                <Bell className="h-5 w-5" />
+               {mentionsCount > 0 && (
+                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] font-medium flex items-center justify-center">
+                   {mentionsCount > 9 ? '9+' : mentionsCount}
+                 </span>
+               )}
              </Button>
              <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                Prepare Session <ArrowRight className="h-4 w-4" />
@@ -483,6 +529,10 @@ export default function CoachPage() {
                               <div className="h-2.5 w-2.5 rounded-full bg-stone-400" />
                               <span className="text-xs text-muted-foreground">AI</span>
                             </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+                              <span className="text-xs text-muted-foreground">You</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -558,11 +608,36 @@ export default function CoachPage() {
                         </div>
                       </ScrollArea>
 
-                      {/* Observer Footer */}
-                      <div className="p-3 border-t border-border bg-muted/30 text-center">
-                        <p className="text-xs text-muted-foreground">
-                          Observing conversation • {selectedClient?.name} ↔ GenaGPT
-                        </p>
+                      {/* Coach Message Composer */}
+                      <div className="p-3 border-t border-border bg-muted/30">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={coachMessage}
+                            onChange={(e) => setCoachMessage(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendCoachMessage();
+                              }
+                            }}
+                            placeholder="Send a message to this conversation..."
+                            className="flex-1"
+                            data-testid="input-coach-message"
+                          />
+                          <Button
+                            size="icon"
+                            onClick={handleSendCoachMessage}
+                            disabled={!coachMessage.trim() || sendCoachMessageMutation.isPending}
+                            className="shrink-0"
+                            data-testid="button-send-coach-message"
+                          >
+                            {sendCoachMessageMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     </>
                   )}

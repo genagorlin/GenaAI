@@ -88,6 +88,15 @@ export class PromptAssembler {
       systemPromptParts.push(`# Response Instructions\n${taskSection}`);
     }
 
+    systemPromptParts.push(`# Three-Way Conversation
+This conversation includes three participants:
+- **Client**: The person you are helping (their messages show as "user")
+- **Coach (Gena)**: The human coach who may occasionally join the conversation (their messages are prefixed with "[COACH]:")
+- **You**: The AI thinking partner
+
+When the coach sends a message, treat it as guidance or direction. Incorporate their input respectfully.
+If the client mentions @Gena or @Coach, acknowledge that you'll note it for the coach's attention.`);
+
     const { getSectionGapInfo } = await import("./sessionSummarizer");
     const gapInfo = getSectionGapInfo(documentSections || []);
     if (gapInfo) {
@@ -113,10 +122,17 @@ export class PromptAssembler {
       }
       
       for (const msg of selectedMessages) {
-        conversationHistory.push({
-          role: msg.role === "user" ? "user" : "assistant",
-          content: msg.content,
-        });
+        if (msg.role === "coach") {
+          conversationHistory.push({
+            role: "user",
+            content: `[COACH]: ${msg.content}`,
+          });
+        } else {
+          conversationHistory.push({
+            role: msg.role === "user" ? "user" : "assistant",
+            content: msg.content,
+          });
+        }
       }
     }
 

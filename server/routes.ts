@@ -6,6 +6,7 @@ import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
+import { detectCoachMention } from "./mentionDetector";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -247,7 +248,17 @@ export async function registerRoutes(
         ? (await storage.getThreadMessages(validated.threadId)).length === 0 
         : false;
       
-      const message = await storage.createMessage(validated);
+      const mentionsCoach = detectCoachMention(validated.content) ? 1 : 0;
+      const message = await storage.createMessage({ ...validated, mentionsCoach });
+      
+      if (mentionsCoach && validated.threadId) {
+        await storage.createCoachMention({
+          messageId: message.id,
+          clientId: req.params.clientId,
+          threadId: validated.threadId,
+        });
+        console.log(`[Mention] Coach mentioned in thread ${validated.threadId}`);
+      }
       
       if (validated.role === "user") {
         const { promptAssembler } = await import("./promptAssembler");
@@ -588,6 +599,69 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Migration error:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Coach Message Route - allows coach to send messages into client threads
+  app.post("/api/coach/threads/:threadId/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const thread = await storage.getThread(req.params.threadId);
+      if (!thread) {
+        return res.status(404).json({ error: "Thread not found" });
+      }
+
+      const { content } = z.object({ content: z.string().min(1) }).parse(req.body);
+      
+      const message = await storage.createMessage({
+        clientId: thread.clientId,
+        threadId: thread.id,
+        role: "coach",
+        content,
+        type: "text",
+      });
+
+      console.log(`[Coach] Message sent to thread ${thread.id}`);
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Coach message error:", error);
+      res.status(400).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Coach Mentions API
+  app.get("/api/coach/mentions", isAuthenticated, async (_req, res) => {
+    try {
+      const mentions = await storage.getUnreadMentions();
+      res.json(mentions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch mentions" });
+    }
+  });
+
+  app.get("/api/coach/mentions/count", isAuthenticated, async (_req, res) => {
+    try {
+      const count = await storage.getUnreadMentionCount();
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch mention count" });
+    }
+  });
+
+  app.patch("/api/coach/mentions/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const mention = await storage.markMentionRead(req.params.id);
+      res.json(mention);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark mention as read" });
+    }
+  });
+
+  app.patch("/api/coach/threads/:threadId/mentions/read", isAuthenticated, async (req, res) => {
+    try {
+      await storage.markThreadMentionsRead(req.params.threadId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark mentions as read" });
     }
   });
 
