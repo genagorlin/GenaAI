@@ -112,25 +112,33 @@ export async function setupAuth(app: Express) {
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, async (err: any, user: any) => {
       if (err || !user) {
+        console.log("[Auth Callback] Error or no user:", err);
         return res.redirect("/api/login");
       }
       
       // Check if user is authorized
       const email = user.claims?.email;
+      console.log("[Auth Callback] Login attempt for email:", email);
+      
       if (email) {
         const authorizedUser = await storage.getAuthorizedUserByEmail(email);
+        console.log("[Auth Callback] Authorized user lookup result:", authorizedUser);
+        
         if (!authorizedUser) {
-          // User is not in allowlist - redirect to unauthorized page
+          console.log("[Auth Callback] User NOT in allowlist, redirecting to /unauthorized");
           return res.redirect("/unauthorized");
         }
+        console.log("[Auth Callback] User IS authorized, proceeding with login");
         // Update last login
         await storage.updateAuthorizedUserLastLogin(email);
       }
       
       req.login(user, (loginErr) => {
         if (loginErr) {
+          console.log("[Auth Callback] Login error:", loginErr);
           return res.redirect("/api/login");
         }
+        console.log("[Auth Callback] Login successful, redirecting to /");
         return res.redirect("/");
       });
     })(req, res, next);
