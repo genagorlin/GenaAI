@@ -121,6 +121,13 @@ export async function setupAuth(app: Express) {
       console.log("[Auth Callback] Login attempt for email:", email);
       
       if (email) {
+        // Bootstrap mode: if no authorized users exist, create the first user as admin
+        const allUsers = await storage.getAllAuthorizedUsers();
+        if (allUsers.length === 0) {
+          console.log("[Auth Callback] No authorized users exist - bootstrapping first user as admin:", email);
+          await storage.createAuthorizedUser(email, "admin");
+        }
+        
         const authorizedUser = await storage.getAuthorizedUserByEmail(email);
         console.log("[Auth Callback] Authorized user lookup result:", authorizedUser);
         
