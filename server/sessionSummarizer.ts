@@ -15,8 +15,10 @@ interface SectionUpdate {
 export async function summarizeSession(clientId: string): Promise<{ success: boolean; updatedSections: number; error?: string }> {
   try {
     const recentMessages = await storage.getMessagesSinceSummarization(clientId);
+    console.log(`[SessionSummarizer] Client ${clientId}: Found ${recentMessages.length} messages since last summarization`);
     
     if (recentMessages.length < 2) {
+      console.log(`[SessionSummarizer] Client ${clientId}: Not enough messages to summarize (need at least 2)`);
       return { success: true, updatedSections: 0 };
     }
 
@@ -24,20 +26,29 @@ export async function summarizeSession(clientId: string): Promise<{ success: boo
     const sections = await storage.getDocumentSections(document.id);
     
     if (sections.length === 0) {
+      console.log(`[SessionSummarizer] Client ${clientId}: No sections found in document`);
       return { success: true, updatedSections: 0 };
     }
 
+    const emptySections = sections.filter(s => !s.content || s.content.trim().length < 20);
+    console.log(`[SessionSummarizer] Client ${clientId}: ${emptySections.length}/${sections.length} sections are empty/minimal`);
+
     const sectionUpdates = await generateSectionUpdates(recentMessages, sections);
+    console.log(`[SessionSummarizer] Client ${clientId}: AI returned ${sectionUpdates.length} section updates`);
     
+    let appliedCount = 0;
     for (const update of sectionUpdates) {
       if (update.newContent && update.newContent.trim()) {
         await storage.updateSectionByAI(update.sectionId, update.newContent);
+        appliedCount++;
+        console.log(`[SessionSummarizer] Updated section ${update.sectionId.slice(0, 8)}...`);
       }
     }
     
     await storage.updateClientLastSummarized(clientId);
+    console.log(`[SessionSummarizer] Client ${clientId}: Applied ${appliedCount} updates, marked as summarized`);
     
-    return { success: true, updatedSections: sectionUpdates.length };
+    return { success: true, updatedSections: appliedCount };
   } catch (error: any) {
     console.error("[SessionSummarizer] Error:", error);
     return { success: false, updatedSections: 0, error: error.message };
@@ -59,27 +70,32 @@ async function generateSectionUpdates(messages: Message[], sections: DocumentSec
   const systemPrompt = `You are an expert coaching assistant helping to maintain a client's living document. 
 Your task is to analyze a recent conversation and update relevant document sections with new insights.
 
+IMPORTANT: If a section is currently empty or has minimal content, you MUST populate it with relevant information from this conversation. Empty sections are a priority to fill.
+
 Guidelines:
-- Only update sections where the conversation provides NEW, MEANINGFUL information
+- PRIORITY: Fill empty sections first with any relevant information from the conversation
 - Preserve existing important content while integrating new insights
 - Write in clear, professional language appropriate for coaching notes
 - Focus on actionable insights, patterns, and client growth
-- Do not add fluff or repeat what's already captured
-- If a section doesn't need updating based on this conversation, return its current content unchanged
+- Overview: Summarize who the client is and what they're working through
+- Key Highlights: Notable patterns, breakthroughs, concerns, or self-observations
+- Current Focus Areas: What the client is actively thinking about or working on
+- Background & Context: Life details, career, relationships, values mentioned
+- Open questions: Questions or issues that could be discussed with their coach
 
 Current document sections:
 ${sectionsInfo.map(s => `
-### ${s.title} (${s.sectionType})
+### ${s.title} (${s.sectionType}) ${!s.currentContent || s.currentContent === "(empty)" ? "[EMPTY - NEEDS CONTENT]" : ""}
 ID: ${s.id}
 Current Content:
 ${s.currentContent}
 `).join("\n")}
 
 Respond with a JSON array of section updates. Each update should have:
-- sectionId: the ID of the section to update
-- newContent: the updated content (or existing content if no update needed)
+- sectionId: the ID of the section to update  
+- newContent: the updated content
 
-Only include sections that have meaningful updates from this conversation.`;
+You MUST return updates for ALL empty sections if the conversation contains any relevant information for them.`;
 
   const userMessage = `Recent conversation to analyze:
 
@@ -88,6 +104,7 @@ ${conversationText}
 Based on this conversation, generate updates for the relevant document sections. Return a JSON array of updates.`;
 
   try {
+    console.log(`[SessionSummarizer] Calling AI to generate section updates for ${messages.length} messages...`);
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
@@ -97,19 +114,24 @@ Based on this conversation, generate updates for the relevant document sections.
 
     const content = response.content[0];
     if (content.type !== "text") {
+      console.log("[SessionSummarizer] AI response was not text");
       return [];
     }
 
     const jsonMatch = content.text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
-      console.log("[SessionSummarizer] No JSON array found in response");
+      console.log("[SessionSummarizer] No JSON array found in response. AI said:", content.text.slice(0, 200));
       return [];
     }
 
     const updates: SectionUpdate[] = JSON.parse(jsonMatch[0]);
+    console.log(`[SessionSummarizer] AI returned ${updates.length} raw updates`);
     
     const validSectionIds = new Set(sections.map(s => s.id));
-    return updates.filter(u => validSectionIds.has(u.sectionId) && u.newContent);
+    const validUpdates = updates.filter(u => validSectionIds.has(u.sectionId) && u.newContent);
+    console.log(`[SessionSummarizer] ${validUpdates.length} updates have valid section IDs and content`);
+    
+    return validUpdates;
   } catch (error) {
     console.error("[SessionSummarizer] AI generation error:", error);
     return [];

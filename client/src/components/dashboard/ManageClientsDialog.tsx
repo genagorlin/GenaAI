@@ -586,10 +586,10 @@ export function ManageClientsDialog({ open, onOpenChange, onClientSelect, select
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge
-                            variant={client.mobileAppConnected ? "default" : "outline"}
+                            variant={client.mobileAppConnected ? "default" : "secondary"}
                             className="text-xs"
                           >
-                            {client.mobileAppConnected ? "Connected" : "Pending"}
+                            {client.mobileAppConnected ? "App Connected" : "Invite Sent"}
                           </Badge>
                           <Button
                             variant="ghost"
