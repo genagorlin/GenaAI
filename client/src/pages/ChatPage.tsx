@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Mic, MoreVertical, Smile, Loader2 } from "lucide-react";
+import { Send, Mic, MoreVertical, Smile, Loader2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,11 @@ export default function ChatPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [inputValue, setInputValue] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
 
   const { data: client } = useQuery<Client>({
@@ -90,6 +94,71 @@ export default function ChatPage() {
       handleSendMessage();
     }
   };
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (audioChunksRef.current.length === 0) return;
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setIsTranscribing(true);
+        
+        try {
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+          
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+          
+          if (!response.ok) throw new Error("Transcription failed");
+          
+          const { text } = await response.json();
+          if (text && text.trim()) {
+            sendMessageMutation.mutate(text.trim());
+          }
+        } catch (error) {
+          console.error("Transcription error:", error);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+    }
+  }, [sendMessageMutation]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  }, [isRecording]);
+
+  const handleMicClick = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
 
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -215,26 +284,44 @@ export default function ChatPage() {
             />
           </div>
           
-          <Button 
-            size="icon" 
-            className={cn(
-              "h-11 w-11 rounded-full shadow-md shrink-0 transition-all duration-200",
-              inputValue.trim() 
-                ? "bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white" 
-                : "bg-slate-300 text-slate-500"
-            )}
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || sendMessageMutation.isPending}
-            data-testid="button-send"
-          >
-            {sendMessageMutation.isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : inputValue.trim() ? (
-              <Send className="h-5 w-5 ml-0.5" />
-            ) : (
-              <Mic className="h-5 w-5" />
-            )}
-          </Button>
+          {inputValue.trim() ? (
+            <Button 
+              size="icon" 
+              className="h-11 w-11 rounded-full shadow-md shrink-0 transition-all duration-200 bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white"
+              onClick={handleSendMessage}
+              disabled={sendMessageMutation.isPending}
+              data-testid="button-send"
+            >
+              {sendMessageMutation.isPending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5 ml-0.5" />
+              )}
+            </Button>
+          ) : (
+            <Button 
+              size="icon" 
+              className={cn(
+                "h-11 w-11 rounded-full shadow-md shrink-0 transition-all duration-200",
+                isRecording 
+                  ? "bg-red-500 hover:bg-red-600 text-white animate-pulse" 
+                  : isTranscribing
+                  ? "bg-amber-500 text-white"
+                  : "bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white"
+              )}
+              onClick={handleMicClick}
+              disabled={isTranscribing}
+              data-testid="button-mic"
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isRecording ? (
+                <Square className="h-4 w-4 fill-current" />
+              ) : (
+                <Mic className="h-5 w-5" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>
