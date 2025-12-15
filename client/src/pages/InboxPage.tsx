@@ -92,7 +92,7 @@ export default function InboxPage() {
 
   return (
     <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
-      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col">
+      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col relative">
         <div className="flex items-center gap-3 bg-[hsl(var(--wa-header))] p-3 text-white shadow-md">
           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
             <div className="flex h-full w-full items-center justify-center bg-emerald-100 text-emerald-800 font-bold text-lg">
@@ -170,21 +170,19 @@ export default function InboxPage() {
         </div>
 
         {threads.length > 0 && (
-          <div className="p-4 border-t border-slate-100">
-            <Button
-              onClick={handleNewThread}
-              disabled={createThreadMutation.isPending}
-              className="w-full bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90"
-              data-testid="button-new-conversation"
-            >
-              {createThreadMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              New conversation
-            </Button>
-          </div>
+          <button
+            onClick={handleNewThread}
+            disabled={createThreadMutation.isPending}
+            className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50"
+            data-testid="button-new-conversation"
+            aria-label="New conversation"
+          >
+            {createThreadMutation.isPending ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Plus className="h-6 w-6" />
+            )}
+          </button>
         )}
       </div>
     </div>
