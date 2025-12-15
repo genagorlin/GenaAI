@@ -32,7 +32,7 @@ import {
   authorizedUsers
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, and, gt } from "drizzle-orm";
 
 export interface IStorage {
   // Users (Replit Auth)
@@ -49,7 +49,11 @@ export interface IStorage {
 
   // Messages
   getClientMessages(clientId: string): Promise<Message[]>;
+  getMessagesSinceSummarization(clientId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
+  
+  // Session management
+  updateClientLastSummarized(clientId: string): Promise<void>;
 
   // Insights
   getClientInsights(clientId: string): Promise<Insight[]>;
@@ -177,6 +181,29 @@ export class DatabaseStorage implements IStorage {
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     const result = await db.insert(messages).values(insertMessage).returning();
     return result[0];
+  }
+
+  async getMessagesSinceSummarization(clientId: string): Promise<Message[]> {
+    const client = await this.getClient(clientId);
+    if (!client) return [];
+    
+    const query = db.select().from(messages)
+      .where(eq(messages.clientId, clientId))
+      .orderBy(messages.timestamp);
+    
+    if (client.lastSummarizedAt) {
+      return await db.select().from(messages)
+        .where(and(eq(messages.clientId, clientId), gt(messages.timestamp, client.lastSummarizedAt)))
+        .orderBy(messages.timestamp);
+    }
+    
+    return await query;
+  }
+
+  async updateClientLastSummarized(clientId: string): Promise<void> {
+    await db.update(clients)
+      .set({ lastSummarizedAt: new Date() })
+      .where(eq(clients.id, clientId));
   }
 
   // Insights

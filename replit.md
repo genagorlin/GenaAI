@@ -123,6 +123,12 @@ Token budgets are allocated across prompt components (total budget: 30,000 token
 
 ## Future Development Notes
 
+**Session Conclusion & AI Document Updates (NEXT):**
+A client session is concluded when:
+1. Client closes the app or says goodbye (explicit end)
+2. Client is inactive for 5+ minutes (timeout)
+Whichever comes first triggers AI to analyze the conversation and update living document sections.
+
 **Insight Generation (planned, not prioritized):**
 - Database schema exists for insights table
 - Categories: Emotional Spike, Recurring Theme, Shift, Contradiction

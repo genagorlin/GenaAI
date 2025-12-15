@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+
 interface Message {
   id: string;
   clientId: string;
@@ -64,6 +66,67 @@ export default function ChatPage() {
     retry: false
   });
 
+  const lastActivityRef = useRef<number>(Date.now());
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerSessionEnd = useCallback(async () => {
+    if (!clientId) return;
+    
+    try {
+      await fetch(`/api/clients/${clientId}/session-end`, { method: "POST" });
+      console.log("[Session] Session end triggered");
+    } catch (error) {
+      console.error("[Session] Failed to trigger session end:", error);
+    }
+  }, [clientId]);
+
+  const resetInactivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    
+    inactivityTimerRef.current = setTimeout(() => {
+      console.log("[Session] Inactivity timeout reached");
+      triggerSessionEnd();
+    }, INACTIVITY_TIMEOUT_MS);
+  }, [triggerSessionEnd]);
+
+  useEffect(() => {
+    resetInactivityTimer();
+    
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [resetInactivityTimer]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        triggerSessionEnd();
+      } else if (document.visibilityState === "visible") {
+        resetInactivityTimer();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (clientId) {
+        navigator.sendBeacon(`/api/clients/${clientId}/session-end`);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [clientId, triggerSessionEnd, resetInactivityTimer]);
+
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/clients", clientId, "messages"],
     queryFn: async () => {
@@ -105,6 +168,7 @@ export default function ChatPage() {
     if (!inputValue.trim() || sendMessageMutation.isPending) return;
     const content = inputValue.trim();
     setInputValue("");
+    resetInactivityTimer();
     sendMessageMutation.mutate(content);
   };
 
@@ -149,6 +213,7 @@ export default function ChatPage() {
           
           const { text } = await response.json();
           if (text && text.trim()) {
+            resetInactivityTimer();
             sendMessageMutation.mutate(text.trim());
           }
         } catch (error) {
@@ -163,7 +228,7 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Failed to start recording:", error);
     }
-  }, [sendMessageMutation]);
+  }, [sendMessageMutation, resetInactivityTimer]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {

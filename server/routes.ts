@@ -160,6 +160,14 @@ export async function registerRoutes(
             type: "text",
           });
           
+          const { isGoodbyeMessage, summarizeSession } = await import("./sessionSummarizer");
+          if (isGoodbyeMessage(validated.content)) {
+            console.log(`[SessionEnd] Goodbye detected from client ${req.params.clientId}`);
+            summarizeSession(req.params.clientId).catch(err => {
+              console.error("[SessionEnd] Background summarization failed:", err);
+            });
+          }
+          
           return res.status(201).json({ userMessage: message, aiMessage });
         } catch (aiError) {
           console.error("AI response error:", aiError);
@@ -386,6 +394,25 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // Session End Route (public - called when client session ends)
+  app.post("/api/clients/:clientId/session-end", async (req, res) => {
+    try {
+      const { summarizeSession } = await import("./sessionSummarizer");
+      const result = await summarizeSession(req.params.clientId);
+      
+      if (result.success) {
+        console.log(`[SessionEnd] Client ${req.params.clientId}: Updated ${result.updatedSections} sections`);
+        res.json({ success: true, updatedSections: result.updatedSections });
+      } else {
+        console.error(`[SessionEnd] Client ${req.params.clientId}: ${result.error}`);
+        res.status(500).json({ error: result.error });
+      }
+    } catch (error: any) {
+      console.error("Session end error:", error);
+      res.status(500).json({ error: "Failed to process session end" });
     }
   });
 
