@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send, Mic, MoreVertical, Smile, Loader2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ interface Client {
 
 export default function ChatPage() {
   const { clientId } = useParams<{ clientId: string }>();
+  const [, setLocation] = useLocation();
   const [inputValue, setInputValue] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -32,6 +33,25 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
+
+  // Check if user is authenticated for client access
+  const { data: authStatus, isLoading: authLoading } = useQuery({
+    queryKey: ["/api/auth/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/status");
+      if (!res.ok) return { authenticated: false };
+      return res.json();
+    },
+    retry: false
+  });
+
+  // Redirect to client login if not authenticated
+  useEffect(() => {
+    if (!authLoading && authStatus && !authStatus.authenticated && clientId) {
+      const returnTo = encodeURIComponent(`/chat/${clientId}`);
+      window.location.href = `/api/client/login?returnTo=${returnTo}`;
+    }
+  }, [authLoading, authStatus, clientId]);
 
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
@@ -173,6 +193,18 @@ export default function ChatPage() {
       <div className="h-screen flex items-center justify-center bg-zinc-100">
         <div className="text-center p-6">
           <p className="text-muted-foreground">Invalid chat link</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking auth
+  if (authLoading || (!authStatus?.authenticated)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-100">
+        <div className="text-center p-6">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
+          <p className="text-muted-foreground">Connecting...</p>
         </div>
       </div>
     );

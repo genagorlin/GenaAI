@@ -29,6 +29,15 @@ export async function registerRoutes(
     }
   });
 
+  // Auth status check (no middleware - returns auth state)
+  app.get('/api/auth/status', (req: any, res) => {
+    const isAuth = req.isAuthenticated?.() && req.user?.claims;
+    res.json({ 
+      authenticated: !!isAuth,
+      email: isAuth ? req.user.claims.email : null
+    });
+  });
+
   // Client Routes (protected)
   app.get("/api/clients", isAuthenticated, async (_req, res) => {
     try {

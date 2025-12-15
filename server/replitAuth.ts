@@ -116,9 +116,78 @@ export async function setupAuth(app: Express) {
         return res.redirect("/api/login");
       }
       
-      // Check if user is authorized
       const email = user.claims?.email;
-      console.log("[Auth Callback] Login attempt for email:", email);
+      const firstName = user.claims?.first_name;
+      const lastName = user.claims?.last_name;
+      const profileImageUrl = user.claims?.profile_image_url;
+      
+      // Check if this is a client login (has clientReturnTo in session)
+      const clientReturnToEncoded = (req.session as any).clientReturnTo;
+      if (clientReturnToEncoded) {
+        // Client login flow - skip allowlist check
+        delete (req.session as any).clientReturnTo;
+        
+        // Decode the URL-encoded returnTo and validate it's a same-origin path
+        let clientReturnTo = decodeURIComponent(clientReturnToEncoded);
+        
+        // Security: Only allow relative paths starting with /chat/ to prevent open redirect
+        if (!clientReturnTo.startsWith('/chat/') || clientReturnTo.includes('//')) {
+          clientReturnTo = '/';
+        }
+        console.log("[Auth Callback] Client login for email:", email, "returnTo:", clientReturnTo);
+        
+        req.login(user, async (loginErr) => {
+          if (loginErr) {
+            console.log("[Auth Callback] Client login error:", loginErr);
+            return res.redirect("/");
+          }
+          
+          // Extract clientId from returnTo URL if it's a chat page
+          const chatMatch = clientReturnTo.match(/\/chat\/([^/?]+)/);
+          if (chatMatch && email) {
+            const clientId = chatMatch[1];
+            
+            // Check if client exists and update or create
+            let existingClient = await storage.getClient(clientId);
+            
+            if (existingClient) {
+              // Update existing client with auth info if not already set
+              if (!existingClient.email || existingClient.email !== email) {
+                await storage.updateClientAuth(clientId, {
+                  email,
+                  name: existingClient.name || `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0],
+                  photoUrl: profileImageUrl,
+                });
+              }
+            } else {
+              // Create new client on first login
+              const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0];
+              await storage.registerClient({
+                id: clientId,
+                name: fullName,
+                email,
+                photoUrl: profileImageUrl,
+              });
+              
+              // Send welcome message
+              await storage.createMessage({
+                clientId,
+                role: "ai",
+                content: `Hi ${firstName || 'there'}! Welcome to GenaGPT. I'm your thinking partner - here whenever you want to work through something. What's on your mind?`,
+                type: "text",
+              });
+              console.log("[Auth Callback] Created new client and sent welcome message:", clientId);
+            }
+          }
+          
+          console.log("[Auth Callback] Client login successful, redirecting to:", clientReturnTo);
+          return res.redirect(clientReturnTo);
+        });
+        return;
+      }
+      
+      // Coach login flow - check allowlist
+      console.log("[Auth Callback] Coach login attempt for email:", email);
       
       if (email) {
         // Bootstrap mode: if no authorized users exist, create the first user as admin
@@ -160,6 +229,20 @@ export async function setupAuth(app: Express) {
         }).href
       );
     });
+  });
+
+  // Client-specific login entry point (stores returnTo, then redirects to same OIDC flow)
+  // The /api/callback handler detects clientReturnTo in session and skips allowlist
+  app.get("/api/client/login", (req, res, next) => {
+    const returnTo = req.query.returnTo as string;
+    if (returnTo) {
+      (req.session as any).clientReturnTo = returnTo;
+    }
+    ensureStrategy(req.hostname);
+    passport.authenticate(`replitauth:${req.hostname}`, {
+      prompt: "login consent",
+      scope: ["openid", "email", "profile", "offline_access"],
+    })(req, res, next);
   });
 }
 

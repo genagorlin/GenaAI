@@ -44,6 +44,7 @@ export interface IStorage {
   getClient(id: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   registerClient(data: { id: string; name: string; email: string; photoUrl?: string }): Promise<Client>;
+  updateClientAuth(id: string, data: { email: string; name: string; photoUrl?: string }): Promise<void>;
   updateClientActivity(id: string, mobileAppConnected: number): Promise<void>;
 
   // Messages
@@ -144,6 +145,17 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return client;
+  }
+
+  async updateClientAuth(id: string, data: { email: string; name: string; photoUrl?: string }): Promise<void> {
+    await db.update(clients)
+      .set({ 
+        email: data.email, 
+        name: data.name, 
+        photoUrl: data.photoUrl,
+        lastActive: new Date() 
+      })
+      .where(eq(clients.id, id));
   }
 
   async updateClientActivity(id: string, mobileAppConnected: number): Promise<void> {
