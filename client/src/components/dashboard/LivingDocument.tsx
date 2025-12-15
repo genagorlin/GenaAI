@@ -1,26 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
   Plus, 
-  GripVertical, 
   Trash2, 
-  ChevronDown, 
-  ChevronRight,
   Save,
-  Edit3,
   Check,
-  X,
+  Bot,
+  MessageSquare,
   Sparkles,
   Target,
   Star,
   BookOpen,
-  LayoutList,
-  FileEdit
+  Clock,
+  RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -30,10 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PromptSettings } from "./PromptSettings";
-import { DocumentView } from "./DocumentView";
-
-type ProfileViewMode = "prompt-entry" | "document";
 
 interface DocumentSection {
   id: string;
@@ -53,6 +45,20 @@ interface ClientDocument {
   title: string;
   lastUpdated: string;
   createdAt: string;
+}
+
+interface RolePrompt {
+  id: string;
+  clientId: string;
+  content: string;
+  updatedAt: string;
+}
+
+interface TaskPrompt {
+  id: string;
+  clientId: string;
+  content: string;
+  updatedAt: string;
 }
 
 interface LivingDocumentProps {
@@ -76,17 +82,64 @@ const sectionTypeLabels: Record<string, string> = {
   custom: "Custom",
 };
 
+const DEFAULT_ROLE_PROMPT = "You are an empathetic thinking partner. Do not prescribe advice. Ask clarifying questions when needed.";
+const DEFAULT_TASK_PROMPT = "Respond reflectively and explore meaning without telling the client what to do. If helpful, ask a clarifying question to deepen understanding.";
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function isRecentUpdate(dateString: string): boolean {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = diffMs / 3600000;
+  return diffHours < 24;
+}
+
 export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
   const queryClient = useQueryClient();
-  const [profileViewMode, setProfileViewMode] = useState<ProfileViewMode>("prompt-entry");
-  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
-  const [editingContent, setEditingContent] = useState("");
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const savedTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initializedPromptsRef = useRef(false);
+  const initializedSectionsRef = useRef(false);
+  
+  const [roleContent, setRoleContent] = useState("");
+  const [taskContent, setTaskContent] = useState("");
+  const [sectionContents, setSectionContents] = useState<Record<string, { title: string; content: string }>>({});
+  
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSectionType, setNewSectionType] = useState("custom");
 
-  const { data, isLoading } = useQuery<{ document: ClientDocument; sections: DocumentSection[] }>({
+  useEffect(() => {
+    return () => {
+      if (savedTimeoutRef.current) {
+        clearTimeout(savedTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    initializedPromptsRef.current = false;
+    initializedSectionsRef.current = false;
+    setHasChanges(false);
+  }, [clientId]);
+
+  const { data: documentData, isLoading: docLoading } = useQuery<{ document: ClientDocument; sections: DocumentSection[] }>({
     queryKey: ["/api/clients", clientId, "document"],
     queryFn: async () => {
       const res = await fetch(`/api/clients/${clientId}/document`, { credentials: "include" });
@@ -94,6 +147,61 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
       return res.json();
     },
     enabled: !!clientId,
+  });
+
+  const { data: promptData, isLoading: promptLoading } = useQuery<{ rolePrompt: RolePrompt; taskPrompt: TaskPrompt }>({
+    queryKey: ["/api/clients", clientId, "prompts"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/prompts`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch prompts");
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
+  useEffect(() => {
+    if (promptData && !initializedPromptsRef.current && !hasChanges) {
+      setRoleContent(promptData.rolePrompt.content);
+      setTaskContent(promptData.taskPrompt.content);
+      initializedPromptsRef.current = true;
+    }
+  }, [promptData, hasChanges]);
+
+  useEffect(() => {
+    if (documentData?.sections && !initializedSectionsRef.current && !hasChanges) {
+      const contents: Record<string, { title: string; content: string }> = {};
+      documentData.sections.forEach(s => {
+        contents[s.id] = { title: s.title, content: s.content };
+      });
+      setSectionContents(contents);
+      initializedSectionsRef.current = true;
+    }
+  }, [documentData, hasChanges]);
+
+  const updateRolePromptMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/clients/${clientId}/prompts/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to update role prompt");
+      return res.json();
+    },
+  });
+
+  const updateTaskPromptMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/clients/${clientId}/prompts/task`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to update task prompt");
+      return res.json();
+    },
   });
 
   const updateSectionMutation = useMutation({
@@ -106,10 +214,6 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
       });
       if (!res.ok) throw new Error("Failed to update section");
       return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
-      setEditingSectionId(null);
     },
   });
 
@@ -124,7 +228,11 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
       if (!res.ok) throw new Error("Failed to create section");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (newSection) => {
+      setSectionContents(prev => ({
+        ...prev,
+        [newSection.id]: { title: newSection.title, content: newSection.content || "" }
+      }));
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
       setIsAddingSection(false);
       setNewSectionTitle("");
@@ -141,42 +249,50 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
       if (!res.ok) throw new Error("Failed to delete section");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
+      setSectionContents(prev => {
+        const updated = { ...prev };
+        delete updated[deletedId];
+        return updated;
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
     },
   });
 
-  const startEditing = (section: DocumentSection) => {
-    setEditingSectionId(section.id);
-    setEditingTitle(section.title);
-    setEditingContent(section.content);
+  const handleRoleChange = (value: string) => {
+    setRoleContent(value);
+    setHasChanges(true);
   };
 
-  const saveEdit = () => {
-    if (editingSectionId) {
-      updateSectionMutation.mutate({
-        id: editingSectionId,
-        updates: { title: editingTitle, content: editingContent },
-      });
-    }
+  const handleTaskChange = (value: string) => {
+    setTaskContent(value);
+    setHasChanges(true);
   };
 
-  const cancelEdit = () => {
-    setEditingSectionId(null);
-    setEditingTitle("");
-    setEditingContent("");
-  };
-
-  const toggleCollapsed = (section: DocumentSection) => {
-    updateSectionMutation.mutate({
-      id: section.id,
-      updates: { isCollapsed: section.isCollapsed ? 0 : 1 },
+  const handleSectionChange = (id: string, field: "title" | "content", value: string) => {
+    setSectionContents(prev => {
+      const existing = prev[id] || { title: "", content: "" };
+      return {
+        ...prev,
+        [id]: { ...existing, [field]: value }
+      };
     });
+    setHasChanges(true);
+  };
+
+  const resetRolePrompt = () => {
+    setRoleContent(DEFAULT_ROLE_PROMPT);
+    setHasChanges(true);
+  };
+
+  const resetTaskPrompt = () => {
+    setTaskContent(DEFAULT_TASK_PROMPT);
+    setHasChanges(true);
   };
 
   const addNewSection = () => {
     if (!newSectionTitle.trim()) return;
-    const maxOrder = Math.max(...(data?.sections.map(s => s.sortOrder) || [0]), -1);
+    const maxOrder = Math.max(...(documentData?.sections.map(s => s.sortOrder) || [0]), -1);
     createSectionMutation.mutate({
       title: newSectionTitle,
       sectionType: newSectionType,
@@ -185,7 +301,48 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
     });
   };
 
-  if (isLoading) {
+  const saveAll = async () => {
+    setIsSaving(true);
+    try {
+      const promises: Promise<any>[] = [];
+
+      if (roleContent !== promptData?.rolePrompt.content) {
+        promises.push(updateRolePromptMutation.mutateAsync(roleContent));
+      }
+      if (taskContent !== promptData?.taskPrompt.content) {
+        promises.push(updateTaskPromptMutation.mutateAsync(taskContent));
+      }
+
+      for (const section of documentData?.sections || []) {
+        const current = sectionContents[section.id];
+        if (current && (current.title !== section.title || current.content !== section.content)) {
+          promises.push(updateSectionMutation.mutateAsync({
+            id: section.id,
+            updates: { title: current.title, content: current.content }
+          }));
+        }
+      }
+
+      await Promise.all(promises);
+      
+      setHasChanges(false);
+      initializedPromptsRef.current = false;
+      initializedSectionsRef.current = false;
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "prompts"] });
+      
+      setShowSaved(true);
+      if (savedTimeoutRef.current) {
+        clearTimeout(savedTimeoutRef.current);
+      }
+      savedTimeoutRef.current = setTimeout(() => setShowSaved(false), 2000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (docLoading || promptLoading) {
     return (
       <div className="flex items-center justify-center h-64" data-testid="document-loading">
         <div className="animate-pulse text-muted-foreground">Loading document...</div>
@@ -193,11 +350,10 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
     );
   }
 
-  const sections = data?.sections || [];
-  const document = data?.document;
+  const sections = documentData?.sections || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <FileText className="h-6 w-6 text-primary" />
@@ -206,53 +362,103 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
               {clientName}'s Profile
             </h2>
             <p className="text-xs text-muted-foreground">
-              Last updated: {document?.lastUpdated ? new Date(document.lastUpdated).toLocaleDateString() : "Never"}
+              Living document updated by AI and coach
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center border rounded-lg p-1 bg-muted/30">
-            <Button
-              variant={profileViewMode === "prompt-entry" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setProfileViewMode("prompt-entry")}
-              className="gap-2 h-8"
-              data-testid="button-view-prompt-entry"
-            >
-              <LayoutList className="h-4 w-4" />
-              Prompt Entry
-            </Button>
-            <Button
-              variant={profileViewMode === "document" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setProfileViewMode("document")}
-              className="gap-2 h-8"
-              data-testid="button-view-document-unified"
-            >
-              <FileEdit className="h-4 w-4" />
-              Document
-            </Button>
-          </div>
-          {profileViewMode === "prompt-entry" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddingSection(true)}
-              className="gap-2"
-              data-testid="button-add-section"
-            >
-              <Plus className="h-4 w-4" />
-              Add Section
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddingSection(true)}
+            className="gap-2"
+            data-testid="button-add-section"
+          >
+            <Plus className="h-4 w-4" />
+            Add Section
+          </Button>
+          <Button
+            onClick={saveAll}
+            disabled={!hasChanges || isSaving}
+            className="gap-2"
+            data-testid="button-save-all"
+          >
+            {showSaved ? (
+              <>
+                <Check className="h-4 w-4" />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                {isSaving ? "Saving..." : "Save Changes"}
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
-      {profileViewMode === "document" ? (
-        <DocumentView clientId={clientId} clientName={clientName} />
-      ) : (
-        <>
-          <PromptSettings clientId={clientId} />
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border pb-4 mb-4">
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-3" data-testid="prompt-role-section">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Role Prompt</span>
+                    <span className="text-xs text-muted-foreground">(AI personality)</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetRolePrompt}
+                    className="h-7 text-xs gap-1"
+                    data-testid="button-reset-role"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset
+                  </Button>
+                </div>
+                <textarea
+                  value={roleContent}
+                  onChange={(e) => handleRoleChange(e.target.value)}
+                  className="w-full min-h-[80px] p-3 text-sm leading-relaxed bg-muted/30 rounded-lg border border-border focus:ring-2 focus:ring-primary/20 focus:border-primary/50 focus:outline-none resize-none"
+                  placeholder="Define the AI's role and personality..."
+                  data-testid="textarea-role-prompt"
+                />
+              </div>
+
+              <div className="space-y-3" data-testid="prompt-task-section">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Task Prompt</span>
+                    <span className="text-xs text-muted-foreground">(Response instructions)</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetTaskPrompt}
+                    className="h-7 text-xs gap-1"
+                    data-testid="button-reset-task"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset
+                  </Button>
+                </div>
+                <textarea
+                  value={taskContent}
+                  onChange={(e) => handleTaskChange(e.target.value)}
+                  className="w-full min-h-[80px] p-3 text-sm leading-relaxed bg-muted/30 rounded-lg border border-border focus:ring-2 focus:ring-primary/20 focus:border-primary/50 focus:outline-none resize-none"
+                  placeholder="Define how the AI should respond..."
+                  data-testid="textarea-task-prompt"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {isAddingSection && (
         <div className="rounded-lg border border-primary/50 bg-primary/5 p-4 space-y-3" data-testid="new-section-form">
@@ -301,128 +507,83 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
         </div>
       )}
 
-      <ScrollArea className="h-[calc(100vh-280px)]">
+      <ScrollArea className="h-[calc(100vh-420px)]">
         <div className="space-y-4 pr-4">
           {sections.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground" data-testid="no-sections">
-              No sections yet. Add one to get started.
+              <Sparkles className="h-8 w-8 mx-auto mb-3 opacity-50" />
+              <p>No profile sections yet.</p>
+              <p className="text-sm">Add a section to start building this client's profile.</p>
             </div>
           ) : (
             sections.map((section) => {
               const Icon = sectionTypeIcons[section.sectionType] || FileText;
-              const isEditing = editingSectionId === section.id;
+              const isRecent = isRecentUpdate(section.updatedAt);
+              const currentContent = sectionContents[section.id];
 
               return (
                 <div
                   key={section.id}
-                  className="rounded-lg border border-border bg-card overflow-hidden"
+                  className={`rounded-xl border bg-card overflow-hidden transition-all ${
+                    isRecent ? "border-primary/30 shadow-sm" : "border-border"
+                  }`}
                   data-testid={`section-${section.id}`}
                 >
-                  <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border">
                     <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => toggleCollapsed(section)}
-                        className="text-muted-foreground hover:text-foreground"
-                        data-testid={`toggle-collapse-${section.id}`}
-                      >
-                        {section.isCollapsed ? (
-                          <ChevronRight className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </button>
-                      <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab" />
                       <Icon className="h-4 w-4 text-primary" />
-                      {isEditing ? (
-                        <Input
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          className="h-7 w-48 text-sm font-medium"
-                          data-testid={`input-edit-title-${section.id}`}
-                        />
-                      ) : (
-                        <span className="font-medium text-sm">{section.title}</span>
-                      )}
+                      <input
+                        type="text"
+                        value={currentContent?.title || ""}
+                        onChange={(e) => handleSectionChange(section.id, "title", e.target.value)}
+                        className="font-medium text-sm bg-transparent border-0 focus:outline-none focus:ring-0 px-0 w-48"
+                        placeholder="Section title..."
+                        data-testid={`input-section-title-${section.id}`}
+                      />
                       <Badge variant="outline" className="text-[10px] h-5 px-1.5">
                         {sectionTypeLabels[section.sectionType] || "Custom"}
                       </Badge>
+                      {isRecent && (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-1 bg-primary/10 text-primary border-primary/20">
+                          <Clock className="h-3 w-3" />
+                          {formatTimeAgo(section.updatedAt)}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
-                      {isEditing ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={saveEdit}
-                            disabled={updateSectionMutation.isPending}
-                            data-testid={`button-save-edit-${section.id}`}
-                          >
-                            <Check className="h-4 w-4 text-emerald-600" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={cancelEdit}
-                            data-testid={`button-cancel-edit-${section.id}`}
-                          >
-                            <X className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => startEditing(section)}
-                            data-testid={`button-edit-${section.id}`}
-                          >
-                            <Edit3 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive/60 hover:text-destructive"
-                            onClick={() => deleteSectionMutation.mutate(section.id)}
-                            disabled={deleteSectionMutation.isPending}
-                            data-testid={`button-delete-${section.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive/60 hover:text-destructive"
+                        onClick={() => deleteSectionMutation.mutate(section.id)}
+                        disabled={deleteSectionMutation.isPending}
+                        data-testid={`button-delete-${section.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  {!section.isCollapsed && (
-                    <div className="p-4">
-                      {isEditing ? (
-                        <Textarea
-                          value={editingContent}
-                          onChange={(e) => setEditingContent(e.target.value)}
-                          placeholder="Add your notes here..."
-                          className="min-h-[120px] resize-none"
-                          data-testid={`textarea-edit-content-${section.id}`}
-                        />
-                      ) : section.content ? (
-                        <p className="text-sm text-foreground/80 whitespace-pre-wrap" data-testid={`content-${section.id}`}>
-                          {section.content}
-                        </p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground italic">
-                          Click edit to add notes to this section...
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  <div className="p-4">
+                    <textarea
+                      value={currentContent?.content || ""}
+                      onChange={(e) => handleSectionChange(section.id, "content", e.target.value)}
+                      placeholder="Add content to this section..."
+                      className="w-full min-h-[100px] p-3 text-sm leading-relaxed bg-muted/20 rounded-lg border-0 focus:ring-2 focus:ring-primary/20 focus:outline-none resize-none"
+                      data-testid={`textarea-section-content-${section.id}`}
+                    />
+                  </div>
                 </div>
               );
             })
           )}
         </div>
       </ScrollArea>
-        </>
+
+      {hasChanges && (
+        <div className="fixed bottom-6 right-6 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 px-4 py-2 rounded-full text-sm shadow-lg flex items-center gap-2">
+          <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+          You have unsaved changes
+        </div>
       )}
     </div>
   );
