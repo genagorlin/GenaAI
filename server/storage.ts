@@ -232,6 +232,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(threads.id, id));
   }
 
+  async deleteThread(id: string): Promise<void> {
+    await db.delete(messages).where(eq(messages.threadId, id));
+    await db.delete(threads).where(eq(threads.id, id));
+  }
+
   async getOrCreateDefaultThread(clientId: string): Promise<Thread> {
     const existingThreads = await this.getClientThreads(clientId);
     if (existingThreads.length > 0) {
