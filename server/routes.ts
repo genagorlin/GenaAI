@@ -9,6 +9,39 @@ import OpenAI, { toFile } from "openai";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+async function generateThreadTitle(threadId: string, firstMessage: string): Promise<void> {
+  try {
+    const openai = new OpenAI({
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+    });
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "Generate a short, descriptive title (3-6 words max) for a coaching conversation based on the user's first message. The title should capture the main topic or theme. Return only the title, no quotes or punctuation."
+        },
+        {
+          role: "user",
+          content: firstMessage
+        }
+      ],
+      max_tokens: 20,
+      temperature: 0.7,
+    });
+    
+    const title = response.choices[0]?.message?.content?.trim();
+    if (title) {
+      await storage.updateThreadTitle(threadId, title);
+      console.log(`[ThreadTitle] Generated title for thread ${threadId}: "${title}"`);
+    }
+  } catch (error) {
+    console.error("[ThreadTitle] Error generating title:", error);
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -180,6 +213,11 @@ export async function registerRoutes(
         ...req.body,
         clientId: req.params.clientId
       });
+      
+      const isFirstMessageInThread = validated.threadId 
+        ? (await storage.getThreadMessages(validated.threadId)).length === 0 
+        : false;
+      
       const message = await storage.createMessage(validated);
       
       if (validated.role === "user") {
@@ -216,6 +254,12 @@ export async function registerRoutes(
             content: aiResponseContent,
             type: "text",
           });
+          
+          if (validated.threadId && isFirstMessageInThread) {
+            generateThreadTitle(validated.threadId, validated.content).catch(err => {
+              console.error("[ThreadTitle] Failed to generate title:", err);
+            });
+          }
           
           const { isGoodbyeMessage, summarizeSession, updateDocumentRealtime } = await import("./sessionSummarizer");
           
