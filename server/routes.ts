@@ -261,6 +261,12 @@ export async function registerRoutes(
       }
       
       if (validated.role === "user") {
+        // Skip AI response if client is addressing the coach directly
+        if (mentionsCoach) {
+          console.log(`[AI] Skipping AI response - client is addressing coach directly`);
+          return res.status(201).json({ userMessage: message, coachMentioned: true });
+        }
+        
         const { promptAssembler } = await import("./promptAssembler");
         const { routeMessage, generateAIResponse } = await import("./modelRouter");
         
