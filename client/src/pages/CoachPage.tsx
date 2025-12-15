@@ -190,7 +190,8 @@ export default function CoachPage() {
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
-    enabled: !!selectedClient || !!selectedThreadId
+    enabled: !!selectedClient || !!selectedThreadId,
+    refetchInterval: selectedThreadId ? 3000 : false
   });
 
   const deleteClientMutation = useMutation({
