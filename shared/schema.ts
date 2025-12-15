@@ -126,6 +126,15 @@ export const documentSections = pgTable("document_sections", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Coach Consultations - private coach-AI conversations about a client
+export const coachConsultations = pgTable("coach_consultations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // "coach" or "ai"
+  content: text("content").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
 // Role Prompts - AI personality/behavior per client (~500 tokens)
 export const rolePrompts = pgTable("role_prompts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -181,6 +190,7 @@ export const insertTaskPromptSchema = createInsertSchema(taskPrompts).omit({ id:
 export const insertMethodologyFrameSchema = createInsertSchema(methodologyFrames).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientMethodologySchema = createInsertSchema(clientMethodologies).omit({ id: true, createdAt: true });
 export const insertCoachMentionSchema = createInsertSchema(coachMentions).omit({ id: true, createdAt: true });
+export const insertCoachConsultationSchema = createInsertSchema(coachConsultations).omit({ id: true, timestamp: true });
 
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
@@ -217,3 +227,6 @@ export type ClientMethodology = typeof clientMethodologies.$inferSelect;
 
 export type InsertCoachMention = z.infer<typeof insertCoachMentionSchema>;
 export type CoachMention = typeof coachMentions.$inferSelect;
+
+export type InsertCoachConsultation = z.infer<typeof insertCoachConsultationSchema>;
+export type CoachConsultation = typeof coachConsultations.$inferSelect;

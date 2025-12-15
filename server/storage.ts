@@ -22,6 +22,8 @@ import {
   type AuthorizedUser,
   type CoachMention,
   type InsertCoachMention,
+  type CoachConsultation,
+  type InsertCoachConsultation,
   clients,
   threads,
   messages,
@@ -35,7 +37,8 @@ import {
   methodologyFrames,
   clientMethodologies,
   authorizedUsers,
-  coachMentions
+  coachMentions,
+  coachConsultations
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -113,6 +116,11 @@ export interface IStorage {
   getUnreadMentionCount(): Promise<number>;
   markMentionRead(id: string): Promise<CoachMention>;
   markThreadMentionsRead(threadId: string): Promise<void>;
+
+  // Coach Consultations (private coach-AI conversations about a client)
+  getClientConsultations(clientId: string): Promise<CoachConsultation[]>;
+  createConsultation(consultation: InsertCoachConsultation): Promise<CoachConsultation>;
+  clearClientConsultations(clientId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -552,6 +560,22 @@ export class DatabaseStorage implements IStorage {
     await db.update(coachMentions)
       .set({ isRead: 1 })
       .where(eq(coachMentions.threadId, threadId));
+  }
+
+  // Coach Consultations
+  async getClientConsultations(clientId: string): Promise<CoachConsultation[]> {
+    return await db.select().from(coachConsultations)
+      .where(eq(coachConsultations.clientId, clientId))
+      .orderBy(asc(coachConsultations.timestamp));
+  }
+
+  async createConsultation(consultation: InsertCoachConsultation): Promise<CoachConsultation> {
+    const [result] = await db.insert(coachConsultations).values(consultation).returning();
+    return result;
+  }
+
+  async clearClientConsultations(clientId: string): Promise<void> {
+    await db.delete(coachConsultations).where(eq(coachConsultations.clientId, clientId));
   }
 }
 

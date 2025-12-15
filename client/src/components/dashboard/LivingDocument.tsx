@@ -15,7 +15,12 @@ import {
   Clock,
   RotateCcw,
   Undo2,
-  CheckCircle2
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Send,
+  Loader2,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +74,14 @@ interface TaskPrompt {
 interface LivingDocumentProps {
   clientId: string;
   clientName: string;
+}
+
+interface CoachConsultation {
+  id: string;
+  clientId: string;
+  role: string;
+  content: string;
+  timestamp: string;
 }
 
 const sectionTypeIcons: Record<string, React.ElementType> = {
@@ -129,6 +142,10 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSectionType, setNewSectionType] = useState("custom");
+  
+  const [isConsultOpen, setIsConsultOpen] = useState(false);
+  const [consultMessage, setConsultMessage] = useState("");
+  const consultScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     return () => {
@@ -297,6 +314,58 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "document"] });
     },
   });
+
+  const { data: consultations, isLoading: consultLoading } = useQuery<CoachConsultation[]>({
+    queryKey: ["/api/coach/clients", clientId, "consultations"],
+    queryFn: async () => {
+      const res = await fetch(`/api/coach/clients/${clientId}/consultations`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch consultations");
+      return res.json();
+    },
+    enabled: !!clientId && isConsultOpen,
+  });
+
+  const sendConsultationMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/coach/clients/${clientId}/consultations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to send consultation");
+      return res.json();
+    },
+    onSuccess: () => {
+      setConsultMessage("");
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/clients", clientId, "consultations"] });
+    },
+  });
+
+  const clearConsultationsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/coach/clients/${clientId}/consultations`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to clear consultations");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/clients", clientId, "consultations"] });
+    },
+  });
+
+  useEffect(() => {
+    if (consultScrollRef.current && consultations) {
+      consultScrollRef.current.scrollTop = consultScrollRef.current.scrollHeight;
+    }
+  }, [consultations]);
+
+  const handleSendConsultation = () => {
+    if (!consultMessage.trim()) return;
+    sendConsultationMutation.mutate(consultMessage);
+  };
 
   const handleRoleChange = (value: string) => {
     setRoleContent(value);
@@ -665,6 +734,119 @@ export function LivingDocument({ clientId, clientName }: LivingDocumentProps) {
           You have unsaved changes
         </div>
       )}
+
+      {/* AI Consultation Panel */}
+      <div className="mt-6 rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+        <button
+          onClick={() => setIsConsultOpen(!isConsultOpen)}
+          className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-violet-500/10 to-purple-500/10 hover:from-violet-500/20 hover:to-purple-500/20 transition-colors"
+          data-testid="button-toggle-consult"
+        >
+          <div className="flex items-center gap-3">
+            <Bot className="h-5 w-5 text-violet-600" />
+            <div className="text-left">
+              <span className="font-medium text-sm">Consult AI about {clientName}</span>
+              <p className="text-xs text-muted-foreground">Private coach-AI discussion</p>
+            </div>
+          </div>
+          {isConsultOpen ? (
+            <ChevronUp className="h-5 w-5 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+          )}
+        </button>
+
+        {isConsultOpen && (
+          <div className="border-t border-border">
+            <div className="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border">
+              <span className="text-xs text-muted-foreground">
+                {consultations?.length || 0} messages
+              </span>
+              {(consultations?.length || 0) > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                  onClick={() => clearConsultationsMutation.mutate()}
+                  disabled={clearConsultationsMutation.isPending}
+                  data-testid="button-clear-consultations"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </Button>
+              )}
+            </div>
+            
+            <div 
+              ref={consultScrollRef}
+              className="h-64 overflow-y-auto p-4 space-y-3"
+              data-testid="consultation-messages"
+            >
+              {consultLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : consultations?.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                  <Bot className="h-8 w-8 mb-2 opacity-50" />
+                  <p className="text-sm">Ask me anything about {clientName}</p>
+                  <p className="text-xs">Patterns, insights, strategies...</p>
+                </div>
+              ) : (
+                consultations?.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.role === "coach" ? "justify-end" : "justify-start"}`}
+                    data-testid={`consult-msg-${msg.id}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                        msg.role === "coach"
+                          ? "bg-violet-500 text-white"
+                          : "bg-muted"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {sendConsultationMutation.isPending && (
+                <div className="flex justify-start">
+                  <div className="bg-muted rounded-lg px-3 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-border flex gap-2">
+              <Input
+                value={consultMessage}
+                onChange={(e) => setConsultMessage(e.target.value)}
+                placeholder="Ask about this client..."
+                className="flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendConsultation();
+                  }
+                }}
+                disabled={sendConsultationMutation.isPending}
+                data-testid="input-consultation"
+              />
+              <Button
+                onClick={handleSendConsultation}
+                disabled={!consultMessage.trim() || sendConsultationMutation.isPending}
+                size="icon"
+                data-testid="button-send-consultation"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

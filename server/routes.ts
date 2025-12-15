@@ -671,6 +671,75 @@ export async function registerRoutes(
     }
   });
 
+  // Coach-AI Consultation Routes (private conversations about a client)
+  app.get("/api/coach/clients/:clientId/consultations", isAuthenticated, async (req, res) => {
+    try {
+      const consultations = await storage.getClientConsultations(req.params.clientId);
+      res.json(consultations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch consultations" });
+    }
+  });
+
+  app.post("/api/coach/clients/:clientId/consultations", isAuthenticated, async (req, res) => {
+    try {
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const { content } = z.object({ content: z.string().min(1) }).parse(req.body);
+      
+      const { promptAssembler } = await import("./promptAssembler");
+      const { generateAIResponse } = await import("./modelRouter");
+
+      const existingConsultations = await storage.getClientConsultations(req.params.clientId);
+      const systemPrompt = await promptAssembler.assembleConsultationPrompt(req.params.clientId);
+      
+      const conversationHistory = [
+        ...existingConsultations.map(c => ({
+          role: c.role === "coach" ? "user" as const : "assistant" as const,
+          content: c.content,
+        })),
+        { role: "user" as const, content },
+      ];
+
+      const aiResponseContent = await generateAIResponse({
+        systemPrompt,
+        conversationHistory,
+        model: "claude-sonnet-4-5",
+        provider: "anthropic",
+      });
+
+      const coachMessage = await storage.createConsultation({
+        clientId: req.params.clientId,
+        role: "coach",
+        content,
+      });
+
+      const aiMessage = await storage.createConsultation({
+        clientId: req.params.clientId,
+        role: "ai",
+        content: aiResponseContent,
+      });
+
+      console.log(`[Consultation] Coach consulted about client ${req.params.clientId}`);
+      res.status(201).json({ coachMessage, aiMessage });
+    } catch (error) {
+      console.error("Consultation error:", error);
+      res.status(500).json({ error: "Failed to process consultation" });
+    }
+  });
+
+  app.delete("/api/coach/clients/:clientId/consultations", isAuthenticated, async (req, res) => {
+    try {
+      await storage.clearClientConsultations(req.params.clientId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to clear consultations" });
+    }
+  });
+
   // Audio Transcription Route (public for client chat)
   app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     try {

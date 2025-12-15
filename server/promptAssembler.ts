@@ -187,6 +187,60 @@ If the client mentions @Gena or @Coach, acknowledge that you'll note it for the 
       }));
   }
 
+  async assembleConsultationPrompt(clientId: string): Promise<string> {
+    const client = await storage.getClient(clientId);
+    const clientName = client?.name || "Unknown Client";
+    
+    const clientContext = await this.getClientContext(clientId);
+    let memorySection = "";
+    if (clientContext.documentSections && clientContext.documentSections.length > 0) {
+      const goalsContent = clientContext.documentSections
+        .filter(s => s.content && s.content.trim())
+        .map(s => `## ${s.title}\n${s.content}`)
+        .join("\n\n");
+      memorySection = truncateToTokenLimit(goalsContent, TOKEN_ALLOCATIONS.memoryContext);
+    }
+
+    const recentMessages = await this.getRecentMessages(clientId, 30);
+    let recentConversations = "";
+    if (recentMessages.length > 0) {
+      recentConversations = recentMessages
+        .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+        .join("\n\n");
+      recentConversations = truncateToTokenLimit(recentConversations, 8000);
+    }
+
+    const systemPromptParts: string[] = [];
+
+    systemPromptParts.push(`# Private Coach Consultation
+You are now in a private consultation with the coach (Gena) about their client, ${clientName}. This conversation is completely separate from the client-facing interactions.
+
+The coach is asking you questions about their client to:
+- Better understand the client's patterns, themes, or struggles
+- Get insights or observations you've noticed
+- Discuss strategies for upcoming sessions
+- Explore what might be helpful for the client
+
+Be direct, insightful, and collaborative. You can share observations, patterns you've noticed, and thoughtful suggestions. This is a professional discussion between two people trying to help the client.`);
+
+    if (memorySection) {
+      systemPromptParts.push(`# Client Profile (Living Document)\n${memorySection}`);
+    }
+
+    if (recentConversations) {
+      systemPromptParts.push(`# Recent Client-AI Conversations\n${recentConversations}`);
+    }
+
+    systemPromptParts.push(`# Response Guidelines
+- Be concise but thorough
+- Share specific observations from conversations
+- Offer actionable insights
+- Be honest about uncertainty
+- Support the coach's thinking process`);
+
+    return systemPromptParts.join("\n\n---\n\n");
+  }
+
   async assembleOpeningPrompt(clientId: string): Promise<{ systemPrompt: string }> {
     const rolePrompt = await storage.getOrCreateRolePrompt(clientId);
     const taskPrompt = await storage.getOrCreateTaskPrompt(clientId);
