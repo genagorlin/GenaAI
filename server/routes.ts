@@ -390,9 +390,9 @@ export async function registerRoutes(
     }
   });
 
-  // Client document access (requires client authentication)
+  // Client document access (no authentication required - security via unique link)
   // Note: Role prompts and task prompts are stored separately and not included in document sections
-  app.get("/api/chat/:clientId/document", isClientAuthenticated, async (req: any, res) => {
+  app.get("/api/chat/:clientId/document", async (req: any, res) => {
     try {
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
@@ -409,8 +409,8 @@ export async function registerRoutes(
     }
   });
 
-  // Client section update (requires client authentication)
-  app.patch("/api/chat/:clientId/sections/:sectionId", isClientAuthenticated, async (req: any, res) => {
+  // Client section update (no authentication required - security via unique link)
+  app.patch("/api/chat/:clientId/sections/:sectionId", async (req: any, res) => {
     try {
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
