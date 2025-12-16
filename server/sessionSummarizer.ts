@@ -148,6 +148,48 @@ export function isGoodbyeMessage(content: string): boolean {
   return GOODBYE_PATTERNS.some(pattern => pattern.test(content));
 }
 
+export async function generateConversationTitle(threadId: string, messages: Message[]): Promise<string | null> {
+  try {
+    if (messages.length < 2) {
+      return null;
+    }
+
+    const conversationText = messages
+      .slice(0, 10) // Use first 10 messages for context
+      .map(m => `${m.role === "user" ? "Client" : "AI"}: ${m.content}`)
+      .join("\n\n");
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 100,
+      messages: [{ 
+        role: "user", 
+        content: `Based on this coaching conversation, generate a short, descriptive title (3-6 words) that captures the main theme or topic discussed. Return ONLY the title, no quotes or explanation.
+
+Conversation:
+${conversationText}`
+      }],
+      system: "You are a helpful assistant that generates concise, meaningful titles for coaching conversations. Focus on the emotional or thematic core of what was discussed. Examples: 'Processing Career Uncertainty', 'Navigating Family Boundaries', 'Finding Work-Life Balance', 'Exploring Self-Worth Questions'",
+    });
+
+    const content = response.content[0];
+    if (content.type !== "text") {
+      return null;
+    }
+
+    const title = content.text.trim().replace(/^["']|["']$/g, ''); // Remove any quotes
+    console.log(`[TitleGenerator] Generated title for thread ${threadId}: "${title}"`);
+    
+    // Update the thread title
+    await storage.updateThreadTitle(threadId, title);
+    
+    return title;
+  } catch (error: any) {
+    console.error("[TitleGenerator] Error:", error.message);
+    return null;
+  }
+}
+
 export async function updateDocumentRealtime(
   clientId: string, 
   userMessage: string, 

@@ -614,8 +614,19 @@ export async function registerRoutes(
   // Session End Route (public - called when client session ends)
   app.post("/api/clients/:clientId/session-end", async (req, res) => {
     try {
-      const { summarizeSession } = await import("./sessionSummarizer");
+      const { summarizeSession, generateConversationTitle } = await import("./sessionSummarizer");
       const result = await summarizeSession(req.params.clientId);
+      
+      // Also generate titles for any threads that still have default names
+      const threads = await storage.getClientThreads(req.params.clientId);
+      for (const thread of threads) {
+        if (thread.title === "New conversation" || thread.title === "First conversation") {
+          const messages = await storage.getThreadMessages(thread.id);
+          if (messages.length >= 2) {
+            await generateConversationTitle(thread.id, messages);
+          }
+        }
+      }
       
       if (result.success) {
         console.log(`[SessionEnd] Client ${req.params.clientId}: Updated ${result.updatedSections} sections`);
