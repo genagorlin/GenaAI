@@ -41,6 +41,7 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
@@ -237,6 +238,10 @@ export default function ChatPage() {
     if (!inputValue.trim() || sendMessageMutation.isPending) return;
     const content = inputValue.trim();
     setInputValue("");
+    // Reset textarea height after sending
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     resetInactivityTimer();
     sendMessageMutation.mutate(content);
   };
@@ -245,6 +250,16 @@ export default function ChatPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // Auto-resize textarea as user types
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    // Reset height to auto to correctly calculate scrollHeight
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   };
 
@@ -469,11 +484,12 @@ export default function ChatPage() {
               <Smile className="h-6 w-6" />
             </Button>
             <Textarea
+              ref={textareaRef}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Message"
-              className="flex-1 min-h-[24px] max-h-[100px] border-0 bg-transparent p-1 text-[16px] focus-visible:ring-0 placeholder:text-slate-400 resize-none leading-5"
+              className="flex-1 min-h-[24px] max-h-[200px] border-0 bg-transparent p-1 text-[16px] focus-visible:ring-0 placeholder:text-slate-400 resize-none leading-5 overflow-y-auto"
               rows={1}
               data-testid="input-message"
             />

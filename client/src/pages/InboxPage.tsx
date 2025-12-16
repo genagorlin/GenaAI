@@ -202,21 +202,19 @@ export default function InboxPage() {
               )}
             </div>
 
-            {threads.length > 0 && (
-              <button
-                onClick={handleNewThread}
-                disabled={createThreadMutation.isPending}
-                className="absolute bottom-6 right-6 w-14 h-14 rounded-full bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50"
-                data-testid="button-new-conversation"
-                aria-label="New conversation"
-              >
-                {createThreadMutation.isPending ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <Plus className="h-6 w-6" />
-                )}
-              </button>
-            )}
+            <button
+              onClick={handleNewThread}
+              disabled={createThreadMutation.isPending}
+              className="fixed bottom-20 right-4 sm:absolute sm:bottom-6 sm:right-6 w-14 h-14 rounded-full bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 z-50"
+              data-testid="button-new-conversation"
+              aria-label="New conversation"
+            >
+              {createThreadMutation.isPending ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <Plus className="h-6 w-6" />
+              )}
+            </button>
           </>
         ) : (
           <div className="flex-1 overflow-hidden bg-slate-50">
