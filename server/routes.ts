@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
-import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin } from "./replitAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
@@ -387,6 +387,68 @@ export async function registerRoutes(
       res.json({ document, sections });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch document" });
+    }
+  });
+
+  // Client document access (requires client authentication + ownership verification)
+  app.get("/api/chat/:clientId/document", isClientAuthenticated, async (req: any, res) => {
+    try {
+      // Verify the authenticated user owns this client record
+      const userEmail = req.user?.claims?.email;
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      if (!userEmail || client.email !== userEmail) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const document = await storage.getOrCreateClientDocument(req.params.clientId);
+      const sections = await storage.getDocumentSections(document.id);
+      // Remove coach notes from sections for client view
+      const clientSections = sections.map(({ coachNotes, ...section }) => section);
+      res.json({ document, sections: clientSections });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch document" });
+    }
+  });
+
+  // Client section update (requires client authentication + ownership verification)
+  app.patch("/api/chat/:clientId/sections/:sectionId", isClientAuthenticated, async (req: any, res) => {
+    try {
+      // Verify the authenticated user owns this client record
+      const userEmail = req.user?.claims?.email;
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      if (!userEmail || client.email !== userEmail) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      // Verify the section belongs to this client's document
+      const document = await storage.getClientDocument(req.params.clientId);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      const existingSection = await storage.getSection(req.params.sectionId);
+      if (!existingSection || existingSection.documentId !== document.id) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+      const updateSchema = z.object({
+        title: z.string().optional(),
+        content: z.string().optional(),
+      });
+      const updates = updateSchema.parse(req.body);
+      // Mark as client-edited
+      const section = await storage.updateSection(req.params.sectionId, { 
+        ...updates, 
+        lastUpdatedBy: "client",
+        pendingReview: 0 // Client edits don't need coach review
+      });
+      res.json(section);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid update data" });
     }
   });
 
