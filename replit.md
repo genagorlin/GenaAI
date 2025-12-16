@@ -134,6 +134,34 @@ A client session is concluded when:
 - Frontend ChatPage.tsx tracks inactivity and visibility changes
 - AI updates are marked with `pendingReview=1` for coach approval (accept/revert controls)
 
+## Client Document Access
+
+Clients can view and edit their own living document through the Inbox interface:
+
+**Client-Visible Sections:**
+- Highlights (key moments and quotes)
+- Focus (current priorities)
+- Context (background information)
+- Conversation Summaries
+- Custom sections
+
+**Hidden from Clients:**
+- Role prompts (AI personality instructions)
+- Task prompts (response guidelines)
+- Coach notes (private coach observations)
+
+**Security Model:**
+- Clients must authenticate via Replit Auth before accessing documents
+- `isClientAuthenticated` middleware checks session without requiring coach allowlist
+- Ownership verification: `req.user.claims.email` must match `client.email`
+- Prevents cross-tenant access - clients can only view/edit their own documents
+
+**Implementation:**
+- `GET /api/chat/:clientId/document` - Fetches document with client-viewable sections
+- `PATCH /api/chat/:clientId/sections/:sectionId` - Updates a section (marks as client-edited)
+- `client/src/components/ClientDocumentView.tsx` - Collapsible section editor
+- `client/src/pages/InboxPage.tsx` - Tab toggle between "Conversations" and "My Document"
+
 ## Future Development Notes
 
 **Insight Generation (planned, not prioritized):**
