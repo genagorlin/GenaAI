@@ -324,6 +324,9 @@ export class DatabaseStorage implements IStorage {
         { documentId: doc.id, sectionType: "highlight", title: "Key Highlights", content: "", sortOrder: 1 },
         { documentId: doc.id, sectionType: "focus", title: "Current Focus Areas", content: "", sortOrder: 2 },
         { documentId: doc.id, sectionType: "context", title: "Background & Context", content: "", sortOrder: 3 },
+        { documentId: doc.id, sectionType: "values", title: "Values / Goals / Life Vision", content: "", sortOrder: 4 },
+        { documentId: doc.id, sectionType: "beliefs", title: "Target Core Beliefs", content: "", sortOrder: 5 },
+        { documentId: doc.id, sectionType: "corrective", title: "Corrective Experiences Needed", content: "", sortOrder: 6 },
       ];
       await db.insert(documentSections).values(defaultSections);
     }
