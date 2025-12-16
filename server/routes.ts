@@ -390,17 +390,13 @@ export async function registerRoutes(
     }
   });
 
-  // Client document access (requires client authentication + ownership verification)
+  // Client document access (requires client authentication)
+  // Note: Role prompts and task prompts are stored separately and not included in document sections
   app.get("/api/chat/:clientId/document", isClientAuthenticated, async (req: any, res) => {
     try {
-      // Verify the authenticated user owns this client record
-      const userEmail = req.user?.claims?.email;
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
-      }
-      if (!userEmail || client.email !== userEmail) {
-        return res.status(403).json({ error: "Access denied" });
       }
       
       const document = await storage.getOrCreateClientDocument(req.params.clientId);
@@ -413,17 +409,12 @@ export async function registerRoutes(
     }
   });
 
-  // Client section update (requires client authentication + ownership verification)
+  // Client section update (requires client authentication)
   app.patch("/api/chat/:clientId/sections/:sectionId", isClientAuthenticated, async (req: any, res) => {
     try {
-      // Verify the authenticated user owns this client record
-      const userEmail = req.user?.claims?.email;
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
-      }
-      if (!userEmail || client.email !== userEmail) {
-        return res.status(403).json({ error: "Access denied" });
       }
       
       // Verify the section belongs to this client's document
