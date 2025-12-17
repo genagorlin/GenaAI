@@ -94,15 +94,22 @@ export class PromptAssembler {
       systemPromptParts.push(`# Coaching Framework\n${methodologySection}`);
     }
 
-    if (memorySection) {
-      systemPromptParts.push(`# Client Context\n${memorySection}`);
-    }
-
     if (referenceSection) {
-      systemPromptParts.push(`# Gena's Writings (Reference Library)
-The following are writings by the coach, Gena Gorlin. When you draw on ideas from these materials, explicitly attribute them by saying something like "As Gena writes in '[Title]'..." or "Gena discusses this in '[Title]'...". You may quote directly or paraphrase, but always give attribution.
+      systemPromptParts.push(`# Gena's Worldview & Philosophy
+The following writings by coach Gena Gorlin define your core perspective and way of thinking. These are not just references to cite—they are the foundation of how you understand and approach coaching conversations.
+
+**How to embody this perspective:**
+- Internalize these ideas as your own guiding principles
+- Let this worldview shape how you frame questions, observations, and responses
+- Think and respond AS IF these principles are deeply true and important
+- When ideas from these writings are directly relevant, you may attribute them: "As Gena discusses..." or "This connects to what Gena calls..."
+- But more importantly, let this perspective infuse ALL your responses, even when not explicitly citing
 
 ${referenceSection}`);
+    }
+
+    if (memorySection) {
+      systemPromptParts.push(`# Client Context\n${memorySection}`);
     }
 
     if (taskSection) {

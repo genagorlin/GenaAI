@@ -177,7 +177,9 @@ The coach can upload their writings (articles, book excerpts, notes) for the AI 
 **How it works:**
 - Coach adds documents via the "Library" button in the dashboard header
 - Each document has a title, optional description, and content
-- AI is instructed to attribute when quoting or paraphrasing: "As Gena writes in '[Title]'..."
+- AI is instructed to **embody** this worldview, not just quote from it
+- The writings shape how the AI thinks and responds in ALL conversations
+- When directly relevant, AI may attribute: "As Gena discusses..."
 - All documents are included in every conversation (within token limits)
 
 **Token Budget:**
