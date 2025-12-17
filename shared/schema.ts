@@ -304,3 +304,21 @@ export type ExerciseStep = typeof exerciseSteps.$inferSelect;
 
 export type InsertClientExerciseSession = z.infer<typeof insertClientExerciseSessionSchema>;
 export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
+
+// File Attachments - uploaded files linked to exercises or reference documents
+export const fileAttachments = pgTable("file_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  objectPath: text("object_path").notNull(),
+  extractedText: text("extracted_text"),
+  exerciseId: varchar("exercise_id").references(() => guidedExercises.id, { onDelete: "cascade" }),
+  referenceDocumentId: varchar("reference_document_id").references(() => referenceDocuments.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertFileAttachmentSchema = createInsertSchema(fileAttachments).omit({ id: true, createdAt: true });
+export type InsertFileAttachment = z.infer<typeof insertFileAttachmentSchema>;
+export type FileAttachment = typeof fileAttachments.$inferSelect;

@@ -32,6 +32,8 @@ import {
   type InsertExerciseStep,
   type ClientExerciseSession,
   type InsertClientExerciseSession,
+  type FileAttachment,
+  type InsertFileAttachment,
   clients,
   threads,
   messages,
@@ -50,7 +52,8 @@ import {
   referenceDocuments,
   guidedExercises,
   exerciseSteps,
-  clientExerciseSessions
+  clientExerciseSessions,
+  fileAttachments
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -163,6 +166,14 @@ export interface IStorage {
   getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
+
+  // File Attachments
+  getFileAttachment(id: string): Promise<FileAttachment | undefined>;
+  getExerciseAttachments(exerciseId: string): Promise<FileAttachment[]>;
+  getReferenceDocumentAttachments(referenceDocumentId: string): Promise<FileAttachment[]>;
+  createFileAttachment(attachment: InsertFileAttachment): Promise<FileAttachment>;
+  updateFileAttachment(id: string, updates: Partial<InsertFileAttachment>): Promise<FileAttachment>;
+  deleteFileAttachment(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -753,6 +764,41 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clientExerciseSessions.id, id))
       .returning();
     return result;
+  }
+
+  // File Attachments
+  async getFileAttachment(id: string): Promise<FileAttachment | undefined> {
+    const [result] = await db.select().from(fileAttachments).where(eq(fileAttachments.id, id));
+    return result;
+  }
+
+  async getExerciseAttachments(exerciseId: string): Promise<FileAttachment[]> {
+    return await db.select().from(fileAttachments)
+      .where(eq(fileAttachments.exerciseId, exerciseId))
+      .orderBy(desc(fileAttachments.createdAt));
+  }
+
+  async getReferenceDocumentAttachments(referenceDocumentId: string): Promise<FileAttachment[]> {
+    return await db.select().from(fileAttachments)
+      .where(eq(fileAttachments.referenceDocumentId, referenceDocumentId))
+      .orderBy(desc(fileAttachments.createdAt));
+  }
+
+  async createFileAttachment(attachment: InsertFileAttachment): Promise<FileAttachment> {
+    const [result] = await db.insert(fileAttachments).values(attachment).returning();
+    return result;
+  }
+
+  async updateFileAttachment(id: string, updates: Partial<InsertFileAttachment>): Promise<FileAttachment> {
+    const [result] = await db.update(fileAttachments)
+      .set(updates)
+      .where(eq(fileAttachments.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteFileAttachment(id: string): Promise<void> {
+    await db.delete(fileAttachments).where(eq(fileAttachments.id, id));
   }
 }
 

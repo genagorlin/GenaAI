@@ -1129,6 +1129,103 @@ export async function registerRoutes(
     }
   });
 
+  // File Attachment Routes (protected - coach only)
+  // Get upload URL for object storage
+  app.post("/api/coach/files/upload-url", isAuthenticated, async (_req, res) => {
+    try {
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Upload URL error:", error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // Register uploaded file attachment
+  app.post("/api/coach/files", isAuthenticated, async (req: any, res) => {
+    try {
+      const { filename, originalName, mimeType, size, objectPath, exerciseId, referenceDocumentId } = req.body;
+      
+      if (!filename || !originalName || !mimeType || !objectPath) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Set ACL policy on the uploaded object
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+        owner: req.user?.claims?.sub || "coach",
+        visibility: "public",
+      });
+
+      const attachment = await storage.createFileAttachment({
+        filename,
+        originalName,
+        mimeType,
+        size: size || 0,
+        objectPath: normalizedPath,
+        exerciseId: exerciseId || null,
+        referenceDocumentId: referenceDocumentId || null,
+        extractedText: null,
+      });
+
+      console.log(`[Files] Created attachment: ${originalName} -> ${normalizedPath}`);
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Create attachment error:", error);
+      res.status(500).json({ error: "Failed to create file attachment" });
+    }
+  });
+
+  // Get attachments for an exercise
+  app.get("/api/coach/exercises/:exerciseId/files", isAuthenticated, async (req, res) => {
+    try {
+      const attachments = await storage.getExerciseAttachments(req.params.exerciseId);
+      res.json(attachments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get exercise attachments" });
+    }
+  });
+
+  // Get attachments for a reference document
+  app.get("/api/coach/reference-documents/:docId/files", isAuthenticated, async (req, res) => {
+    try {
+      const attachments = await storage.getReferenceDocumentAttachments(req.params.docId);
+      res.json(attachments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get reference document attachments" });
+    }
+  });
+
+  // Delete a file attachment
+  app.delete("/api/coach/files/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteFileAttachment(req.params.id);
+      console.log(`[Files] Deleted attachment: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete file attachment" });
+    }
+  });
+
+  // Serve uploaded files (public for now - coach uploads are visible)
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    try {
+      const { ObjectStorageService, ObjectNotFoundError } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error: any) {
+      console.error("Object serve error:", error);
+      if (error.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "File not found" });
+      }
+      res.status(500).json({ error: "Failed to serve file" });
+    }
+  });
+
   // Dynamic PWA manifest (customizes start_url based on query param)
   app.get("/api/manifest.json", (req, res) => {
     let startUrl = "/";
