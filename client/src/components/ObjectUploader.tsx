@@ -46,10 +46,23 @@ export function ObjectUploader({
     })
       .use(AwsS3, {
         shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
+        getUploadParameters: async (file) => {
+          const params = await onGetUploadParameters();
+          // Store the URL in file meta so we can access it after upload
+          file.meta = { ...file.meta, uploadUrl: params.url };
+          return params;
+        },
       })
       .on("complete", (result) => {
-        onComplete?.(result);
+        // Attach the stored uploadUrl to each successful file
+        const enhanced = {
+          ...result,
+          successful: result.successful?.map(file => ({
+            ...file,
+            uploadURL: (file.meta as any)?.uploadUrl?.split("?")[0] || file.uploadURL,
+          })),
+        };
+        onComplete?.(enhanced);
         setShowModal(false);
       })
   );

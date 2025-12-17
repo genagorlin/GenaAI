@@ -87,6 +87,16 @@ export function FileAttachments({
     
     for (const file of uploadedFiles) {
       try {
+        // Extract the upload URL - Uppy stores it in different places depending on the plugin
+        const uploadUrl = file.uploadURL || file.response?.uploadURL || file.xhrUpload?.endpoint;
+        
+        if (!uploadUrl) {
+          console.error("No upload URL found for file:", file);
+          toast.error(`Failed to get upload path for ${file.name}`);
+          continue;
+        }
+
+        // The uploadUrl is the full signed URL, we send it to the backend to normalize
         const response = await fetch("/api/coach/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -95,24 +105,28 @@ export function FileAttachments({
             originalName: file.meta?.name || file.name,
             mimeType: file.type,
             size: file.size,
-            objectPath: file.response?.body?.path || file.uploadURL?.split("?")[0],
+            objectPath: uploadUrl,
             exerciseId: exerciseId || null,
             referenceDocumentId: referenceDocumentId || null,
           }),
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Failed to save file metadata:", errorText);
           throw new Error("Failed to save file metadata");
         }
       } catch (error) {
         console.error("Error saving file:", error);
-        toast.error(`Failed to save ${file.name}`);
+        toast.error(`Failed to attach ${file.name}`);
       }
     }
 
     queryClient.invalidateQueries({ queryKey });
     setIsUploading(false);
-    toast.success(`${uploadedFiles.length} file(s) uploaded`);
+    if (uploadedFiles.length > 0) {
+      toast.success(`${uploadedFiles.length} file(s) uploaded`);
+    }
   };
 
   const getUploadUrl = async () => {
