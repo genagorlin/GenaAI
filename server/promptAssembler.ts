@@ -14,6 +14,8 @@ interface AssembledPrompt {
 interface PromptContext {
   clientId: string;
   currentMessage: string;
+  currentSpeaker?: "client" | "coach"; // Who is sending the current message
+  messageAlreadyStored?: boolean; // If true, currentMessage is already in recentMessages
   recentMessages?: { role: string; content: string }[];
   documentSections?: { title: string; content: string }[];
 }
@@ -90,12 +92,20 @@ export class PromptAssembler {
 
     systemPromptParts.push(`# Three-Way Conversation
 This conversation includes three participants:
-- **Client**: The person you are helping (their messages show as "user")
-- **Coach (Gena)**: The human coach who may occasionally join the conversation (their messages are prefixed with "[COACH]:")
-- **You**: The AI thinking partner
+- **Client**: The person receiving coaching (their messages are prefixed with "[CLIENT]:")
+- **Coach (Gena)**: The human coach who may join the conversation (their messages are prefixed with "[COACH]:")
+- **You**: The AI thinking partner assistant
 
-When the coach sends a message, treat it as guidance or direction. Incorporate their input respectfully.
-If the client mentions @Gena or @Coach, acknowledge that you'll note it for the coach's attention.`);
+IMPORTANT: When the coach sends a message:
+- Respond directly to the coach's question or comment
+- The coach may ask you to do something specific for the client, give you guidance, or ask about observations
+- Be collaborative and helpful to the coach while remaining supportive of the client
+
+When the client sends a message:
+- Respond to them as their thinking partner
+- If the client mentions @Gena or @Coach, note it for the coach's attention
+
+The coach has full visibility of this conversation. Treat coach messages as coming from a trusted collaborator.`);
 
     const { getSectionGapInfo } = await import("./sessionSummarizer");
     const gapInfo = getSectionGapInfo(documentSections || []);
@@ -127,19 +137,29 @@ If the client mentions @Gena or @Coach, acknowledge that you'll note it for the 
             role: "user",
             content: `[COACH]: ${msg.content}`,
           });
+        } else if (msg.role === "user") {
+          conversationHistory.push({
+            role: "user",
+            content: `[CLIENT]: ${msg.content}`,
+          });
         } else {
           conversationHistory.push({
-            role: msg.role === "user" ? "user" : "assistant",
+            role: "assistant",
             content: msg.content,
           });
         }
       }
     }
 
-    conversationHistory.push({
-      role: "user",
-      content: currentMessage,
-    });
+    // Add the current message with appropriate speaker label (unless already stored)
+    if (!context.messageAlreadyStored) {
+      const speaker = context.currentSpeaker || "client";
+      const speakerLabel = speaker === "coach" ? "[COACH]" : "[CLIENT]";
+      conversationHistory.push({
+        role: "user",
+        content: `${speakerLabel}: ${currentMessage}`,
+      });
+    }
 
     const totalTokens = 
       estimateTokens(systemPrompt) + 

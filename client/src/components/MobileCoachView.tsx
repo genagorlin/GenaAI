@@ -136,10 +136,14 @@ export function MobileCoachView() {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setCoachMessage("");
       queryClient.invalidateQueries({ queryKey: ["/api/threads", selectedThreadId, "messages"] });
-      toast.success("Message sent");
+      if (data.aiMessage) {
+        toast.success("Message sent - AI responded");
+      } else {
+        toast.success("Message sent");
+      }
     },
     onError: () => {
       toast.error("Failed to send message");

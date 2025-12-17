@@ -279,6 +279,8 @@ export async function registerRoutes(
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
             currentMessage: validated.content,
+            currentSpeaker: "client",
+            messageAlreadyStored: true, // Message was already saved before this call
             recentMessages,
             documentSections: clientContext.documentSections,
           });
@@ -673,6 +675,7 @@ export async function registerRoutes(
   });
 
   // Coach Message Route - allows coach to send messages into client threads
+  // Also triggers an AI response so the AI can respond to the coach
   app.post("/api/coach/threads/:threadId/messages", isAuthenticated, async (req: any, res) => {
     try {
       const thread = await storage.getThread(req.params.threadId);
@@ -680,9 +683,12 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Thread not found" });
       }
 
-      const { content } = z.object({ content: z.string().min(1) }).parse(req.body);
+      const { content, triggerAI = true } = z.object({ 
+        content: z.string().min(1),
+        triggerAI: z.boolean().optional()
+      }).parse(req.body);
       
-      const message = await storage.createMessage({
+      const coachMessage = await storage.createMessage({
         clientId: thread.clientId,
         threadId: thread.id,
         role: "coach",
@@ -691,7 +697,53 @@ export async function registerRoutes(
       });
 
       console.log(`[Coach] Message sent to thread ${thread.id}`);
-      res.status(201).json(message);
+
+      // Generate AI response to the coach's message
+      if (triggerAI) {
+        try {
+          const { routeMessage, generateAIResponse } = await import("./modelRouter");
+          const { promptAssembler } = await import("./promptAssembler");
+          
+          const clientContext = await promptAssembler.getClientContext(thread.clientId);
+          const recentMessages = await promptAssembler.getThreadMessages(thread.id);
+          
+          const assembled = await promptAssembler.assemblePrompt({
+            clientId: thread.clientId,
+            currentMessage: content,
+            currentSpeaker: "coach",
+            messageAlreadyStored: true, // Message was already saved before this call
+            recentMessages,
+            documentSections: clientContext.documentSections,
+          });
+          
+          const routing = routeMessage(content);
+          console.log(`[AI] Coach message routing: ${routing.reasoning} -> ${routing.model}`);
+          
+          const aiResponseContent = await generateAIResponse({
+            systemPrompt: assembled.systemPrompt,
+            conversationHistory: assembled.conversationHistory,
+            model: routing.model,
+            provider: routing.provider,
+          });
+          
+          const aiMessage = await storage.createMessage({
+            clientId: thread.clientId,
+            threadId: thread.id,
+            role: "ai",
+            content: aiResponseContent,
+            type: "text",
+          });
+          
+          console.log(`[AI] Response to coach in thread ${thread.id}`);
+          res.status(201).json({ coachMessage, aiMessage });
+        } catch (aiError) {
+          console.error("[AI] Failed to generate response to coach:", aiError);
+          // Still return the coach message even if AI fails
+          res.status(201).json({ coachMessage, aiMessage: null, error: "AI response failed" });
+        }
+      } else {
+        res.status(201).json({ coachMessage });
+      }
     } catch (error) {
       console.error("Coach message error:", error);
       res.status(400).json({ error: "Failed to send message" });
