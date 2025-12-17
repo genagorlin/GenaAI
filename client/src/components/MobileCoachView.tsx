@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
+import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { toast } from "sonner";
 
 interface Client {
@@ -197,6 +198,7 @@ export function MobileCoachView() {
             <h1 className="font-semibold text-lg">GenaGPT</h1>
           </div>
           <div className="flex items-center gap-2">
+            <ReferenceLibrary />
             <Button 
               variant="outline" 
               size="sm"
