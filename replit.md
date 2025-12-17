@@ -170,6 +170,26 @@ Clients can view and edit their own living document through the Inbox interface:
 - `client/src/components/ClientDocumentView.tsx` - Collapsible section editor
 - `client/src/pages/InboxPage.tsx` - Tab toggle between "Conversations" and "My Document"
 
+## Reference Library
+
+The coach can upload their writings (articles, book excerpts, notes) for the AI to reference when talking to clients.
+
+**How it works:**
+- Coach adds documents via the "Library" button in the dashboard header
+- Each document has a title, optional description, and content
+- AI is instructed to attribute when quoting or paraphrasing: "As Gena writes in '[Title]'..."
+- All documents are included in every conversation (within token limits)
+
+**Token Budget:**
+- Reference documents: 3,000 tokens (~12,000 characters)
+- If total content exceeds this, documents are truncated (oldest content cut first)
+
+**Implementation:**
+- `reference_documents` table stores title, content, description, tags
+- `GET/POST/PATCH/DELETE /api/coach/reference-documents` - CRUD operations
+- `client/src/components/dashboard/ReferenceLibrary.tsx` - Dialog UI
+- Prompt assembler fetches all documents and adds to system prompt with attribution instructions
+
 ## Future Development Notes
 
 **Insight Generation (planned, not prioritized):**
