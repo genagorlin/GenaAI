@@ -10,8 +10,10 @@ import {
   FileText,
   Loader2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Paperclip
 } from "lucide-react";
+import { FileAttachments } from "@/components/FileAttachments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -266,6 +268,9 @@ export function ReferenceLibrary() {
                           className="min-h-[200px]"
                           data-testid={`textarea-edit-content-${doc.id}`}
                         />
+                        
+                        <FileAttachments referenceDocumentId={doc.id} />
+                        
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-muted-foreground">
                             {wordCount(editingDoc.content)} words
