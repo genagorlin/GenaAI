@@ -13,8 +13,10 @@ import {
   GripVertical,
   Eye,
   EyeOff,
-  Clock
+  Clock,
+  Paperclip
 } from "lucide-react";
+import { FileAttachments } from "@/components/FileAttachments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -644,6 +646,9 @@ export function ExerciseManager() {
                   rows={4}
                   data-testid="input-edit-exercise-prompt"
                 />
+                
+                <FileAttachments exerciseId={editingExercise.id} />
+                
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setEditingExercise(null)}>
                     Cancel
