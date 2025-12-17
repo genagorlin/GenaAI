@@ -16,6 +16,7 @@ interface ExerciseContext {
   exerciseId: string;
   exerciseTitle: string;
   exerciseDescription: string;
+  exerciseSystemPrompt: string; // Replaces the default task prompt during exercises
   currentStepTitle: string;
   currentStepPrompt: string;
   currentStepGuidance?: string;
@@ -158,7 +159,10 @@ ${referenceContent}`);
       systemPromptParts.push(`# Client Context\n${memorySection}`);
     }
 
-    if (taskSection) {
+    // Use exercise's system prompt instead of default task prompt when in an exercise
+    if (context.exerciseContext && context.exerciseContext.exerciseSystemPrompt) {
+      systemPromptParts.push(`# Response Instructions\n${truncateToTokenLimit(context.exerciseContext.exerciseSystemPrompt, TOKEN_ALLOCATIONS.taskPrompt)}`);
+    } else if (taskSection) {
       systemPromptParts.push(`# Response Instructions\n${taskSection}`);
     }
 
@@ -470,6 +474,7 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
       exerciseId: exercise.id,
       exerciseTitle: exercise.title,
       exerciseDescription: exercise.description,
+      exerciseSystemPrompt: exercise.systemPrompt || "",
       currentStepTitle: currentStep.title,
       currentStepPrompt: currentStep.instructions,
       currentStepGuidance: currentStep.supportingMaterial || undefined,
