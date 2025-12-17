@@ -190,13 +190,46 @@ The coach can upload their writings (articles, book excerpts, notes) for the AI 
 
 **Token Budget:**
 - Reference documents: 3,000 tokens (~12,000 characters)
+- File attachments: 2,000 tokens (~8,000 characters)
 - If total content exceeds this, documents are truncated (oldest content cut first)
 
 **Implementation:**
 - `reference_documents` table stores title, content, description, tags
+- `file_attachments` table stores uploaded files linked to reference docs or exercises
 - `GET/POST/PATCH/DELETE /api/coach/reference-documents` - CRUD operations
 - `client/src/components/dashboard/ReferenceLibrary.tsx` - Dialog UI
 - Prompt assembler fetches all documents and adds to system prompt with attribution instructions
+
+## File Attachments
+
+Coaches can attach files (PDFs, documents, images) to both reference library documents and guided exercises. The AI can read and use the content when guiding clients.
+
+**Supported File Types:**
+- **PDFs** - Full text extraction using pdf-parse library
+- **Text files** - Direct text content extraction (txt, md, json, xml)
+- **Images** - Descriptive placeholder (AI cannot extract image content)
+- **Word documents** - Descriptive placeholder (suggests conversion to PDF)
+- **Other types** - Descriptive placeholder with file type info
+
+**How it works:**
+1. Coach uploads files via ObjectUploader component (Uppy dashboard)
+2. Files are stored in Replit Object Storage (`.private/` directory)
+3. File metadata saved to `file_attachments` table with links to parent entity
+4. During conversations, PromptAssembler fetches and parses attached files
+5. Parsed text content is included in the AI system prompt
+
+**Token Budget Allocation:**
+- Reference document attachments: 2,000 tokens
+- Exercise attachments: 2,000 tokens (within exercise context)
+
+**Implementation:**
+- `server/objectStorage.ts` - Object Storage service for file operations
+- `server/fileParser.ts` - File parsing utilities (PDF extraction, text parsing)
+- `server/promptAssembler.ts` - Includes parsed file content in AI prompts
+- `client/src/components/ObjectUploader.tsx` - Uppy-based file upload UI
+- `client/src/components/FileAttachments.tsx` - Display and manage attachments
+- `POST /api/attachments/upload-url` - Generate signed upload URLs
+- `POST /api/attachments/register` - Register uploaded files in database
 
 ## Future Development Notes
 
