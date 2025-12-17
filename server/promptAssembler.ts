@@ -118,7 +118,9 @@ The coach has full visibility of this conversation. Treat coach messages as comi
     const conversationHistory: ConversationMessage[] = [];
     
     if (recentMessages && recentMessages.length > 0) {
-      const availableTokens = TOKEN_ALLOCATIONS.conversationBuffer - estimateTokens(currentMessage);
+      // Only reserve tokens for currentMessage if it's not already stored in recentMessages
+      const currentMsgTokens = context.messageAlreadyStored ? 0 : estimateTokens(currentMessage);
+      const availableTokens = Math.max(0, TOKEN_ALLOCATIONS.conversationBuffer - currentMsgTokens);
       let usedTokens = 0;
       
       const reversedMessages = [...recentMessages].reverse();
