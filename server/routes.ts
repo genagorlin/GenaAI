@@ -856,6 +856,16 @@ export async function registerRoutes(
     }
   });
 
+  // Reference Documents Routes - Public endpoint for clients to read
+  app.get("/api/reference-documents", async (_req, res) => {
+    try {
+      const docs = await storage.getAllReferenceDocuments();
+      res.json(docs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reference documents" });
+    }
+  });
+
   // Reference Documents Routes (coach's writings for AI to reference)
   app.get("/api/coach/reference-documents", isAuthenticated, async (_req, res) => {
     try {

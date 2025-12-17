@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, FileText } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
 
@@ -39,7 +39,8 @@ export default function InboxPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"chat" | "document">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "document" | "library">("chat");
+  const [selectedDocument, setSelectedDocument] = useState<{ id: number; title: string; content: string; description: string | null } | null>(null);
 
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
@@ -59,6 +60,17 @@ export default function InboxPage() {
       return res.json();
     },
     enabled: !!clientId,
+  });
+
+  const { data: referenceDocuments = [] } = useQuery<{ id: number; title: string; content: string; description: string | null }[]>({
+    queryKey: ["/api/reference-documents"],
+    queryFn: async () => {
+      const res = await fetch("/api/reference-documents");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activeTab === "library",
+    staleTime: 5 * 60 * 1000,
   });
 
   const createThreadMutation = useMutation({
@@ -136,6 +148,18 @@ export default function InboxPage() {
             >
               <FileText className="h-4 w-4" />
               My Document
+            </button>
+            <button
+              onClick={() => { setActiveTab("library"); setSelectedDocument(null); }}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                activeTab === "library" 
+                  ? "bg-white/10 text-white border-b-2 border-white" 
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+              data-testid="tab-library"
+            >
+              <BookOpen className="h-4 w-4" />
+              Library
             </button>
           </div>
         </div>
@@ -216,9 +240,86 @@ export default function InboxPage() {
               )}
             </button>
           </>
-        ) : (
+        ) : activeTab === "document" ? (
           <div className="flex-1 overflow-hidden bg-slate-50">
             <ClientDocumentView clientId={clientId!} />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto bg-white">
+            {selectedDocument ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center gap-3 p-4 border-b bg-slate-50 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedDocument(null)}
+                    className="h-8 w-8"
+                    data-testid="button-library-back"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg truncate">{selectedDocument.title}</h3>
+                    {selectedDocument.description && (
+                      <p className="text-sm text-muted-foreground truncate">{selectedDocument.description}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap text-slate-700 leading-relaxed">
+                    {selectedDocument.content}
+                  </div>
+                </div>
+              </div>
+            ) : referenceDocuments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center mb-4">
+                  <BookOpen className="h-8 w-8 text-violet-600" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">No writings yet</h3>
+                <p className="text-sm text-slate-500">
+                  Your coach's writings and materials will appear here
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                <div className="p-4 bg-slate-50 border-b">
+                  <h3 className="font-medium text-slate-900 flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-violet-600" />
+                    Gena's Writings
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Explore the ideas and frameworks that inform your coaching sessions
+                  </p>
+                </div>
+                {referenceDocuments.map((doc) => (
+                  <button
+                    key={doc.id}
+                    onClick={() => setSelectedDocument(doc)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                    data-testid={`library-document-${doc.id}`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                      <BookOpen className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-slate-900 truncate text-[15px]">
+                        {doc.title}
+                      </h3>
+                      {doc.description && (
+                        <p className="text-sm text-slate-500 truncate mt-0.5">
+                          {doc.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {Math.round(doc.content.split(/\s+/).length)} words
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

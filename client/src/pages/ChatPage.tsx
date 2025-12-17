@@ -1,10 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Mic, MoreVertical, Smile, Loader2, Square, ArrowLeft } from "lucide-react";
+import { Send, Mic, BookOpen, Smile, Loader2, Square, ArrowLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+
+interface ReferenceDocument {
+  id: number;
+  title: string;
+  content: string;
+  description: string | null;
+  createdAt: string;
+}
 
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -40,6 +50,8 @@ export default function ChatPage() {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<ReferenceDocument | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -85,6 +97,17 @@ export default function ChatPage() {
     },
     enabled: !!threadId,
     retry: false
+  });
+
+  const { data: referenceDocuments = [] } = useQuery<ReferenceDocument[]>({
+    queryKey: ["/api/reference-documents"],
+    queryFn: async () => {
+      const res = await fetch("/api/reference-documents");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showLibrary,
+    staleTime: 5 * 60 * 1000
   });
 
   const handleBackToInbox = () => {
@@ -387,9 +410,15 @@ export default function ChatPage() {
               <p className="truncate text-xs text-white/80">Your thinking partner</p>
             )}
           </div>
-          <div className="flex items-center gap-4 text-white/70">
-            <MoreVertical className="h-5 w-5" />
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowLibrary(true)}
+            className="h-8 w-8 text-white hover:bg-white/10"
+            data-testid="button-library"
+          >
+            <BookOpen className="h-5 w-5" />
+          </Button>
         </div>
 
         <div className="z-10 flex-1 overflow-y-auto p-2 sm:p-4 bg-[#efe7dd]" ref={scrollRef}>
@@ -535,6 +564,79 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      <Sheet open={showLibrary} onOpenChange={setShowLibrary}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          {selectedDocument ? (
+            <>
+              <div className="flex items-center gap-3 p-4 border-b bg-slate-50">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedDocument(null)}
+                  className="h-8 w-8"
+                  data-testid="button-library-back"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-lg truncate">{selectedDocument.title}</h3>
+                  {selectedDocument.description && (
+                    <p className="text-sm text-muted-foreground truncate">{selectedDocument.description}</p>
+                  )}
+                </div>
+              </div>
+              <ScrollArea className="flex-1 p-4">
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-slate-700 leading-relaxed">
+                  {selectedDocument.content}
+                </div>
+              </ScrollArea>
+            </>
+          ) : (
+            <>
+              <SheetHeader className="p-4 border-b bg-slate-50">
+                <SheetTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  Gena's Writings
+                </SheetTitle>
+                <p className="text-sm text-muted-foreground">
+                  Explore the ideas and frameworks that inform your coaching sessions
+                </p>
+              </SheetHeader>
+              <ScrollArea className="flex-1">
+                {referenceDocuments.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>No writings available yet</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {referenceDocuments.map((doc) => (
+                      <button
+                        key={doc.id}
+                        onClick={() => setSelectedDocument(doc)}
+                        className="w-full text-left p-4 hover:bg-slate-50 transition-colors flex items-center gap-3"
+                        data-testid={`document-${doc.id}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-slate-900 truncate">{doc.title}</h4>
+                          {doc.description && (
+                            <p className="text-sm text-muted-foreground truncate mt-0.5">{doc.description}</p>
+                          )}
+                          <p className="text-xs text-slate-400 mt-1">
+                            {Math.round(doc.content.split(/\s+/).length)} words
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

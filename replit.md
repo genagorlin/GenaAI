@@ -172,11 +172,17 @@ Clients can view and edit their own living document through the Inbox interface:
 
 ## Reference Library
 
-The coach can upload their writings (articles, book excerpts, notes) for the AI to reference when talking to clients.
+The coach can upload their writings (articles, book excerpts, notes) for the AI to reference when talking to clients. Clients can also browse and read these materials.
 
 **How it works:**
 - Coach adds documents via the "Library" button in the dashboard header
 - Each document has a title, optional description, and content
+
+**Client Access:**
+- Clients can browse the Library via a "Library" tab in the Inbox page
+- A book icon button in the chat header also opens the Library as a slide-out panel
+- Clients can read full documents but cannot edit them
+- API: `GET /api/reference-documents` - Public endpoint for clients to fetch documents
 - AI is instructed to **embody** this worldview, not just quote from it
 - The writings shape how the AI thinks and responds in ALL conversations
 - When directly relevant, AI may attribute: "As Gena discusses..."
