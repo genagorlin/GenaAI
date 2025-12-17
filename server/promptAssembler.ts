@@ -26,7 +26,8 @@ const CHARS_PER_TOKEN = 4;
 const TOKEN_ALLOCATIONS = {
   rolePrompt: 500,
   methodologyFrame: 2000,
-  memoryContext: 15000,
+  memoryContext: 12000,
+  referenceDocuments: 3000,
   currentInput: 1000,
   taskPrompt: 500,
   conversationBuffer: 11000,
@@ -68,6 +69,16 @@ export class PromptAssembler {
         .map(s => `## ${s.title}\n${s.content}`)
         .join("\n\n");
       memorySection = truncateToTokenLimit(goalsContent, TOKEN_ALLOCATIONS.memoryContext);
+    }
+
+    // Fetch reference documents (coach's writings for AI to reference)
+    let referenceSection = "";
+    const referenceDocuments = await storage.getAllReferenceDocuments();
+    if (referenceDocuments.length > 0) {
+      const refContent = referenceDocuments
+        .map(doc => `## "${doc.title}"\n${doc.content}`)
+        .join("\n\n");
+      referenceSection = truncateToTokenLimit(refContent, TOKEN_ALLOCATIONS.referenceDocuments);
     }
 
     const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
