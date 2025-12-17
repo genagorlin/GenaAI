@@ -74,6 +74,7 @@ export class PromptAssembler {
     // Fetch reference documents (coach's writings for AI to reference)
     let referenceSection = "";
     const referenceDocuments = await storage.getAllReferenceDocuments();
+    console.log(`[PromptAssembler] Found ${referenceDocuments.length} reference documents`);
     if (referenceDocuments.length > 0) {
       const refContent = referenceDocuments
         .map(doc => `## "${doc.title}"\n${doc.content}`)
@@ -95,6 +96,13 @@ export class PromptAssembler {
 
     if (memorySection) {
       systemPromptParts.push(`# Client Context\n${memorySection}`);
+    }
+
+    if (referenceSection) {
+      systemPromptParts.push(`# Gena's Writings (Reference Library)
+The following are writings by the coach, Gena Gorlin. When you draw on ideas from these materials, explicitly attribute them by saying something like "As Gena writes in '[Title]'..." or "Gena discusses this in '[Title]'...". You may quote directly or paraphrase, but always give attribution.
+
+${referenceSection}`);
     }
 
     if (taskSection) {
