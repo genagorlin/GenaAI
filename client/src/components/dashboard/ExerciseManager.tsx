@@ -359,78 +359,82 @@ export function ExerciseManager() {
                 {exercises.map((exercise) => (
                   <div key={exercise.id} className="border rounded-lg overflow-hidden">
                     <div 
-                      className="flex items-center gap-2 p-3 hover:bg-muted/50 cursor-pointer"
+                      className="p-3 hover:bg-muted/50 cursor-pointer"
                       onClick={() => toggleExpanded(exercise.id)}
                       data-testid={`exercise-row-${exercise.id}`}
                     >
-                      <div className="flex-shrink-0">
-                        {expandedExercises.has(exercise.id) ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium truncate max-w-[200px]">{exercise.title}</span>
-                          {exercise.category && (
-                            <Badge variant="secondary" className="text-xs flex-shrink-0">{exercise.category}</Badge>
-                          )}
-                          {exercise.estimatedMinutes && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                              <Clock className="h-3 w-3" />
-                              {exercise.estimatedMinutes}m
-                            </span>
-                          )}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <div className="flex-shrink-0 mt-0.5">
+                            {expandedExercises.has(exercise.id) ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{exercise.title}</span>
+                              {exercise.category && (
+                                <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
+                              )}
+                              {exercise.estimatedMinutes && (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {exercise.estimatedMinutes}m
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">{exercise.description}</p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate max-w-full">{exercise.description}</p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => togglePublished(exercise)}
-                          className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
-                          data-testid={`toggle-publish-${exercise.id}`}
-                        >
-                          {exercise.isPublished === 1 ? (
-                            <Eye className="h-4 w-4" />
-                          ) : (
-                            <EyeOff className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingExercise(exercise)}
-                          data-testid={`edit-exercise-${exercise.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteExerciseMutation.mutate(exercise.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => togglePublished(exercise)}
+                            className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
+                            data-testid={`toggle-publish-${exercise.id}`}
+                          >
+                            {exercise.isPublished === 1 ? (
+                              <Eye className="h-4 w-4" />
+                            ) : (
+                              <EyeOff className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingExercise(exercise)}
+                            data-testid={`edit-exercise-${exercise.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteExerciseMutation.mutate(exercise.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     </div>
 
