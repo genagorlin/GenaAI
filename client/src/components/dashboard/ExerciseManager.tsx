@@ -287,7 +287,7 @@ export function ExerciseManager() {
           Exercises
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[85vh]">
+      <DialogContent className="max-w-4xl max-h-[85vh] sm:max-h-[85vh] h-[100dvh] sm:h-auto w-full sm:w-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Dumbbell className="h-5 w-5" />
@@ -295,7 +295,7 @@ export function ExerciseManager() {
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="h-[70vh] pr-4">
+        <ScrollArea className="h-[calc(100dvh-120px)] sm:h-[70vh] pr-4">
           <div className="space-y-4">
             {!isCreating && (
               <Button 

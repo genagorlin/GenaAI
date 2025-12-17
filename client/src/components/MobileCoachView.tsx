@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
+import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
 import { toast } from "sonner";
 
 interface Client {
@@ -199,6 +200,7 @@ export function MobileCoachView() {
           </div>
           <div className="flex items-center gap-2">
             <ReferenceLibrary />
+            <ExerciseManager />
             <Button 
               variant="outline" 
               size="sm"
