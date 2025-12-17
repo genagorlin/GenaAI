@@ -11,6 +11,17 @@ interface AssembledPrompt {
   estimatedTokens: number;
 }
 
+interface ExerciseContext {
+  exerciseId: string;
+  exerciseTitle: string;
+  exerciseDescription: string;
+  currentStepTitle: string;
+  currentStepPrompt: string;
+  currentStepGuidance?: string;
+  currentStepOrder: number;
+  totalSteps: number;
+}
+
 interface PromptContext {
   clientId: string;
   currentMessage: string;
@@ -18,6 +29,7 @@ interface PromptContext {
   messageAlreadyStored?: boolean; // If true, currentMessage is already in recentMessages
   recentMessages?: { role: string; content: string }[];
   documentSections?: { title: string; content: string }[];
+  exerciseContext?: ExerciseContext; // Active exercise session context
 }
 
 const TOKEN_BUDGET = 30000;
@@ -114,6 +126,31 @@ ${referenceSection}`);
 
     if (taskSection) {
       systemPromptParts.push(`# Response Instructions\n${taskSection}`);
+    }
+
+    // Add exercise context if there's an active exercise session
+    if (context.exerciseContext) {
+      const ex = context.exerciseContext;
+      systemPromptParts.push(`# ACTIVE GUIDED EXERCISE
+**IMPORTANT**: The client is currently working through a structured coaching exercise. Your primary role is to guide them through this exercise.
+
+**Exercise**: ${ex.exerciseTitle}
+**Description**: ${ex.exerciseDescription}
+**Current Step**: ${ex.currentStepOrder} of ${ex.totalSteps} - "${ex.currentStepTitle}"
+
+## Step Instructions for You
+${ex.currentStepPrompt}
+
+${ex.currentStepGuidance ? `## Coach Guidance for This Step\n${ex.currentStepGuidance}` : ''}
+
+## How to Guide the Client
+1. **Focus on this step**: Help the client complete the current step before moving on
+2. **Use the prompt**: The step instructions above tell you what to explore with the client
+3. **Be patient**: Allow the client to fully engage with each step before suggesting they move forward
+4. **Acknowledge progress**: When the client has meaningfully addressed the step's focus, encourage them that they can move to the next step when ready
+5. **Don't rush**: The exercise is designed to unfold at the client's pace
+
+The client can click "Next Step" in their interface when they're ready to advance. You don't need to advance steps programmatically - just guide them through the current step's focus.`);
     }
 
     systemPromptParts.push(`# Three-Way Conversation
@@ -342,6 +379,38 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
     const systemPrompt = systemPromptParts.join("\n\n---\n\n");
 
     return { systemPrompt };
+  }
+
+  async getExerciseContext(clientId: string, threadId: string): Promise<ExerciseContext | undefined> {
+    const sessions = await storage.getClientExerciseSessions(clientId);
+    const activeSession = sessions.find(s => s.threadId === threadId && s.status === "in_progress");
+    
+    if (!activeSession || !activeSession.currentStepId) {
+      return undefined;
+    }
+
+    const exercise = await storage.getGuidedExercise(activeSession.exerciseId);
+    if (!exercise) {
+      return undefined;
+    }
+
+    const steps = await storage.getExerciseSteps(exercise.id);
+    const currentStep = steps.find(s => s.id === activeSession.currentStepId);
+    
+    if (!currentStep) {
+      return undefined;
+    }
+
+    return {
+      exerciseId: exercise.id,
+      exerciseTitle: exercise.title,
+      exerciseDescription: exercise.description,
+      currentStepTitle: currentStep.title,
+      currentStepPrompt: currentStep.instructions,
+      currentStepGuidance: currentStep.supportingMaterial || undefined,
+      currentStepOrder: currentStep.stepOrder,
+      totalSteps: steps.length,
+    };
   }
 }
 

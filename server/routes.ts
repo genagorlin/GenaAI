@@ -276,6 +276,11 @@ export async function registerRoutes(
             ? await promptAssembler.getThreadMessages(validated.threadId)
             : await promptAssembler.getRecentMessages(req.params.clientId);
           
+          // Get exercise context if there's an active exercise in this thread
+          const exerciseContext = validated.threadId 
+            ? await promptAssembler.getExerciseContext(req.params.clientId, validated.threadId)
+            : undefined;
+          
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
             currentMessage: validated.content,
@@ -283,6 +288,7 @@ export async function registerRoutes(
             messageAlreadyStored: true, // Message was already saved before this call
             recentMessages,
             documentSections: clientContext.documentSections,
+            exerciseContext,
           });
           
           const routing = routeMessage(validated.content);
@@ -707,6 +713,9 @@ export async function registerRoutes(
           const clientContext = await promptAssembler.getClientContext(thread.clientId);
           const recentMessages = await promptAssembler.getThreadMessages(thread.id);
           
+          // Get exercise context if there's an active exercise in this thread
+          const exerciseContext = await promptAssembler.getExerciseContext(thread.clientId, thread.id);
+          
           const assembled = await promptAssembler.assemblePrompt({
             clientId: thread.clientId,
             currentMessage: content,
@@ -714,6 +723,7 @@ export async function registerRoutes(
             messageAlreadyStored: true, // Message was already saved before this call
             recentMessages,
             documentSections: clientContext.documentSections,
+            exerciseContext,
           });
           
           const routing = routeMessage(content);
