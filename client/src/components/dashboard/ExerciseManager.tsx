@@ -10,11 +10,14 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   GripVertical,
   Eye,
   EyeOff,
   Clock,
-  Paperclip
+  Paperclip,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { FileAttachments } from "@/components/FileAttachments";
 import { Button } from "@/components/ui/button";
@@ -219,6 +222,37 @@ export function ExerciseManager() {
       toast.error("Failed to delete step");
     },
   });
+
+  const moveStep = async (exerciseId: string, steps: ExerciseStep[], stepId: string, direction: 'up' | 'down') => {
+    const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+    const currentIndex = sortedSteps.findIndex(s => s.id === stepId);
+    
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === sortedSteps.length - 1) return;
+    
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const currentStep = sortedSteps[currentIndex];
+    const swapStep = sortedSteps[swapIndex];
+    
+    // Swap the step orders
+    try {
+      await Promise.all([
+        fetch(`/api/coach/steps/${currentStep.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepOrder: swapStep.stepOrder }),
+        }),
+        fetch(`/api/coach/steps/${swapStep.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepOrder: currentStep.stepOrder }),
+        }),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    } catch (error) {
+      toast.error("Failed to reorder steps");
+    }
+  };
 
   const toggleExpanded = async (id: string) => {
     const next = new Set(expandedExercises);
@@ -491,6 +525,28 @@ export function ExerciseManager() {
                                 )}
                                 {editingStep?.id !== step.id && (
                                   <div className="flex items-center gap-1">
+                                    <div className="flex flex-col">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-5 w-5 p-0"
+                                        onClick={() => moveStep(exercise.id, exercise.steps || [], step.id, 'up')}
+                                        disabled={idx === 0}
+                                        data-testid={`move-step-up-${step.id}`}
+                                      >
+                                        <ArrowUp className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-5 w-5 p-0"
+                                        onClick={() => moveStep(exercise.id, exercise.steps || [], step.id, 'down')}
+                                        disabled={idx === (exercise.steps?.length || 1) - 1}
+                                        data-testid={`move-step-down-${step.id}`}
+                                      >
+                                        <ArrowDown className="h-3 w-3" />
+                                      </Button>
+                                    </div>
                                     <Button
                                       variant="ghost"
                                       size="sm"
