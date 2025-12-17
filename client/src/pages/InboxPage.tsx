@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
 
@@ -16,6 +16,14 @@ interface Thread {
 interface Client {
   id: string;
   name: string;
+}
+
+interface GuidedExercise {
+  id: string;
+  title: string;
+  description: string;
+  category?: string;
+  estimatedMinutes?: number;
 }
 
 function formatWhatsAppTimestamp(dateStr: string): string {
@@ -39,7 +47,7 @@ export default function InboxPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"chat" | "document" | "library">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "exercises" | "document" | "library">("chat");
   const [selectedDocument, setSelectedDocument] = useState<{ id: number; title: string; content: string; description: string | null } | null>(null);
 
   const { data: client } = useQuery<Client>({
@@ -73,6 +81,24 @@ export default function InboxPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: exercises = [], isLoading: exercisesLoading } = useQuery<GuidedExercise[]>({
+    queryKey: ["/api/exercises"],
+    queryFn: async () => {
+      const res = await fetch("/api/exercises");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activeTab === "exercises",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const groupedExercises = exercises.reduce((acc, exercise) => {
+    const category = exercise.category || "Other";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(exercise);
+    return acc;
+  }, {} as Record<string, GuidedExercise[]>);
+
   const createThreadMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/clients/${clientId}/threads`, {
@@ -84,6 +110,34 @@ export default function InboxPage() {
       return res.json();
     },
     onSuccess: (thread) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
+      setLocation(`/chat/${clientId}/${thread.id}`);
+    },
+  });
+
+  const startExerciseMutation = useMutation({
+    mutationFn: async (exercise: GuidedExercise) => {
+      const threadRes = await fetch(`/api/clients/${clientId}/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: exercise.title }),
+      });
+      if (!threadRes.ok) throw new Error("Failed to create thread");
+      const thread = await threadRes.json();
+
+      const sessionRes = await fetch(`/api/clients/${clientId}/exercise-sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          exerciseId: exercise.id, 
+          threadId: thread.id 
+        }),
+      });
+      if (!sessionRes.ok) throw new Error("Failed to start exercise");
+      
+      return { thread, exercise };
+    },
+    onSuccess: ({ thread }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
       setLocation(`/chat/${clientId}/${thread.id}`);
     },
@@ -127,7 +181,7 @@ export default function InboxPage() {
           <div className="flex border-t border-white/10">
             <button
               onClick={() => setActiveTab("chat")}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
                 activeTab === "chat" 
                   ? "bg-white/10 text-white border-b-2 border-white" 
                   : "text-white/70 hover:text-white hover:bg-white/5"
@@ -135,11 +189,23 @@ export default function InboxPage() {
               data-testid="tab-chat"
             >
               <MessageCircle className="h-4 w-4" />
-              Conversations
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveTab("exercises")}
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
+                activeTab === "exercises" 
+                  ? "bg-white/10 text-white border-b-2 border-white" 
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+              data-testid="tab-exercises"
+            >
+              <Dumbbell className="h-4 w-4" />
+              Exercises
             </button>
             <button
               onClick={() => setActiveTab("document")}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
                 activeTab === "document" 
                   ? "bg-white/10 text-white border-b-2 border-white" 
                   : "text-white/70 hover:text-white hover:bg-white/5"
@@ -147,11 +213,11 @@ export default function InboxPage() {
               data-testid="tab-document"
             >
               <FileText className="h-4 w-4" />
-              My Document
+              Document
             </button>
             <button
               onClick={() => { setActiveTab("library"); setSelectedDocument(null); }}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
                 activeTab === "library" 
                   ? "bg-white/10 text-white border-b-2 border-white" 
                   : "text-white/70 hover:text-white hover:bg-white/5"
@@ -240,6 +306,73 @@ export default function InboxPage() {
               )}
             </button>
           </>
+        ) : activeTab === "exercises" ? (
+          <div className="flex-1 overflow-y-auto bg-white">
+            {exercisesLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              </div>
+            ) : exercises.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                  <Dumbbell className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">No exercises yet</h3>
+                <p className="text-sm text-slate-500">
+                  Guided exercises from your coach will appear here
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                <div className="p-4 bg-slate-50 border-b">
+                  <h3 className="font-medium text-slate-900 flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 text-amber-600" />
+                    Guided Exercises
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Structured activities to deepen your reflection
+                  </p>
+                </div>
+                {Object.entries(groupedExercises).map(([category, categoryExercises]) => (
+                  <div key={category}>
+                    <div className="px-4 py-2 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                      {category}
+                    </div>
+                    {categoryExercises.map((exercise) => (
+                      <button
+                        key={exercise.id}
+                        onClick={() => startExerciseMutation.mutate(exercise)}
+                        disabled={startExerciseMutation.isPending}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 disabled:opacity-50"
+                        data-testid={`exercise-item-${exercise.id}`}
+                      >
+                        <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                          <Dumbbell className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-medium text-slate-900 truncate text-[15px]">
+                              {exercise.title}
+                            </h3>
+                            {exercise.estimatedMinutes && (
+                              <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                                <Clock className="h-3 w-3" />
+                                {exercise.estimatedMinutes}m
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-500 line-clamp-2 mt-0.5">
+                            {exercise.description}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : activeTab === "document" ? (
           <div className="flex-1 overflow-hidden bg-slate-50">
             <ClientDocumentView clientId={clientId!} />
