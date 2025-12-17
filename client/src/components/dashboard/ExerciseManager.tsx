@@ -224,13 +224,13 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to update step");
       return res.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updatedStep, variables) => {
       const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
       if (currentData) {
         queryClient.setQueryData(["/api/coach/exercises"], 
           currentData.map(e => ({
             ...e,
-            steps: e.steps?.map(s => s.id === variables.id ? { ...s, ...variables } : s)
+            steps: e.steps?.map(s => s.id === variables.id ? { ...s, ...updatedStep } : s)
           }))
         );
       } else {
@@ -272,15 +272,17 @@ export function ExerciseManager() {
   });
 
   const moveStep = async (exerciseId: string, steps: ExerciseStep[], stepId: string, direction: 'up' | 'down') => {
-    const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
-    const currentIndex = sortedSteps.findIndex(s => s.id === stepId);
+    if (!steps || steps.length === 0) return;
+    
+    const currentIndex = steps.findIndex(s => s.id === stepId);
+    if (currentIndex === -1) return;
     
     if (direction === 'up' && currentIndex === 0) return;
-    if (direction === 'down' && currentIndex === sortedSteps.length - 1) return;
+    if (direction === 'down' && currentIndex === steps.length - 1) return;
     
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    const currentStep = sortedSteps[currentIndex];
-    const swapStep = sortedSteps[swapIndex];
+    const currentStep = steps[currentIndex];
+    const swapStep = steps[swapIndex];
     
     const newCurrentOrder = swapStep.stepOrder;
     const newSwapOrder = currentStep.stepOrder;
@@ -634,8 +636,18 @@ export function ExerciseManager() {
                                           </Button>
                                           <Button 
                                             size="sm" 
-                                            onClick={() => updateStepMutation.mutate(editingStep)}
-                                            disabled={updateStepMutation.isPending}
+                                            onClick={() => {
+                                              if (editingStep) {
+                                                updateStepMutation.mutate({
+                                                  id: editingStep.id,
+                                                  title: editingStep.title,
+                                                  instructions: editingStep.instructions,
+                                                  completionCriteria: editingStep.completionCriteria,
+                                                  supportingMaterial: editingStep.supportingMaterial,
+                                                });
+                                              }
+                                            }}
+                                            disabled={updateStepMutation.isPending || !editingStep?.title}
                                           >
                                             {updateStepMutation.isPending ? (
                                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -660,7 +672,7 @@ export function ExerciseManager() {
                                             className="h-6 w-6 p-0"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              moveStep(exercise.id, exercise.steps || [], step.id, 'up');
+                                              moveStep(exercise.id, sortedSteps, step.id, 'up');
                                             }}
                                             disabled={idx === 0}
                                             data-testid={`move-step-up-${step.id}`}
@@ -673,7 +685,7 @@ export function ExerciseManager() {
                                             className="h-6 w-6 p-0"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              moveStep(exercise.id, exercise.steps || [], step.id, 'down');
+                                              moveStep(exercise.id, sortedSteps, step.id, 'down');
                                             }}
                                             disabled={idx === sortedSteps.length - 1}
                                             data-testid={`move-step-down-${step.id}`}
