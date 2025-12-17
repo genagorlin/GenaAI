@@ -725,14 +725,19 @@ export function ExerciseManager() {
                     Cancel
                   </Button>
                   <Button 
-                    onClick={() => updateExerciseMutation.mutate({
-                      id: editingExercise.id,
-                      title: editingExercise.title,
-                      description: editingExercise.description,
-                      category: editingExercise.category,
-                      estimatedMinutes: editingExercise.estimatedMinutes,
-                      systemPrompt: editingExercise.systemPrompt
-                    })}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      updateExerciseMutation.mutate({
+                        id: editingExercise.id,
+                        title: editingExercise.title,
+                        description: editingExercise.description,
+                        category: editingExercise.category,
+                        estimatedMinutes: editingExercise.estimatedMinutes,
+                        systemPrompt: editingExercise.systemPrompt
+                      });
+                    }}
                     disabled={updateExerciseMutation.isPending}
                     data-testid="button-save-edit-exercise"
                   >
