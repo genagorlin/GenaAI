@@ -115,11 +115,19 @@ Token budgets are allocated across prompt components (total budget: 30,000 token
 - Conversation Buffer: 11,000 tokens (recent messages)
 
 **Conversation Flow:**
-1. Client sends message via chat interface
+1. Client or coach sends message via chat interface
 2. Model router analyzes message → selects tier/model/provider
 3. Prompt assembler builds system prompt from living document + prompts
 4. Request sent to AI provider
-5. Response saved to database and returned to client
+5. Response saved to database and returned to sender
+
+**Three-Way Conversations:**
+The AI participates in conversations between client and coach:
+- Messages are labeled as [CLIENT] or [COACH] in conversation history
+- AI receives instructions on how to respond to each participant type
+- Coach messages automatically trigger AI responses (can disable with `triggerAI: false`)
+- `currentSpeaker` parameter identifies who is sending the current message
+- `messageAlreadyStored` flag prevents duplicate messages in prompt history
 
 ## Session Conclusion & AI Document Updates
 
