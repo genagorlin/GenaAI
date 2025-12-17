@@ -26,6 +26,12 @@ import {
   type InsertCoachConsultation,
   type ReferenceDocument,
   type InsertReferenceDocument,
+  type GuidedExercise,
+  type InsertGuidedExercise,
+  type ExerciseStep,
+  type InsertExerciseStep,
+  type ClientExerciseSession,
+  type InsertClientExerciseSession,
   clients,
   threads,
   messages,
@@ -41,7 +47,10 @@ import {
   authorizedUsers,
   coachMentions,
   coachConsultations,
-  referenceDocuments
+  referenceDocuments,
+  guidedExercises,
+  exerciseSteps,
+  clientExerciseSessions
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -131,6 +140,29 @@ export interface IStorage {
   createReferenceDocument(doc: InsertReferenceDocument): Promise<ReferenceDocument>;
   updateReferenceDocument(id: string, updates: Partial<InsertReferenceDocument>): Promise<ReferenceDocument>;
   deleteReferenceDocument(id: string): Promise<void>;
+
+  // Guided Exercises
+  getAllGuidedExercises(): Promise<GuidedExercise[]>;
+  getPublishedExercises(): Promise<GuidedExercise[]>;
+  getGuidedExercise(id: string): Promise<GuidedExercise | undefined>;
+  createGuidedExercise(exercise: InsertGuidedExercise): Promise<GuidedExercise>;
+  updateGuidedExercise(id: string, updates: Partial<InsertGuidedExercise>): Promise<GuidedExercise>;
+  deleteGuidedExercise(id: string): Promise<void>;
+
+  // Exercise Steps
+  getExerciseSteps(exerciseId: string): Promise<ExerciseStep[]>;
+  getExerciseStep(id: string): Promise<ExerciseStep | undefined>;
+  createExerciseStep(step: InsertExerciseStep): Promise<ExerciseStep>;
+  updateExerciseStep(id: string, updates: Partial<InsertExerciseStep>): Promise<ExerciseStep>;
+  deleteExerciseStep(id: string): Promise<void>;
+  reorderExerciseSteps(exerciseId: string, stepIds: string[]): Promise<void>;
+
+  // Client Exercise Sessions
+  getClientExerciseSessions(clientId: string): Promise<ClientExerciseSession[]>;
+  getActiveExerciseSession(clientId: string, threadId: string): Promise<ClientExerciseSession | undefined>;
+  getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
+  createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
+  updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -616,6 +648,111 @@ export class DatabaseStorage implements IStorage {
 
   async deleteReferenceDocument(id: string): Promise<void> {
     await db.delete(referenceDocuments).where(eq(referenceDocuments.id, id));
+  }
+
+  // Guided Exercises
+  async getAllGuidedExercises(): Promise<GuidedExercise[]> {
+    return await db.select().from(guidedExercises).orderBy(asc(guidedExercises.sortOrder));
+  }
+
+  async getPublishedExercises(): Promise<GuidedExercise[]> {
+    return await db.select().from(guidedExercises)
+      .where(eq(guidedExercises.isPublished, 1))
+      .orderBy(asc(guidedExercises.sortOrder));
+  }
+
+  async getGuidedExercise(id: string): Promise<GuidedExercise | undefined> {
+    const [result] = await db.select().from(guidedExercises).where(eq(guidedExercises.id, id));
+    return result;
+  }
+
+  async createGuidedExercise(exercise: InsertGuidedExercise): Promise<GuidedExercise> {
+    const [result] = await db.insert(guidedExercises).values(exercise).returning();
+    return result;
+  }
+
+  async updateGuidedExercise(id: string, updates: Partial<InsertGuidedExercise>): Promise<GuidedExercise> {
+    const [result] = await db.update(guidedExercises)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(guidedExercises.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteGuidedExercise(id: string): Promise<void> {
+    await db.delete(guidedExercises).where(eq(guidedExercises.id, id));
+  }
+
+  // Exercise Steps
+  async getExerciseSteps(exerciseId: string): Promise<ExerciseStep[]> {
+    return await db.select().from(exerciseSteps)
+      .where(eq(exerciseSteps.exerciseId, exerciseId))
+      .orderBy(asc(exerciseSteps.stepOrder));
+  }
+
+  async getExerciseStep(id: string): Promise<ExerciseStep | undefined> {
+    const [result] = await db.select().from(exerciseSteps).where(eq(exerciseSteps.id, id));
+    return result;
+  }
+
+  async createExerciseStep(step: InsertExerciseStep): Promise<ExerciseStep> {
+    const [result] = await db.insert(exerciseSteps).values(step).returning();
+    return result;
+  }
+
+  async updateExerciseStep(id: string, updates: Partial<InsertExerciseStep>): Promise<ExerciseStep> {
+    const [result] = await db.update(exerciseSteps)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(exerciseSteps.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteExerciseStep(id: string): Promise<void> {
+    await db.delete(exerciseSteps).where(eq(exerciseSteps.id, id));
+  }
+
+  async reorderExerciseSteps(exerciseId: string, stepIds: string[]): Promise<void> {
+    for (let i = 0; i < stepIds.length; i++) {
+      await db.update(exerciseSteps)
+        .set({ stepOrder: i })
+        .where(and(eq(exerciseSteps.id, stepIds[i]), eq(exerciseSteps.exerciseId, exerciseId)));
+    }
+  }
+
+  // Client Exercise Sessions
+  async getClientExerciseSessions(clientId: string): Promise<ClientExerciseSession[]> {
+    return await db.select().from(clientExerciseSessions)
+      .where(eq(clientExerciseSessions.clientId, clientId))
+      .orderBy(desc(clientExerciseSessions.startedAt));
+  }
+
+  async getActiveExerciseSession(clientId: string, threadId: string): Promise<ClientExerciseSession | undefined> {
+    const [result] = await db.select().from(clientExerciseSessions)
+      .where(and(
+        eq(clientExerciseSessions.clientId, clientId),
+        eq(clientExerciseSessions.threadId, threadId),
+        eq(clientExerciseSessions.status, "in_progress")
+      ));
+    return result;
+  }
+
+  async getExerciseSession(id: string): Promise<ClientExerciseSession | undefined> {
+    const [result] = await db.select().from(clientExerciseSessions).where(eq(clientExerciseSessions.id, id));
+    return result;
+  }
+
+  async createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession> {
+    const [result] = await db.insert(clientExerciseSessions).values(session).returning();
+    return result;
+  }
+
+  async updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession> {
+    const [result] = await db.update(clientExerciseSessions)
+      .set(updates)
+      .where(eq(clientExerciseSessions.id, id))
+      .returning();
+    return result;
   }
 }
 

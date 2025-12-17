@@ -249,3 +249,58 @@ export type CoachMention = typeof coachMentions.$inferSelect;
 
 export type InsertCoachConsultation = z.infer<typeof insertCoachConsultationSchema>;
 export type CoachConsultation = typeof coachConsultations.$inferSelect;
+
+// Guided Exercises - structured coaching exercises that clients can work through
+export const guidedExercises = pgTable("guided_exercises", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(), // What clients see when choosing
+  category: text("category"), // e.g., "Values", "Emotions", "Beliefs", "Goals", "Habits"
+  estimatedMinutes: integer("estimated_minutes"), // Approximate time to complete
+  systemPrompt: text("system_prompt").notNull().default(""), // Overall instructions for AI during this exercise
+  isPublished: integer("is_published").notNull().default(0), // 0 = draft, 1 = visible to clients
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Exercise Steps - ordered steps within an exercise (supports branching)
+export const exerciseSteps = pgTable("exercise_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  exerciseId: varchar("exercise_id").notNull().references(() => guidedExercises.id, { onDelete: "cascade" }),
+  title: text("title").notNull(), // e.g., "Step 1: Surface your values"
+  instructions: text("instructions").notNull(), // AI instructions for this step
+  completionCriteria: text("completion_criteria"), // Hints for AI on when to advance
+  supportingMaterial: text("supporting_material"), // Optional reference content for this step
+  stepOrder: integer("step_order").notNull().default(0),
+  nextStepId: varchar("next_step_id"), // Default next step (null = end of exercise)
+  branchingRules: jsonb("branching_rules"), // Optional: { conditions: [{ if: "...", thenStepId: "..." }] }
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Client Exercise Sessions - tracks when a client starts/completes an exercise
+export const clientExerciseSessions = pgTable("client_exercise_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  exerciseId: varchar("exercise_id").notNull().references(() => guidedExercises.id, { onDelete: "cascade" }),
+  threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
+  currentStepId: varchar("current_step_id").references(() => exerciseSteps.id),
+  status: text("status").notNull().default("in_progress"), // "in_progress", "completed", "abandoned"
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  summary: text("summary"), // AI-generated summary upon completion
+});
+
+export const insertGuidedExerciseSchema = createInsertSchema(guidedExercises).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertExerciseStepSchema = createInsertSchema(exerciseSteps).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertClientExerciseSessionSchema = createInsertSchema(clientExerciseSessions).omit({ id: true, startedAt: true, completedAt: true });
+
+export type InsertGuidedExercise = z.infer<typeof insertGuidedExerciseSchema>;
+export type GuidedExercise = typeof guidedExercises.$inferSelect;
+
+export type InsertExerciseStep = z.infer<typeof insertExerciseStepSchema>;
+export type ExerciseStep = typeof exerciseSteps.$inferSelect;
+
+export type InsertClientExerciseSession = z.infer<typeof insertClientExerciseSessionSchema>;
+export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
