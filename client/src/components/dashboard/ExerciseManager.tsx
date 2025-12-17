@@ -10,14 +10,12 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
-  GripVertical,
   Eye,
   EyeOff,
   Clock,
-  Paperclip,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  ArrowLeft
 } from "lucide-react";
 import { FileAttachments } from "@/components/FileAttachments";
 import { Button } from "@/components/ui/button";
@@ -25,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -79,8 +76,11 @@ interface GuidedExercise {
 
 const CATEGORIES = ["Values", "Emotions", "Beliefs", "Goals", "Habits", "Decisions", "Interpersonal"];
 
+type ViewMode = "list" | "edit";
+
 export function ExerciseManager() {
   const [isOpen, setIsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [editingExercise, setEditingExercise] = useState<GuidedExercise | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [expandedExercises, setExpandedExercises] = useState<Set<string>>(new Set());
@@ -117,8 +117,13 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to create exercise");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (newEx) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], [...currentData, newEx]);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
       setIsCreating(false);
       setNewExercise({ title: "", description: "", category: "", estimatedMinutes: 15, systemPrompt: "" });
       toast.success("Exercise created");
@@ -138,8 +143,16 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to update exercise");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (updatedEx, variables) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], 
+          currentData.map(e => e.id === variables.id ? { ...e, ...variables } : e)
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
+      setViewMode("list");
       setEditingExercise(null);
       toast.success("Exercise updated");
     },
@@ -156,8 +169,13 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to delete exercise");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (_, deletedId) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], currentData.filter(e => e.id !== deletedId));
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
       toast.success("Exercise deleted");
     },
     onError: () => {
@@ -175,8 +193,18 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to create step");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (newStepData, variables) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], 
+          currentData.map(e => e.id === variables.exerciseId 
+            ? { ...e, steps: [...(e.steps || []), newStepData] }
+            : e
+          )
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
       setIsAddingStep(null);
       setNewStep({ title: "", instructions: "", completionCriteria: "", supportingMaterial: "" });
       toast.success("Step added");
@@ -196,8 +224,18 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to update step");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (_, variables) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], 
+          currentData.map(e => ({
+            ...e,
+            steps: e.steps?.map(s => s.id === variables.id ? { ...s, ...variables } : s)
+          }))
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
       setEditingStep(null);
       toast.success("Step updated");
     },
@@ -214,8 +252,18 @@ export function ExerciseManager() {
       if (!res.ok) throw new Error("Failed to delete step");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    onSuccess: (_, deletedId) => {
+      const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+      if (currentData) {
+        queryClient.setQueryData(["/api/coach/exercises"], 
+          currentData.map(e => ({
+            ...e,
+            steps: e.steps?.filter(s => s.id !== deletedId)
+          }))
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      }
       toast.success("Step deleted");
     },
     onError: () => {
@@ -234,22 +282,44 @@ export function ExerciseManager() {
     const currentStep = sortedSteps[currentIndex];
     const swapStep = sortedSteps[swapIndex];
     
-    // Swap the step orders
+    const newCurrentOrder = swapStep.stepOrder;
+    const newSwapOrder = currentStep.stepOrder;
+    
+    // Optimistically update the cache
+    const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+    if (currentData) {
+      queryClient.setQueryData(["/api/coach/exercises"], 
+        currentData.map(e => e.id === exerciseId 
+          ? {
+              ...e,
+              steps: e.steps?.map(s => {
+                if (s.id === currentStep.id) return { ...s, stepOrder: newCurrentOrder };
+                if (s.id === swapStep.id) return { ...s, stepOrder: newSwapOrder };
+                return s;
+              })
+            }
+          : e
+        )
+      );
+    }
+    
+    // Persist to server
     try {
       await Promise.all([
         fetch(`/api/coach/steps/${currentStep.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stepOrder: swapStep.stepOrder }),
+          body: JSON.stringify({ stepOrder: newCurrentOrder }),
         }),
         fetch(`/api/coach/steps/${swapStep.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stepOrder: currentStep.stepOrder }),
+          body: JSON.stringify({ stepOrder: newSwapOrder }),
         }),
       ]);
-      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
     } catch (error) {
+      // Revert on error
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       toast.error("Failed to reorder steps");
     }
   };
@@ -264,414 +334,479 @@ export function ExerciseManager() {
       if (existing && !existing.steps) {
         const res = await fetch(`/api/coach/exercises/${id}`);
         const data = await res.json();
-        queryClient.setQueryData(["/api/coach/exercises"], (old: GuidedExercise[] | undefined) => 
-          old?.map(e => e.id === id ? { ...e, steps: data.steps } : e)
-        );
+        const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+        if (currentData) {
+          queryClient.setQueryData(["/api/coach/exercises"], 
+            currentData.map(e => e.id === id ? { ...e, steps: data.steps } : e)
+          );
+        }
       }
     }
     setExpandedExercises(next);
   };
 
   const togglePublished = async (exercise: GuidedExercise) => {
-    await updateExerciseMutation.mutateAsync({
-      id: exercise.id,
-      isPublished: exercise.isPublished === 1 ? 0 : 1
+    const newValue = exercise.isPublished === 1 ? 0 : 1;
+    // Optimistic update
+    const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
+    if (currentData) {
+      queryClient.setQueryData(["/api/coach/exercises"], 
+        currentData.map(e => e.id === exercise.id ? { ...e, isPublished: newValue } : e)
+      );
+    }
+    try {
+      await fetch(`/api/coach/exercises/${exercise.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublished: newValue }),
+      });
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+      toast.error("Failed to update");
+    }
+  };
+
+  const startEditing = (exercise: GuidedExercise) => {
+    setEditingExercise({ ...exercise });
+    setViewMode("edit");
+  };
+
+  const cancelEditing = () => {
+    setEditingExercise(null);
+    setViewMode("list");
+  };
+
+  const saveExercise = () => {
+    if (!editingExercise) return;
+    updateExerciseMutation.mutate({
+      id: editingExercise.id,
+      title: editingExercise.title,
+      description: editingExercise.description,
+      category: editingExercise.category,
+      estimatedMinutes: editingExercise.estimatedMinutes,
+      systemPrompt: editingExercise.systemPrompt
     });
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) {
+        setViewMode("list");
+        setEditingExercise(null);
+      }
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2" data-testid="button-open-exercises">
           <Dumbbell className="h-4 w-4" />
-          Exercises
+          <span className="hidden sm:inline">Exercises</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[85vh] sm:max-h-[85vh] h-[100dvh] sm:h-auto w-full sm:w-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
+            {viewMode === "edit" && (
+              <Button variant="ghost" size="sm" onClick={cancelEditing} className="mr-1">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
             <Dumbbell className="h-5 w-5" />
-            Guided Exercises
+            {viewMode === "edit" ? "Edit Exercise" : "Guided Exercises"}
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="h-[calc(100dvh-120px)] sm:h-[70vh] pr-4">
-          <div className="space-y-4">
-            {!isCreating && (
-              <Button 
-                onClick={() => setIsCreating(true)} 
-                className="w-full gap-2"
-                variant="outline"
-                data-testid="button-create-exercise"
-              >
-                <Plus className="h-4 w-4" />
-                Create New Exercise
-              </Button>
-            )}
+        {viewMode === "list" ? (
+          <ScrollArea className="h-[calc(100dvh-120px)] sm:h-[70vh] pr-4">
+            <div className="space-y-4">
+              {!isCreating && (
+                <Button 
+                  onClick={() => setIsCreating(true)} 
+                  className="w-full gap-2"
+                  variant="outline"
+                  data-testid="button-create-exercise"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Exercise
+                </Button>
+              )}
 
-            {isCreating && (
-              <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-                <Input
-                  placeholder="Exercise title (e.g., Values Clarification)"
-                  value={newExercise.title}
-                  onChange={(e) => setNewExercise({ ...newExercise, title: e.target.value })}
-                  data-testid="input-new-exercise-title"
-                />
-                <Textarea
-                  placeholder="Description (what clients will see when choosing this exercise)"
-                  value={newExercise.description}
-                  onChange={(e) => setNewExercise({ ...newExercise, description: e.target.value })}
-                  rows={2}
-                  data-testid="input-new-exercise-description"
-                />
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Label className="text-xs text-muted-foreground">Category</Label>
-                    <Select
-                      value={newExercise.category}
-                      onValueChange={(value) => setNewExercise({ ...newExercise, category: value })}
-                    >
-                      <SelectTrigger data-testid="select-new-exercise-category">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-32">
-                    <Label className="text-xs text-muted-foreground">Est. Minutes</Label>
-                    <Input
-                      type="number"
-                      value={newExercise.estimatedMinutes}
-                      onChange={(e) => setNewExercise({ ...newExercise, estimatedMinutes: parseInt(e.target.value) || 15 })}
-                      data-testid="input-new-exercise-minutes"
-                    />
-                  </div>
-                </div>
-                <Textarea
-                  placeholder="System prompt for AI (overall instructions for guiding this exercise)"
-                  value={newExercise.systemPrompt}
-                  onChange={(e) => setNewExercise({ ...newExercise, systemPrompt: e.target.value })}
-                  rows={3}
-                  data-testid="input-new-exercise-prompt"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)}>
-                    <X className="h-4 w-4 mr-1" />
-                    Cancel
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={() => createExerciseMutation.mutate(newExercise)}
-                    disabled={!newExercise.title || !newExercise.description || createExerciseMutation.isPending}
-                    data-testid="button-save-new-exercise"
-                  >
-                    {createExerciseMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-1" />
-                    )}
-                    Create Exercise
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : exercises.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No exercises yet. Create your first one to get started.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {exercises.map((exercise) => (
-                  <div key={exercise.id} className="border rounded-lg overflow-hidden">
-                    <div 
-                      className="p-3 hover:bg-muted/50 cursor-pointer"
-                      onClick={() => toggleExpanded(exercise.id)}
-                      data-testid={`exercise-row-${exercise.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <div className="flex-shrink-0 mt-0.5">
-                            {expandedExercises.has(exercise.id) ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium">{exercise.title}</span>
-                              {exercise.category && (
-                                <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
-                              )}
-                              {exercise.estimatedMinutes && (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Clock className="h-3 w-3" />
-                                  {exercise.estimatedMinutes}m
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">{exercise.description}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => togglePublished(exercise)}
-                            className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
-                            data-testid={`toggle-publish-${exercise.id}`}
-                          >
-                            {exercise.isPublished === 1 ? (
-                              <Eye className="h-4 w-4" />
-                            ) : (
-                              <EyeOff className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingExercise(exercise)}
-                            data-testid={`edit-exercise-${exercise.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteExerciseMutation.mutate(exercise.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
+              {isCreating && (
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                  <Input
+                    placeholder="Exercise title (e.g., Values Clarification)"
+                    value={newExercise.title}
+                    onChange={(e) => setNewExercise({ ...newExercise, title: e.target.value })}
+                    data-testid="input-new-exercise-title"
+                  />
+                  <Textarea
+                    placeholder="Description (what clients will see when choosing this exercise)"
+                    value={newExercise.description}
+                    onChange={(e) => setNewExercise({ ...newExercise, description: e.target.value })}
+                    rows={2}
+                    data-testid="input-new-exercise-description"
+                  />
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Label className="text-xs text-muted-foreground">Category</Label>
+                      <Select
+                        value={newExercise.category}
+                        onValueChange={(value) => setNewExercise({ ...newExercise, category: value })}
+                      >
+                        <SelectTrigger data-testid="select-new-exercise-category">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+                    <div className="w-32">
+                      <Label className="text-xs text-muted-foreground">Est. Minutes</Label>
+                      <Input
+                        type="number"
+                        value={newExercise.estimatedMinutes}
+                        onChange={(e) => setNewExercise({ ...newExercise, estimatedMinutes: parseInt(e.target.value) || 15 })}
+                        data-testid="input-new-exercise-minutes"
+                      />
+                    </div>
+                  </div>
+                  <Textarea
+                    placeholder="System prompt for AI (overall instructions for guiding this exercise)"
+                    value={newExercise.systemPrompt}
+                    onChange={(e) => setNewExercise({ ...newExercise, systemPrompt: e.target.value })}
+                    rows={3}
+                    data-testid="input-new-exercise-prompt"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)}>
+                      <X className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={() => createExerciseMutation.mutate(newExercise)}
+                      disabled={!newExercise.title || !newExercise.description || createExerciseMutation.isPending}
+                      data-testid="button-save-new-exercise"
+                    >
+                      {createExerciseMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-1" />
+                      )}
+                      Create Exercise
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-                    {expandedExercises.has(exercise.id) && (
-                      <div className="border-t bg-muted/30 p-3 space-y-3">
-                        <div className="text-xs font-medium text-muted-foreground uppercase">Steps</div>
-                        
-                        {exercise.steps && exercise.steps.length > 0 ? (
-                          <div className="space-y-2">
-                            {exercise.steps.sort((a, b) => a.stepOrder - b.stepOrder).map((step, idx) => (
-                              <div key={step.id} className="flex items-start gap-2 p-2 rounded border bg-background">
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                                  {idx + 1}
-                                </div>
-                                {editingStep?.id === step.id ? (
-                                  <div className="flex-1 space-y-2">
-                                    <Input
-                                      value={editingStep.title}
-                                      onChange={(e) => setEditingStep({ ...editingStep, title: e.target.value })}
-                                      placeholder="Step title"
-                                      data-testid={`input-edit-step-title-${step.id}`}
-                                    />
-                                    <Textarea
-                                      value={editingStep.instructions}
-                                      onChange={(e) => setEditingStep({ ...editingStep, instructions: e.target.value })}
-                                      placeholder="AI instructions for this step"
-                                      rows={3}
-                                      data-testid={`input-edit-step-instructions-${step.id}`}
-                                    />
-                                    <Input
-                                      value={editingStep.completionCriteria || ""}
-                                      onChange={(e) => setEditingStep({ ...editingStep, completionCriteria: e.target.value })}
-                                      placeholder="Completion criteria (when to advance)"
-                                      data-testid={`input-edit-step-criteria-${step.id}`}
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                      <Button variant="ghost" size="sm" onClick={() => setEditingStep(null)}>
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        onClick={() => updateStepMutation.mutate(editingStep)}
-                                        disabled={updateStepMutation.isPending}
-                                      >
-                                        <Save className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : exercises.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No exercises yet. Create your first one to get started.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {exercises.map((exercise) => {
+                    const sortedSteps = exercise.steps ? [...exercise.steps].sort((a, b) => a.stepOrder - b.stepOrder) : [];
+                    
+                    return (
+                      <div key={exercise.id} className="border rounded-lg overflow-hidden">
+                        <div 
+                          className="p-3 hover:bg-muted/50 cursor-pointer"
+                          onClick={() => toggleExpanded(exercise.id)}
+                          data-testid={`exercise-row-${exercise.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
+                              <div className="flex-shrink-0 mt-0.5">
+                                {expandedExercises.has(exercise.id) ? (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                 ) : (
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm">{step.title}</div>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{step.instructions}</p>
-                                  </div>
-                                )}
-                                {editingStep?.id !== step.id && (
-                                  <div className="flex items-center gap-1">
-                                    <div className="flex flex-col">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-5 w-5 p-0"
-                                        onClick={() => moveStep(exercise.id, exercise.steps || [], step.id, 'up')}
-                                        disabled={idx === 0}
-                                        data-testid={`move-step-up-${step.id}`}
-                                      >
-                                        <ArrowUp className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-5 w-5 p-0"
-                                        onClick={() => moveStep(exercise.id, exercise.steps || [], step.id, 'down')}
-                                        disabled={idx === (exercise.steps?.length || 1) - 1}
-                                        data-testid={`move-step-down-${step.id}`}
-                                      >
-                                        <ArrowDown className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setEditingStep(step)}
-                                      data-testid={`edit-step-${step.id}`}
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-step-${step.id}`}>
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Delete Step</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Are you sure you want to delete this step?
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => deleteStepMutation.mutate(step.id)}
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          >
-                                            Delete
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 )}
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-muted-foreground italic">No steps yet</div>
-                        )}
-
-                        {isAddingStep === exercise.id ? (
-                          <div className="space-y-2 p-2 border rounded bg-background">
-                            <Input
-                              value={newStep.title}
-                              onChange={(e) => setNewStep({ ...newStep, title: e.target.value })}
-                              placeholder="Step title (e.g., 'Identify your core values')"
-                              data-testid={`input-new-step-title-${exercise.id}`}
-                            />
-                            <Textarea
-                              value={newStep.instructions}
-                              onChange={(e) => setNewStep({ ...newStep, instructions: e.target.value })}
-                              placeholder="AI instructions for this step"
-                              rows={3}
-                              data-testid={`input-new-step-instructions-${exercise.id}`}
-                            />
-                            <Input
-                              value={newStep.completionCriteria}
-                              onChange={(e) => setNewStep({ ...newStep, completionCriteria: e.target.value })}
-                              placeholder="Completion criteria (optional - when AI should advance)"
-                              data-testid={`input-new-step-criteria-${exercise.id}`}
-                            />
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => setIsAddingStep(null)}>
-                                <X className="h-4 w-4 mr-1" />
-                                Cancel
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  createStepMutation.mutate({
-                                    ...newStep,
-                                    exerciseId: exercise.id,
-                                    stepOrder: (exercise.steps?.length || 0)
-                                  });
-                                }}
-                                disabled={!newStep.title || !newStep.instructions || createStepMutation.isPending}
-                                data-testid={`button-save-new-step-${exercise.id}`}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">{exercise.title}</span>
+                                  {exercise.category && (
+                                    <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
+                                  )}
+                                  {exercise.estimatedMinutes && (
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Clock className="h-3 w-3" />
+                                      {exercise.estimatedMinutes}m
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">{exercise.description}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => togglePublished(exercise)}
+                                className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
+                                data-testid={`toggle-publish-${exercise.id}`}
                               >
-                                {createStepMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                {exercise.isPublished === 1 ? (
+                                  <Eye className="h-4 w-4" />
                                 ) : (
-                                  <Save className="h-4 w-4 mr-1" />
+                                  <EyeOff className="h-4 w-4" />
                                 )}
-                                Add Step
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startEditing(exercise)}
+                                data-testid={`edit-exercise-${exercise.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteExerciseMutation.mutate(exercise.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </div>
-                        ) : (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="w-full gap-2"
-                            onClick={() => setIsAddingStep(exercise.id)}
-                            data-testid={`button-add-step-${exercise.id}`}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Add Step
-                          </Button>
+                        </div>
+
+                        {expandedExercises.has(exercise.id) && (
+                          <div className="border-t bg-muted/30 p-3 space-y-3">
+                            <div className="text-xs font-medium text-muted-foreground uppercase">Steps</div>
+                            
+                            {sortedSteps.length > 0 ? (
+                              <div className="space-y-2">
+                                {sortedSteps.map((step, idx) => (
+                                  <div key={step.id} className="flex items-start gap-2 p-2 rounded border bg-background">
+                                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
+                                      {idx + 1}
+                                    </div>
+                                    {editingStep?.id === step.id ? (
+                                      <div className="flex-1 space-y-2">
+                                        <Input
+                                          value={editingStep.title}
+                                          onChange={(e) => setEditingStep({ ...editingStep, title: e.target.value })}
+                                          placeholder="Step title"
+                                          data-testid={`input-edit-step-title-${step.id}`}
+                                        />
+                                        <Textarea
+                                          value={editingStep.instructions}
+                                          onChange={(e) => setEditingStep({ ...editingStep, instructions: e.target.value })}
+                                          placeholder="AI instructions for this step"
+                                          rows={3}
+                                          data-testid={`input-edit-step-instructions-${step.id}`}
+                                        />
+                                        <Input
+                                          value={editingStep.completionCriteria || ""}
+                                          onChange={(e) => setEditingStep({ ...editingStep, completionCriteria: e.target.value })}
+                                          placeholder="Completion criteria (when to advance)"
+                                          data-testid={`input-edit-step-criteria-${step.id}`}
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                          <Button variant="ghost" size="sm" onClick={() => setEditingStep(null)}>
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                          <Button 
+                                            size="sm" 
+                                            onClick={() => updateStepMutation.mutate(editingStep)}
+                                            disabled={updateStepMutation.isPending}
+                                          >
+                                            {updateStepMutation.isPending ? (
+                                              <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                              <Save className="h-4 w-4" />
+                                            )}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm">{step.title}</div>
+                                        <p className="text-xs text-muted-foreground line-clamp-2">{step.instructions}</p>
+                                      </div>
+                                    )}
+                                    {editingStep?.id !== step.id && (
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        <div className="flex flex-col">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              moveStep(exercise.id, exercise.steps || [], step.id, 'up');
+                                            }}
+                                            disabled={idx === 0}
+                                            data-testid={`move-step-up-${step.id}`}
+                                          >
+                                            <ArrowUp className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              moveStep(exercise.id, exercise.steps || [], step.id, 'down');
+                                            }}
+                                            disabled={idx === sortedSteps.length - 1}
+                                            data-testid={`move-step-down-${step.id}`}
+                                          >
+                                            <ArrowDown className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => setEditingStep(step)}
+                                          data-testid={`edit-step-${step.id}`}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-step-${step.id}`}>
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Delete Step</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Are you sure you want to delete this step?
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => deleteStepMutation.mutate(step.id)}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              >
+                                                Delete
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground italic">No steps yet</div>
+                            )}
+
+                            {isAddingStep === exercise.id ? (
+                              <div className="space-y-2 p-2 border rounded bg-background">
+                                <Input
+                                  value={newStep.title}
+                                  onChange={(e) => setNewStep({ ...newStep, title: e.target.value })}
+                                  placeholder="Step title (e.g., 'Identify your core values')"
+                                  data-testid={`input-new-step-title-${exercise.id}`}
+                                />
+                                <Textarea
+                                  value={newStep.instructions}
+                                  onChange={(e) => setNewStep({ ...newStep, instructions: e.target.value })}
+                                  placeholder="AI instructions for this step"
+                                  rows={3}
+                                  data-testid={`input-new-step-instructions-${exercise.id}`}
+                                />
+                                <Input
+                                  value={newStep.completionCriteria}
+                                  onChange={(e) => setNewStep({ ...newStep, completionCriteria: e.target.value })}
+                                  placeholder="Completion criteria (optional - when AI should advance)"
+                                  data-testid={`input-new-step-criteria-${exercise.id}`}
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => setIsAddingStep(null)}>
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      createStepMutation.mutate({
+                                        ...newStep,
+                                        exerciseId: exercise.id,
+                                        stepOrder: sortedSteps.length
+                                      });
+                                    }}
+                                    disabled={!newStep.title || !newStep.instructions || createStepMutation.isPending}
+                                    data-testid={`button-save-new-step-${exercise.id}`}
+                                  >
+                                    {createStepMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    ) : (
+                                      <Save className="h-4 w-4 mr-1" />
+                                    )}
+                                    Add Step
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full gap-2"
+                                onClick={() => setIsAddingStep(exercise.id)}
+                                data-testid={`button-add-step-${exercise.id}`}
+                              >
+                                <Plus className="h-4 w-4" />
+                                Add Step
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-
-        {editingExercise && (
-          <Dialog open={!!editingExercise} onOpenChange={() => setEditingExercise(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Exercise</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        ) : editingExercise && (
+          <ScrollArea className="h-[calc(100dvh-120px)] sm:h-[70vh] pr-4">
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Title</Label>
                 <Input
                   value={editingExercise.title}
                   onChange={(e) => setEditingExercise({ ...editingExercise, title: e.target.value })}
                   placeholder="Exercise title"
                   data-testid="input-edit-exercise-title"
                 />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Description</Label>
                 <Textarea
                   value={editingExercise.description}
                   onChange={(e) => setEditingExercise({ ...editingExercise, description: e.target.value })}
@@ -679,79 +814,67 @@ export function ExerciseManager() {
                   rows={2}
                   data-testid="input-edit-exercise-description"
                 />
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Label className="text-xs text-muted-foreground">Category</Label>
-                    <Select
-                      value={editingExercise.category || ""}
-                      onValueChange={(value) => setEditingExercise({ ...editingExercise, category: value })}
-                    >
-                      <SelectTrigger data-testid="select-edit-exercise-category">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-32">
-                    <Label className="text-xs text-muted-foreground">Est. Minutes</Label>
-                    <Input
-                      type="number"
-                      value={editingExercise.estimatedMinutes || ""}
-                      onChange={(e) => setEditingExercise({ ...editingExercise, estimatedMinutes: parseInt(e.target.value) || undefined })}
-                      data-testid="input-edit-exercise-minutes"
-                    />
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground">Category</Label>
+                  <Select
+                    value={editingExercise.category || ""}
+                    onValueChange={(value) => setEditingExercise({ ...editingExercise, category: value })}
+                  >
+                    <SelectTrigger data-testid="select-edit-exercise-category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">System Prompt (AI Instructions)</Label>
-                  <Textarea
-                    value={editingExercise.systemPrompt}
-                    onChange={(e) => setEditingExercise({ ...editingExercise, systemPrompt: e.target.value })}
-                    placeholder="Overall instructions for how the AI should guide this exercise"
-                    rows={4}
-                    className="mt-1"
-                    data-testid="input-edit-exercise-prompt"
+                <div className="w-32">
+                  <Label className="text-xs text-muted-foreground">Est. Minutes</Label>
+                  <Input
+                    type="number"
+                    value={editingExercise.estimatedMinutes || ""}
+                    onChange={(e) => setEditingExercise({ ...editingExercise, estimatedMinutes: parseInt(e.target.value) || undefined })}
+                    data-testid="input-edit-exercise-minutes"
                   />
                 </div>
-                
-                <FileAttachments exerciseId={editingExercise.id} />
-                
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setEditingExercise(null)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      updateExerciseMutation.mutate({
-                        id: editingExercise.id,
-                        title: editingExercise.title,
-                        description: editingExercise.description,
-                        category: editingExercise.category,
-                        estimatedMinutes: editingExercise.estimatedMinutes,
-                        systemPrompt: editingExercise.systemPrompt
-                      });
-                    }}
-                    disabled={updateExerciseMutation.isPending}
-                    data-testid="button-save-edit-exercise"
-                  >
-                    {updateExerciseMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-2" />
-                    )}
-                    Save Changes
-                  </Button>
-                </div>
               </div>
-            </DialogContent>
-          </Dialog>
+              <div>
+                <Label className="text-xs text-muted-foreground">System Prompt (AI Instructions)</Label>
+                <Textarea
+                  value={editingExercise.systemPrompt}
+                  onChange={(e) => setEditingExercise({ ...editingExercise, systemPrompt: e.target.value })}
+                  placeholder="Overall instructions for how the AI should guide this exercise"
+                  rows={4}
+                  className="mt-1"
+                  data-testid="input-edit-exercise-prompt"
+                />
+              </div>
+              
+              <FileAttachments exerciseId={editingExercise.id} />
+              
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="ghost" onClick={cancelEditing}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={saveExercise}
+                  disabled={updateExerciseMutation.isPending}
+                  data-testid="button-save-edit-exercise"
+                >
+                  {updateExerciseMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </ScrollArea>
         )}
       </DialogContent>
     </Dialog>
