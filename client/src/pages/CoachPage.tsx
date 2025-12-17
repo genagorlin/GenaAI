@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
@@ -27,6 +27,7 @@ import {
   Send,
   Loader2
 } from "lucide-react";
+import { MobileCoachView } from "@/components/MobileCoachView";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,7 +111,37 @@ interface Mention {
 
 type ViewMode = "document" | "signals" | "messages";
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => {
+    // Initialize correctly on first render to prevent flash
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  return isMobile;
+}
+
 export default function CoachPage() {
+  const isMobile = useIsMobile();
+  
+  // Show mobile view on small screens
+  if (isMobile) {
+    return <MobileCoachView />;
+  }
+  
+  // Desktop view below
+  return <DesktopCoachView />;
+}
+
+function DesktopCoachView() {
   const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
