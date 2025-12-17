@@ -856,6 +856,62 @@ export async function registerRoutes(
     }
   });
 
+  // Reference Documents Routes (coach's writings for AI to reference)
+  app.get("/api/coach/reference-documents", isAuthenticated, async (_req, res) => {
+    try {
+      const docs = await storage.getAllReferenceDocuments();
+      res.json(docs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reference documents" });
+    }
+  });
+
+  app.get("/api/coach/reference-documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const doc = await storage.getReferenceDocument(req.params.id);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(doc);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reference document" });
+    }
+  });
+
+  app.post("/api/coach/reference-documents", isAuthenticated, async (req, res) => {
+    try {
+      const { insertReferenceDocumentSchema } = await import("@shared/schema");
+      const validated = insertReferenceDocumentSchema.parse(req.body);
+      const doc = await storage.createReferenceDocument(validated);
+      console.log(`[RefDoc] Created reference document: ${doc.title}`);
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Create reference document error:", error);
+      res.status(400).json({ error: "Failed to create reference document" });
+    }
+  });
+
+  app.patch("/api/coach/reference-documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const doc = await storage.updateReferenceDocument(req.params.id, req.body);
+      console.log(`[RefDoc] Updated reference document: ${doc.title}`);
+      res.json(doc);
+    } catch (error) {
+      console.error("Update reference document error:", error);
+      res.status(400).json({ error: "Failed to update reference document" });
+    }
+  });
+
+  app.delete("/api/coach/reference-documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteReferenceDocument(req.params.id);
+      console.log(`[RefDoc] Deleted reference document: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete reference document" });
+    }
+  });
+
   // Dynamic PWA manifest (customizes start_url based on query param)
   app.get("/api/manifest.json", (req, res) => {
     let startUrl = "/";

@@ -196,6 +196,21 @@ export const insertClientMethodologySchema = createInsertSchema(clientMethodolog
 export const insertCoachMentionSchema = createInsertSchema(coachMentions).omit({ id: true, createdAt: true });
 export const insertCoachConsultationSchema = createInsertSchema(coachConsultations).omit({ id: true, timestamp: true });
 
+// Reference Documents - coach's writings that the AI can reference when talking to clients
+export const referenceDocuments = pgTable("reference_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  description: text("description"), // Optional short description/summary
+  tags: text("tags").array(), // Optional tags for categorization
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertReferenceDocumentSchema = createInsertSchema(referenceDocuments).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertReferenceDocument = z.infer<typeof insertReferenceDocumentSchema>;
+export type ReferenceDocument = typeof referenceDocuments.$inferSelect;
+
 export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
 

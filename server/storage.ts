@@ -24,6 +24,8 @@ import {
   type InsertCoachMention,
   type CoachConsultation,
   type InsertCoachConsultation,
+  type ReferenceDocument,
+  type InsertReferenceDocument,
   clients,
   threads,
   messages,
@@ -38,7 +40,8 @@ import {
   clientMethodologies,
   authorizedUsers,
   coachMentions,
-  coachConsultations
+  coachConsultations,
+  referenceDocuments
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -121,6 +124,13 @@ export interface IStorage {
   getClientConsultations(clientId: string): Promise<CoachConsultation[]>;
   createConsultation(consultation: InsertCoachConsultation): Promise<CoachConsultation>;
   clearClientConsultations(clientId: string): Promise<void>;
+
+  // Reference Documents (coach's writings for AI to reference)
+  getAllReferenceDocuments(): Promise<ReferenceDocument[]>;
+  getReferenceDocument(id: string): Promise<ReferenceDocument | undefined>;
+  createReferenceDocument(doc: InsertReferenceDocument): Promise<ReferenceDocument>;
+  updateReferenceDocument(id: string, updates: Partial<InsertReferenceDocument>): Promise<ReferenceDocument>;
+  deleteReferenceDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -579,6 +589,33 @@ export class DatabaseStorage implements IStorage {
 
   async clearClientConsultations(clientId: string): Promise<void> {
     await db.delete(coachConsultations).where(eq(coachConsultations.clientId, clientId));
+  }
+
+  // Reference Documents
+  async getAllReferenceDocuments(): Promise<ReferenceDocument[]> {
+    return await db.select().from(referenceDocuments).orderBy(desc(referenceDocuments.createdAt));
+  }
+
+  async getReferenceDocument(id: string): Promise<ReferenceDocument | undefined> {
+    const [result] = await db.select().from(referenceDocuments).where(eq(referenceDocuments.id, id));
+    return result;
+  }
+
+  async createReferenceDocument(doc: InsertReferenceDocument): Promise<ReferenceDocument> {
+    const [result] = await db.insert(referenceDocuments).values(doc).returning();
+    return result;
+  }
+
+  async updateReferenceDocument(id: string, updates: Partial<InsertReferenceDocument>): Promise<ReferenceDocument> {
+    const [result] = await db.update(referenceDocuments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(referenceDocuments.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteReferenceDocument(id: string): Promise<void> {
+    await db.delete(referenceDocuments).where(eq(referenceDocuments.id, id));
   }
 }
 
