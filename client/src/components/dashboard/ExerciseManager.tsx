@@ -616,11 +616,16 @@ export function ExerciseManager() {
                               </Button>
                               <Button 
                                 size="sm" 
-                                onClick={() => createStepMutation.mutate({
-                                  ...newStep,
-                                  exerciseId: exercise.id,
-                                  stepOrder: (exercise.steps?.length || 0)
-                                })}
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  createStepMutation.mutate({
+                                    ...newStep,
+                                    exerciseId: exercise.id,
+                                    stepOrder: (exercise.steps?.length || 0)
+                                  });
+                                }}
                                 disabled={!newStep.title || !newStep.instructions || createStepMutation.isPending}
                                 data-testid={`button-save-new-step-${exercise.id}`}
                               >
