@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { parseFileFromStorage, truncateText, estimateTokens as fileEstimateTokens } from "./fileParser";
 
 interface ConversationMessage {
   role: "user" | "assistant";
@@ -40,9 +41,10 @@ const TOKEN_ALLOCATIONS = {
   methodologyFrame: 2000,
   memoryContext: 12000,
   referenceDocuments: 3000,
+  fileAttachments: 4000,
   currentInput: 1000,
   taskPrompt: 500,
-  conversationBuffer: 11000,
+  conversationBuffer: 7000,
 };
 
 function estimateTokens(text: string): number {
@@ -85,6 +87,7 @@ export class PromptAssembler {
 
     // Fetch reference documents (coach's writings for AI to reference)
     let referenceSection = "";
+    let fileAttachmentSection = "";
     const referenceDocuments = await storage.getAllReferenceDocuments();
     console.log(`[PromptAssembler] Found ${referenceDocuments.length} reference documents`);
     if (referenceDocuments.length > 0) {
@@ -92,6 +95,33 @@ export class PromptAssembler {
         .map(doc => `## "${doc.title}"\n${doc.content}`)
         .join("\n\n");
       referenceSection = truncateToTokenLimit(refContent, TOKEN_ALLOCATIONS.referenceDocuments);
+      
+      // Fetch file attachments for reference documents
+      const fileContents: string[] = [];
+      for (const doc of referenceDocuments) {
+        const attachments = await storage.getReferenceDocumentAttachments(doc.id);
+        for (const attachment of attachments) {
+          try {
+            const parsed = await parseFileFromStorage(
+              attachment.objectPath, 
+              attachment.mimeType, 
+              attachment.originalName
+            );
+            if (parsed.text) {
+              fileContents.push(`### Attached File: ${attachment.originalName} (from "${doc.title}")\n${parsed.text}`);
+              console.log(`[PromptAssembler] Parsed file ${attachment.originalName}: ${parsed.text.length} chars`);
+            }
+          } catch (error) {
+            console.error(`[PromptAssembler] Error parsing attachment ${attachment.originalName}:`, error);
+            fileContents.push(`### Attached File: ${attachment.originalName} (from "${doc.title}")\n[File could not be read]`);
+          }
+        }
+      }
+      
+      if (fileContents.length > 0) {
+        const allFileContent = fileContents.join("\n\n");
+        fileAttachmentSection = truncateToTokenLimit(allFileContent, TOKEN_ALLOCATIONS.fileAttachments);
+      }
     }
 
     const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
@@ -107,6 +137,10 @@ export class PromptAssembler {
     }
 
     if (referenceSection) {
+      let referenceContent = referenceSection;
+      if (fileAttachmentSection) {
+        referenceContent += `\n\n## Additional Materials\n${fileAttachmentSection}`;
+      }
       systemPromptParts.push(`# Gena's Worldview & Philosophy
 The following writings by coach Gena Gorlin define your core perspective and way of thinking. These are not just references to cite—they are the foundation of how you understand and approach coaching conversations.
 
@@ -117,7 +151,7 @@ The following writings by coach Gena Gorlin define your core perspective and way
 - When ideas from these writings are directly relevant, you may attribute them: "As Gena discusses..." or "This connects to what Gena calls..."
 - But more importantly, let this perspective infuse ALL your responses, even when not explicitly citing
 
-${referenceSection}`);
+${referenceContent}`);
     }
 
     if (memorySection) {
@@ -131,6 +165,37 @@ ${referenceSection}`);
     // Add exercise context if there's an active exercise session
     if (context.exerciseContext) {
       const ex = context.exerciseContext;
+      
+      // Fetch file attachments for the active exercise
+      let exerciseAttachmentContent = "";
+      try {
+        const exerciseAttachments = await storage.getExerciseAttachments(ex.exerciseId);
+        if (exerciseAttachments.length > 0) {
+          const attachmentTexts: string[] = [];
+          for (const attachment of exerciseAttachments) {
+            try {
+              const parsed = await parseFileFromStorage(
+                attachment.objectPath,
+                attachment.mimeType,
+                attachment.originalName
+              );
+              if (parsed.text) {
+                attachmentTexts.push(`### ${attachment.originalName}\n${parsed.text}`);
+                console.log(`[PromptAssembler] Parsed exercise attachment ${attachment.originalName}: ${parsed.text.length} chars`);
+              }
+            } catch (error) {
+              console.error(`[PromptAssembler] Error parsing exercise attachment ${attachment.originalName}:`, error);
+              attachmentTexts.push(`### ${attachment.originalName}\n[File could not be read]`);
+            }
+          }
+          if (attachmentTexts.length > 0) {
+            exerciseAttachmentContent = `\n\n## Exercise Reference Materials\n${truncateToTokenLimit(attachmentTexts.join("\n\n"), 2000)}`;
+          }
+        }
+      } catch (error) {
+        console.error(`[PromptAssembler] Error fetching exercise attachments:`, error);
+      }
+      
       systemPromptParts.push(`# ACTIVE GUIDED EXERCISE
 **IMPORTANT**: The client is currently working through a structured coaching exercise. Your primary role is to guide them through this exercise.
 
@@ -141,7 +206,7 @@ ${referenceSection}`);
 ## Step Instructions for You
 ${ex.currentStepPrompt}
 
-${ex.currentStepGuidance ? `## Coach Guidance for This Step\n${ex.currentStepGuidance}` : ''}
+${ex.currentStepGuidance ? `## Coach Guidance for This Step\n${ex.currentStepGuidance}` : ''}${exerciseAttachmentContent}
 
 ## How to Guide the Client
 1. **Focus on this step**: Help the client complete the current step before moving on
