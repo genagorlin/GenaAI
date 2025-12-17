@@ -922,6 +922,203 @@ export async function registerRoutes(
     }
   });
 
+  // Guided Exercises Routes - Public endpoints for clients
+  app.get("/api/exercises", async (_req, res) => {
+    try {
+      const exercises = await storage.getPublishedExercises();
+      res.json(exercises);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercises" });
+    }
+  });
+
+  app.get("/api/exercises/:id", async (req, res) => {
+    try {
+      const exercise = await storage.getGuidedExercise(req.params.id);
+      if (!exercise) {
+        return res.status(404).json({ error: "Exercise not found" });
+      }
+      res.json(exercise);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercise" });
+    }
+  });
+
+  app.get("/api/exercises/:id/steps", async (req, res) => {
+    try {
+      const steps = await storage.getExerciseSteps(req.params.id);
+      res.json(steps);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercise steps" });
+    }
+  });
+
+  // Client Exercise Sessions
+  app.get("/api/clients/:clientId/exercise-sessions", async (req, res) => {
+    try {
+      const sessions = await storage.getClientExerciseSessions(req.params.clientId);
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercise sessions" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/threads/:threadId/exercise-session", async (req, res) => {
+    try {
+      const session = await storage.getActiveExerciseSession(
+        req.params.clientId,
+        req.params.threadId
+      );
+      if (!session) {
+        return res.json(null);
+      }
+      const exercise = await storage.getGuidedExercise(session.exerciseId);
+      const currentStep = session.currentStepId 
+        ? await storage.getExerciseStep(session.currentStepId) 
+        : null;
+      const steps = await storage.getExerciseSteps(session.exerciseId);
+      res.json({ session, exercise, currentStep, steps });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active exercise session" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/exercise-sessions", async (req, res) => {
+    try {
+      const { insertClientExerciseSessionSchema } = await import("@shared/schema");
+      const validated = insertClientExerciseSessionSchema.parse({
+        ...req.body,
+        clientId: req.params.clientId,
+      });
+      const session = await storage.createExerciseSession(validated);
+      console.log(`[Exercise] Client ${req.params.clientId} started exercise session: ${session.id}`);
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Create exercise session error:", error);
+      res.status(400).json({ error: "Failed to start exercise session" });
+    }
+  });
+
+  app.patch("/api/exercise-sessions/:id", async (req, res) => {
+    try {
+      const session = await storage.updateExerciseSession(req.params.id, req.body);
+      console.log(`[Exercise] Updated session ${req.params.id}: ${JSON.stringify(req.body)}`);
+      res.json(session);
+    } catch (error) {
+      console.error("Update exercise session error:", error);
+      res.status(400).json({ error: "Failed to update exercise session" });
+    }
+  });
+
+  // Guided Exercises Routes - Coach management (protected)
+  app.get("/api/coach/exercises", isAuthenticated, async (_req, res) => {
+    try {
+      const exercises = await storage.getAllGuidedExercises();
+      res.json(exercises);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercises" });
+    }
+  });
+
+  app.get("/api/coach/exercises/:id", isAuthenticated, async (req, res) => {
+    try {
+      const exercise = await storage.getGuidedExercise(req.params.id);
+      if (!exercise) {
+        return res.status(404).json({ error: "Exercise not found" });
+      }
+      const steps = await storage.getExerciseSteps(req.params.id);
+      res.json({ ...exercise, steps });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercise" });
+    }
+  });
+
+  app.post("/api/coach/exercises", isAuthenticated, async (req, res) => {
+    try {
+      const { insertGuidedExerciseSchema } = await import("@shared/schema");
+      const validated = insertGuidedExerciseSchema.parse(req.body);
+      const exercise = await storage.createGuidedExercise(validated);
+      console.log(`[Exercise] Coach created exercise: ${exercise.title}`);
+      res.status(201).json(exercise);
+    } catch (error) {
+      console.error("Create exercise error:", error);
+      res.status(400).json({ error: "Failed to create exercise" });
+    }
+  });
+
+  app.patch("/api/coach/exercises/:id", isAuthenticated, async (req, res) => {
+    try {
+      const exercise = await storage.updateGuidedExercise(req.params.id, req.body);
+      console.log(`[Exercise] Coach updated exercise: ${exercise.title}`);
+      res.json(exercise);
+    } catch (error) {
+      console.error("Update exercise error:", error);
+      res.status(400).json({ error: "Failed to update exercise" });
+    }
+  });
+
+  app.delete("/api/coach/exercises/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteGuidedExercise(req.params.id);
+      console.log(`[Exercise] Coach deleted exercise: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete exercise" });
+    }
+  });
+
+  // Exercise Steps Routes (coach)
+  app.post("/api/coach/exercises/:exerciseId/steps", isAuthenticated, async (req, res) => {
+    try {
+      const { insertExerciseStepSchema } = await import("@shared/schema");
+      const validated = insertExerciseStepSchema.parse({
+        ...req.body,
+        exerciseId: req.params.exerciseId,
+      });
+      const step = await storage.createExerciseStep(validated);
+      console.log(`[Exercise] Coach added step to exercise ${req.params.exerciseId}: ${step.title}`);
+      res.status(201).json(step);
+    } catch (error) {
+      console.error("Create step error:", error);
+      res.status(400).json({ error: "Failed to create exercise step" });
+    }
+  });
+
+  app.patch("/api/coach/steps/:id", isAuthenticated, async (req, res) => {
+    try {
+      const step = await storage.updateExerciseStep(req.params.id, req.body);
+      console.log(`[Exercise] Coach updated step: ${step.title}`);
+      res.json(step);
+    } catch (error) {
+      console.error("Update step error:", error);
+      res.status(400).json({ error: "Failed to update exercise step" });
+    }
+  });
+
+  app.delete("/api/coach/steps/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteExerciseStep(req.params.id);
+      console.log(`[Exercise] Coach deleted step: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete exercise step" });
+    }
+  });
+
+  app.post("/api/coach/exercises/:exerciseId/reorder-steps", isAuthenticated, async (req, res) => {
+    try {
+      const { stepIds } = req.body;
+      if (!Array.isArray(stepIds)) {
+        return res.status(400).json({ error: "stepIds must be an array" });
+      }
+      await storage.reorderExerciseSteps(req.params.exerciseId, stepIds);
+      console.log(`[Exercise] Coach reordered steps for exercise ${req.params.exerciseId}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder exercise steps" });
+    }
+  });
+
   // Dynamic PWA manifest (customizes start_url based on query param)
   app.get("/api/manifest.json", (req, res) => {
     let startUrl = "/";
