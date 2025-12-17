@@ -38,6 +38,7 @@ import { InsightCard } from "@/components/dashboard/InsightCard";
 import { SentimentChart } from "@/components/dashboard/SentimentChart";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
+import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -567,6 +568,7 @@ function DesktopCoachView() {
                  </ScrollArea>
                </PopoverContent>
              </Popover>
+             <ReferenceLibrary />
              <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                Prepare Session <ArrowRight className="h-4 w-4" />
              </Button>
