@@ -363,27 +363,29 @@ export function ExerciseManager() {
                       onClick={() => toggleExpanded(exercise.id)}
                       data-testid={`exercise-row-${exercise.id}`}
                     >
-                      {expandedExercises.has(exercise.id) ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium truncate">{exercise.title}</span>
+                      <div className="flex-shrink-0">
+                        {expandedExercises.has(exercise.id) ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium truncate max-w-[200px]">{exercise.title}</span>
                           {exercise.category && (
-                            <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
+                            <Badge variant="secondary" className="text-xs flex-shrink-0">{exercise.category}</Badge>
                           )}
                           {exercise.estimatedMinutes && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
                               <Clock className="h-3 w-3" />
                               {exercise.estimatedMinutes}m
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">{exercise.description}</p>
+                        <p className="text-sm text-muted-foreground truncate max-w-full">{exercise.description}</p>
                       </div>
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -639,13 +641,17 @@ export function ExerciseManager() {
                     />
                   </div>
                 </div>
-                <Textarea
-                  value={editingExercise.systemPrompt}
-                  onChange={(e) => setEditingExercise({ ...editingExercise, systemPrompt: e.target.value })}
-                  placeholder="System prompt for AI"
-                  rows={4}
-                  data-testid="input-edit-exercise-prompt"
-                />
+                <div>
+                  <Label className="text-xs text-muted-foreground">System Prompt (AI Instructions)</Label>
+                  <Textarea
+                    value={editingExercise.systemPrompt}
+                    onChange={(e) => setEditingExercise({ ...editingExercise, systemPrompt: e.target.value })}
+                    placeholder="Overall instructions for how the AI should guide this exercise"
+                    rows={4}
+                    className="mt-1"
+                    data-testid="input-edit-exercise-prompt"
+                  />
+                </div>
                 
                 <FileAttachments exerciseId={editingExercise.id} />
                 
