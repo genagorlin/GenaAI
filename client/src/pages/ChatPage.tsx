@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Mic, BookOpen, Smile, Loader2, Square, ArrowLeft, ChevronRight, X } from "lucide-react";
+import { Send, Mic, BookOpen, Smile, Loader2, Square, ArrowLeft, ChevronRight, X, Dumbbell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { ExerciseMenu } from "@/components/ExerciseMenu";
+import { ExerciseProgress } from "@/components/ExerciseProgress";
 
 interface ReferenceDocument {
   id: number;
@@ -43,6 +45,36 @@ interface Client {
   email: string;
 }
 
+interface GuidedExercise {
+  id: string;
+  title: string;
+  description: string;
+  category?: string;
+  estimatedMinutes?: number;
+}
+
+interface ExerciseStep {
+  id: string;
+  title: string;
+  stepOrder: number;
+}
+
+interface ExerciseSession {
+  id: string;
+  clientId: string;
+  exerciseId: string;
+  threadId: string | null;
+  currentStepId: string | null;
+  status: string;
+}
+
+interface ExerciseSessionData {
+  session: ExerciseSession;
+  exercise: GuidedExercise;
+  currentStep: ExerciseStep | null;
+  steps: ExerciseStep[];
+}
+
 export default function ChatPage() {
   const { clientId, threadId } = useParams<{ clientId: string; threadId: string }>();
   const [, setLocation] = useLocation();
@@ -51,6 +83,7 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showExercises, setShowExercises] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<ReferenceDocument | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +142,78 @@ export default function ChatPage() {
     enabled: showLibrary,
     staleTime: 5 * 60 * 1000
   });
+
+  const { data: exerciseSessionData, refetch: refetchExerciseSession } = useQuery<ExerciseSessionData | null>({
+    queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/threads/${threadId}/exercise-session`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!clientId && !!threadId,
+    staleTime: 30 * 1000,
+  });
+
+  const startExerciseMutation = useMutation({
+    mutationFn: async (exercise: GuidedExercise) => {
+      const stepsRes = await fetch(`/api/exercises/${exercise.id}/steps`);
+      const steps = await stepsRes.json();
+      const firstStep = steps.length > 0 ? steps[0] : null;
+      
+      const res = await fetch(`/api/clients/${clientId}/exercise-sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exerciseId: exercise.id,
+          threadId,
+          currentStepId: firstStep?.id || null,
+          status: "in_progress",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to start exercise");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchExerciseSession();
+    },
+  });
+
+  const updateExerciseSessionMutation = useMutation({
+    mutationFn: async (updates: { currentStepId?: string; status?: string; summary?: string }) => {
+      if (!exerciseSessionData?.session.id) return;
+      const res = await fetch(`/api/exercise-sessions/${exerciseSessionData.session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Failed to update exercise session");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchExerciseSession();
+    },
+  });
+
+  const handleAdvanceStep = () => {
+    if (!exerciseSessionData) return;
+    const { currentStep, steps } = exerciseSessionData;
+    const currentIndex = currentStep ? steps.findIndex(s => s.id === currentStep.id) : -1;
+    
+    if (currentIndex < steps.length - 1) {
+      const nextStep = steps[currentIndex + 1];
+      updateExerciseSessionMutation.mutate({ currentStepId: nextStep.id });
+    } else {
+      updateExerciseSessionMutation.mutate({ 
+        status: "completed",
+        currentStepId: undefined,
+      });
+    }
+  };
+
+  const handleExitExercise = () => {
+    if (!exerciseSessionData) return;
+    updateExerciseSessionMutation.mutate({ status: "abandoned" });
+  };
 
   const handleBackToInbox = () => {
     setLocation(`/chat/${clientId}`);
@@ -413,6 +518,15 @@ export default function ChatPage() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => setShowExercises(true)}
+            className="h-8 w-8 text-white hover:bg-white/10"
+            data-testid="button-exercises"
+          >
+            <Dumbbell className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setShowLibrary(true)}
             className="h-8 w-8 text-white hover:bg-white/10"
             data-testid="button-library"
@@ -420,6 +534,18 @@ export default function ChatPage() {
             <BookOpen className="h-5 w-5" />
           </Button>
         </div>
+
+        {exerciseSessionData && exerciseSessionData.session.status === "in_progress" && (
+          <ExerciseProgress
+            exercise={exerciseSessionData.exercise}
+            session={exerciseSessionData.session}
+            currentStep={exerciseSessionData.currentStep}
+            steps={exerciseSessionData.steps}
+            onAdvanceStep={handleAdvanceStep}
+            onExitExercise={handleExitExercise}
+            isAdvancing={updateExerciseSessionMutation.isPending}
+          />
+        )}
 
         <div className="z-10 flex-1 overflow-y-auto p-2 sm:p-4 bg-[#efe7dd]" ref={scrollRef}>
           <div className="flex flex-col gap-2 pb-2">
@@ -637,6 +763,14 @@ export default function ChatPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <ExerciseMenu
+        clientId={clientId || ""}
+        threadId={threadId}
+        onSelectExercise={(exercise) => startExerciseMutation.mutate(exercise)}
+        isOpen={showExercises}
+        onOpenChange={setShowExercises}
+      />
     </div>
   );
 }
