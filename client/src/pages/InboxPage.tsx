@@ -117,10 +117,11 @@ export default function InboxPage() {
 
   const startExerciseMutation = useMutation({
     mutationFn: async (exercise: GuidedExercise) => {
+      // Pass exerciseId when creating thread so the opening message is exercise-specific
       const threadRes = await fetch(`/api/clients/${clientId}/threads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: exercise.title }),
+        body: JSON.stringify({ title: exercise.title, exerciseId: exercise.id }),
       });
       if (!threadRes.ok) throw new Error("Failed to create thread");
       const thread = await threadRes.json();

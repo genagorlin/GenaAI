@@ -175,11 +175,14 @@ export async function registerRoutes(
       const thread = await storage.createThread(validated);
       
       // Generate AI opening message for the new thread
+      // If exerciseId is provided, generate an exercise-specific opening
+      const exerciseId = req.body.exerciseId as string | undefined;
+      
       try {
         const { promptAssembler } = await import("./promptAssembler");
         const { generateAIResponse } = await import("./modelRouter");
         
-        const { systemPrompt } = await promptAssembler.assembleOpeningPrompt(req.params.clientId);
+        const { systemPrompt } = await promptAssembler.assembleOpeningPrompt(req.params.clientId, exerciseId);
         
         const aiResponseContent = await generateAIResponse({
           systemPrompt,
@@ -196,7 +199,7 @@ export async function registerRoutes(
           type: "text",
         });
         
-        console.log(`[Thread] Created opening message for thread ${thread.id}`);
+        console.log(`[Thread] Created opening message for thread ${thread.id}${exerciseId ? ` (exercise: ${exerciseId})` : ''}`);
       } catch (aiError) {
         console.error("[Thread] Failed to generate opening message:", aiError);
         // Thread is still created, just without opening message

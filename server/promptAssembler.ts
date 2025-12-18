@@ -401,7 +401,7 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
     return systemPromptParts.join("\n\n---\n\n");
   }
 
-  async assembleOpeningPrompt(clientId: string): Promise<{ systemPrompt: string }> {
+  async assembleOpeningPrompt(clientId: string, exerciseId?: string): Promise<{ systemPrompt: string }> {
     const rolePrompt = await storage.getOrCreateRolePrompt(clientId);
     const taskPrompt = await storage.getOrCreateTaskPrompt(clientId);
     const client = await storage.getClient(clientId);
@@ -428,7 +428,16 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
       memorySection = truncateToTokenLimit(goalsContent, TOKEN_ALLOCATIONS.memoryContext);
     }
 
-    const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
+    // Check if this is an exercise opening
+    let exercise = null;
+    let firstStep = null;
+    if (exerciseId) {
+      exercise = await storage.getGuidedExercise(exerciseId);
+      if (exercise) {
+        const steps = await storage.getExerciseSteps(exerciseId);
+        firstStep = steps.length > 0 ? steps.sort((a, b) => a.stepOrder - b.stepOrder)[0] : null;
+      }
+    }
 
     const systemPromptParts: string[] = [];
 
@@ -444,12 +453,38 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
       systemPromptParts.push(`# Client Context\n${memorySection}`);
     }
 
-    if (taskSection) {
-      systemPromptParts.push(`# Response Instructions\n${taskSection}`);
+    // For exercises, use the exercise's system prompt; otherwise use default task prompt
+    if (exercise) {
+      if (exercise.systemPrompt && exercise.systemPrompt.trim()) {
+        systemPromptParts.push(`# Response Instructions\n${truncateToTokenLimit(exercise.systemPrompt, TOKEN_ALLOCATIONS.taskPrompt)}`);
+      }
+      
+      // Add exercise context for the opening
+      systemPromptParts.push(`# EXERCISE OPENING
+You are beginning a structured coaching exercise with the client.
+
+**Exercise**: ${exercise.title}
+**Description**: ${exercise.description}
+${firstStep ? `\n**First Step**: "${firstStep.title}"\n${firstStep.instructions}` : ''}
+
+Your opening message should:
+1. Warmly welcome the client to this exercise
+2. Briefly explain what they'll be exploring together
+3. If there's a first step, introduce it and invite them to engage with it
+4. Be encouraging and set a supportive tone for the exercise`);
+    } else {
+      const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
+      if (taskSection) {
+        systemPromptParts.push(`# Response Instructions\n${taskSection}`);
+      }
     }
 
     const clientName = client?.name?.split(' ')[0] || 'there';
-    systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above exactly for how to greet them. This is the very start of a new conversation thread - there is no prior context from the user yet. Ignore any placeholder input and simply deliver your opening greeting as instructed.`);
+    if (exercise) {
+      systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for ${clientName} to begin the "${exercise.title}" exercise. This is the start of a guided exercise - make them feel welcomed and ready to engage with the first step.`);
+    } else {
+      systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above exactly for how to greet them. This is the very start of a new conversation thread - there is no prior context from the user yet. Ignore any placeholder input and simply deliver your opening greeting as instructed.`);
+    }
 
     const systemPrompt = systemPromptParts.join("\n\n---\n\n");
 
