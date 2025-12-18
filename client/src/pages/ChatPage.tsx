@@ -490,7 +490,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
-      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden relative flex flex-col">
+      <div className="w-full h-full sm:max-w-[450px] lg:max-w-[700px] xl:max-w-[900px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden relative flex flex-col">
         <div className="absolute inset-0 z-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat"></div>
 
         <div className="z-10 flex items-center gap-3 bg-[hsl(var(--wa-header))] p-3 text-white shadow-md">
@@ -693,7 +693,7 @@ export default function ChatPage() {
       </div>
 
       <Sheet open={showLibrary} onOpenChange={setShowLibrary}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetContent side="right" className="w-full sm:max-w-md lg:max-w-lg xl:max-w-xl p-0 flex flex-col">
           {selectedDocument ? (
             <>
               <div className="flex items-center gap-3 p-4 border-b bg-slate-50">

@@ -440,7 +440,7 @@ export function ExerciseManager() {
           <span className="hidden sm:inline">Exercises</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[85vh] sm:max-h-[85vh] h-[100dvh] sm:h-auto w-full sm:w-auto">
+      <DialogContent className="max-w-4xl xl:max-w-6xl max-h-[85vh] sm:max-h-[85vh] h-[100dvh] sm:h-auto w-full sm:w-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {viewMode === "edit" && (

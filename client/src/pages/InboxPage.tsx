@@ -201,7 +201,7 @@ export default function InboxPage() {
 
   return (
     <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
-      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col relative">
+      <div className="w-full h-full sm:max-w-[450px] lg:max-w-[700px] xl:max-w-[900px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col relative">
         <div className="bg-[hsl(var(--wa-header))] text-white shadow-md">
           <div className="flex items-center gap-3 p-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
