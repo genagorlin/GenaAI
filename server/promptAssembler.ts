@@ -160,9 +160,15 @@ ${referenceContent}`);
     }
 
     // Use exercise's system prompt instead of default task prompt when in an exercise
-    if (context.exerciseContext && context.exerciseContext.exerciseSystemPrompt) {
-      systemPromptParts.push(`# Response Instructions\n${truncateToTokenLimit(context.exerciseContext.exerciseSystemPrompt, TOKEN_ALLOCATIONS.taskPrompt)}`);
+    // During an exercise, NEVER use the default task prompt - the exercise context provides all needed guidance
+    if (context.exerciseContext) {
+      // Only add response instructions if the exercise has a custom system prompt
+      if (context.exerciseContext.exerciseSystemPrompt && context.exerciseContext.exerciseSystemPrompt.trim()) {
+        systemPromptParts.push(`# Response Instructions\n${truncateToTokenLimit(context.exerciseContext.exerciseSystemPrompt, TOKEN_ALLOCATIONS.taskPrompt)}`);
+      }
+      // If no custom system prompt, the exercise guidance below will be sufficient
     } else if (taskSection) {
+      // Only use default task prompt when NOT in an exercise
       systemPromptParts.push(`# Response Instructions\n${taskSection}`);
     }
 
