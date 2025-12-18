@@ -166,6 +166,20 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/threads/:id", async (req, res) => {
+    try {
+      const thread = await storage.getThread(req.params.id);
+      if (!thread) {
+        return res.status(404).json({ error: "Thread not found" });
+      }
+      await storage.deleteThread(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete thread error:", error);
+      res.status(500).json({ error: "Failed to delete thread" });
+    }
+  });
+
   app.post("/api/clients/:clientId/threads", async (req, res) => {
     try {
       const validated = insertThreadSchema.parse({

@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ExerciseMenu } from "@/components/ExerciseMenu";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
+import ReactMarkdown from "react-markdown";
 
 interface ReferenceDocument {
   id: number;
@@ -599,8 +600,8 @@ export default function ChatPage() {
                       Coach Gena
                     </div>
                   )}
-                  <div className="text-[15px] leading-relaxed break-words whitespace-pre-wrap px-1">
-                    {message.content}
+                  <div className="text-[15px] leading-relaxed break-words px-1 prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
                   </div>
                   <div className="flex items-center justify-end gap-1 mt-0.5">
                     <span className={cn(

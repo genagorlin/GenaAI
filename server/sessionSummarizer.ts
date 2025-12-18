@@ -68,20 +68,27 @@ async function generateSectionUpdates(messages: Message[], sections: DocumentSec
   }));
 
   const systemPrompt = `You are an expert coaching assistant helping to maintain a client's living document. 
-Your task is to analyze a recent conversation and update relevant document sections with new insights.
+Your task is to analyze a recent conversation and ACCUMULATE new insights into the existing document sections.
 
-IMPORTANT: If a section is currently empty or has minimal content, you MUST populate it with relevant information from this conversation. Empty sections are a priority to fill.
+CRITICAL INSTRUCTION: This document should BUILD UP knowledge about the client over time across multiple conversations.
+- For sections that already have content: MERGE the new insights with existing content - do NOT replace it
+- For empty sections: Populate them with relevant information from this conversation
+- Information should ACCUMULATE so that insights from all conversations are preserved
+- Remove redundancy when merging, but keep all unique insights and details
 
-Guidelines:
-- PRIORITY: Fill empty sections first with any relevant information from the conversation
-- Preserve existing important content while integrating new insights
-- Write in clear, professional language appropriate for coaching notes
-- Focus on actionable insights, patterns, and client growth
-- Overview: Summarize who the client is and what they're working through
-- Key Highlights: Notable patterns, breakthroughs, concerns, or self-observations
-- Current Focus Areas: What the client is actively thinking about or working on
-- Background & Context: Life details, career, relationships, values mentioned
-- Open questions: Questions or issues that could be discussed with their coach
+Guidelines for each section:
+- Overview: Keep adding to the picture of who the client is. Synthesize across all sessions.
+- Key Highlights: Add new patterns, breakthroughs, or insights. Keep previous notable moments.
+- Current Focus Areas: Update what the client is actively working on (this can change but track evolution)
+- Background & Context: Continuously build up life details, career, relationships, values mentioned
+- Open questions: Track ongoing questions. Resolve ones that got answered, add new ones.
+
+MERGE STRATEGY:
+- When adding to existing content, read what's already there and integrate new information naturally
+- Avoid repetition - if something is already captured, don't duplicate it
+- Organize information thematically within each section
+- Use bullet points or paragraphs as appropriate for readability
+- Preserve specific quotes, examples, or moments that are meaningful
 
 Current document sections:
 ${sectionsInfo.map(s => `
@@ -93,7 +100,7 @@ ${s.currentContent}
 
 Respond with a JSON array of section updates. Each update should have:
 - sectionId: the ID of the section to update  
-- newContent: the updated content
+- newContent: the COMPLETE merged/accumulated content for that section (not just what's new)
 
 You MUST return updates for ALL empty sections if the conversation contains any relevant information for them.`;
 
@@ -224,13 +231,15 @@ Current: ${s.currentContent || "(empty)"}
 GUIDELINES:
 - Only update if this exchange reveals NEW meaningful information
 - For empty sections, add content if the exchange provides relevant info
-- Keep updates concise and additive (append, don't replace unless correcting)
+- CRITICAL: ACCUMULATE information - add to what exists, don't replace it
+- For sections with existing content, MERGE new information while preserving all prior insights
+- Keep updates concise but comprehensive
 - Overview: High-level summary of who the client is and their journey
 - Key Highlights: Notable patterns, breakthroughs, or important moments
 - Current Focus Areas: What the client is actively working on right now
 - Background & Context: Life history, relationships, career, values
 
-Return a JSON array: [{"sectionId": "...", "newContent": "..."}]
+Return a JSON array: [{"sectionId": "...", "newContent": "complete merged content including both old and new"}]
 Return [] if no updates needed.`;
 
     const response = await anthropic.messages.create({

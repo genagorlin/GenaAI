@@ -130,7 +130,7 @@ async function generateAnthropicResponse(params: Omit<GenerateResponseParams, "p
   
   const response = await anthropic.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: systemPrompt,
     messages: conversationHistory,
   });
@@ -161,7 +161,7 @@ async function generateOpenAIResponse(params: Omit<GenerateResponseParams, "prov
   
   const response = await openai.chat.completions.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 4096,
     messages,
   });
   

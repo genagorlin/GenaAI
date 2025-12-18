@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -201,8 +202,8 @@ export function JournalInterface() {
                     </div>
                  </div>
               ) : (
-                 <div className="text-[15px] leading-relaxed break-words whitespace-pre-wrap font-sans">
-                   {message.content}
+                 <div className="text-[15px] leading-relaxed break-words font-sans prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                   <ReactMarkdown>{message.content}</ReactMarkdown>
                  </div>
               )}
               

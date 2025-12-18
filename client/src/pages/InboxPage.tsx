@@ -1,9 +1,21 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface Thread {
   id: string;
@@ -154,6 +166,23 @@ export default function InboxPage() {
     },
   });
 
+  const deleteThreadMutation = useMutation({
+    mutationFn: async (threadId: string) => {
+      const res = await fetch(`/api/threads/${threadId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete conversation");
+      return threadId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
+      toast.success("Conversation deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete conversation");
+    },
+  });
+
   const handleNewThread = () => {
     createThreadMutation.mutate();
   };
@@ -274,30 +303,64 @@ export default function InboxPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {threads.map((thread) => (
-                    <button
+                    <div
                       key={thread.id}
-                      onClick={() => handleOpenThread(thread.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
                       data-testid={`thread-item-${thread.id}`}
                     >
-                      <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                        <MessageCircle className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="font-medium text-slate-900 truncate text-[15px]">
-                            {thread.title}
-                          </h3>
-                          <span className="text-xs text-slate-500 shrink-0">
-                            {formatWhatsAppTimestamp(thread.lastMessageAt)}
-                          </span>
+                      <button
+                        onClick={() => handleOpenThread(thread.id)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <MessageCircle className="h-5 w-5 text-emerald-600" />
                         </div>
-                        <p className="text-sm text-slate-500 truncate mt-0.5">
-                          Tap to continue...
-                        </p>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
-                    </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-medium text-slate-900 truncate text-[15px]">
+                              {thread.title}
+                            </h3>
+                            <span className="text-xs text-slate-500 shrink-0">
+                              {formatWhatsAppTimestamp(thread.lastMessageAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-500 truncate mt-0.5">
+                            Tap to continue...
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-400 hover:text-red-500 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`delete-thread-${thread.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{thread.title}"? This will permanently remove all messages in this conversation.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteThreadMutation.mutate(thread.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   ))}
                 </div>
               )}

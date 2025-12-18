@@ -26,6 +26,7 @@ import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog"
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 interface Client {
   id: string;
@@ -387,7 +388,9 @@ export function MobileCoachView() {
                         </Badge>
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <div className="text-sm prose prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
                     <div className={`text-[10px] mt-1 ${
                       isUser || isCoach ? 'text-white/70' : 'text-slate-400'
                     }`}>

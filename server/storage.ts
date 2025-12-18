@@ -78,6 +78,7 @@ export interface IStorage {
   updateThreadTitle(id: string, title: string): Promise<Thread>;
   updateThreadLastMessage(id: string): Promise<void>;
   getOrCreateDefaultThread(clientId: string): Promise<Thread>;
+  deleteThread(id: string): Promise<void>;
 
   // Messages
   getClientMessages(clientId: string): Promise<Message[]>;
@@ -291,6 +292,15 @@ export class DatabaseStorage implements IStorage {
       return existingThreads[0];
     }
     return await this.createThread({ clientId, title: "First conversation" });
+  }
+
+  async deleteThread(id: string): Promise<void> {
+    // Delete related messages first
+    await db.delete(messages).where(eq(messages.threadId, id));
+    // Delete any related exercise sessions
+    await db.delete(clientExerciseSessions).where(eq(clientExerciseSessions.threadId, id));
+    // Delete the thread
+    await db.delete(threads).where(eq(threads.id, id));
   }
 
   // Messages

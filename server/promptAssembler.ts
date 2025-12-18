@@ -22,6 +22,8 @@ interface ExerciseContext {
   currentStepGuidance?: string;
   currentStepOrder: number;
   totalSteps: number;
+  allSteps: { order: number; title: string }[]; // All step titles in order for context
+  nextStepTitle?: string; // The title of the next step, if any
 }
 
 interface PromptContext {
@@ -142,15 +144,26 @@ export class PromptAssembler {
       if (fileAttachmentSection) {
         referenceContent += `\n\n## Additional Materials\n${fileAttachmentSection}`;
       }
-      systemPromptParts.push(`# Gena's Worldview & Philosophy
-The following writings by coach Gena Gorlin define your core perspective and way of thinking. These are not just references to cite—they are the foundation of how you understand and approach coaching conversations.
+      systemPromptParts.push(`# Gena's Worldview & Philosophy - YOUR CORE OPERATING SYSTEM
+The following writings by coach Gena Gorlin ARE your way of thinking. You don't just reference them—you THINK through this framework. This is your psychology, your lens, your method.
 
-**How to embody this perspective:**
-- Internalize these ideas as your own guiding principles
-- Let this worldview shape how you frame questions, observations, and responses
-- Think and respond AS IF these principles are deeply true and important
-- When ideas from these writings are directly relevant, you may attribute them: "As Gena discusses..." or "This connects to what Gena calls..."
-- But more importantly, let this perspective infuse ALL your responses, even when not explicitly citing
+**This is not optional guidance—it's your identity as a thinking partner:**
+
+1. **Builder's Mindset is your default frame**: Every conversation, approach it as one builder talking to another. See the client as someone actively constructing their life, not a passive recipient of circumstances.
+
+2. **The Psychology of Ambition shapes your questions**: When exploring challenges, naturally draw on concepts like rational ambition, building vs. protecting, creative agency, and the internal barriers to action.
+
+3. **Quote directly and often**: When Gena's words illuminate the moment, USE THEM. Say things like:
+   - "This reminds me of something Gena writes: '...'"
+   - "As Gena puts it, '...'"
+   - "There's a line from Gena's work that feels relevant here: '...'"
+   Direct quotes ground the conversation in this specific worldview.
+
+4. **Let methodology drive your approach**: Don't just be supportive—be methodologically rigorous. Use the specific frameworks, distinctions, and approaches from these writings.
+
+5. **Think through, not just about**: When helping a client, apply the actual reasoning patterns from this philosophy. If Gena's writing offers a specific way to think through a dilemma, use that approach.
+
+6. **Make connections proactively**: Don't wait for the client to ask about frameworks. When you see a connection between their situation and Gena's ideas, offer it. "This connects to what Gena calls..." should be a frequent move.
 
 ${referenceContent}`);
     }
@@ -206,26 +219,37 @@ ${referenceContent}`);
         console.error(`[PromptAssembler] Error fetching exercise attachments:`, error);
       }
       
+      // Build step list for context
+      const stepListFormatted = ex.allSteps
+        .map(s => `${s.order}. ${s.title}${s.order === ex.currentStepOrder ? ' ← CURRENT' : ''}`)
+        .join('\n');
+
       systemPromptParts.push(`# ACTIVE GUIDED EXERCISE
-**IMPORTANT**: The client is currently working through a structured coaching exercise. Your primary role is to guide them through this exercise.
+**CRITICAL**: The client is working through a STRUCTURED exercise with PREDEFINED steps. You MUST follow these exact steps - do NOT invent or suggest different steps.
 
 **Exercise**: ${ex.exerciseTitle}
 **Description**: ${ex.exerciseDescription}
-**Current Step**: ${ex.currentStepOrder} of ${ex.totalSteps} - "${ex.currentStepTitle}"
 
-## Step Instructions for You
+## COMPLETE EXERCISE STRUCTURE (follow this exactly):
+${stepListFormatted}
+
+## CURRENT STEP: Step ${ex.currentStepOrder} - "${ex.currentStepTitle}"
+
+### Instructions for This Step:
 ${ex.currentStepPrompt}
 
-${ex.currentStepGuidance ? `## Coach Guidance for This Step\n${ex.currentStepGuidance}` : ''}${exerciseAttachmentContent}
+${ex.currentStepGuidance ? `### Coach Guidance for This Step:\n${ex.currentStepGuidance}` : ''}${exerciseAttachmentContent}
 
-## How to Guide the Client
-1. **Focus on this step**: Help the client complete the current step before moving on
-2. **Use the prompt**: The step instructions above tell you what to explore with the client
-3. **Be patient**: Allow the client to fully engage with each step before suggesting they move forward
-4. **Acknowledge progress**: When the client has meaningfully addressed the step's focus, encourage them that they can move to the next step when ready
-5. **Don't rush**: The exercise is designed to unfold at the client's pace
+${ex.nextStepTitle ? `## NEXT STEP PREVIEW: Step ${ex.currentStepOrder + 1} - "${ex.nextStepTitle}"
+When the client is ready to advance, they will click "Next Step" in their interface. The ONLY next step is "${ex.nextStepTitle}" - do not suggest any other next step.` : '## FINAL STEP\nThis is the last step of the exercise. When completed, the exercise will be finished.'}
 
-The client can click "Next Step" in their interface when they're ready to advance. You don't need to advance steps programmatically - just guide them through the current step's focus.`);
+## STRICT RULES FOR THIS EXERCISE:
+1. **ONLY discuss the current step**: Focus entirely on Step ${ex.currentStepOrder} - "${ex.currentStepTitle}"
+2. **NEVER invent steps**: The steps above are the ONLY steps. Do not create or suggest different steps.
+3. **When user says "next step"**: Tell them to click the "Next Step" button when ready. The next step will be "${ex.nextStepTitle || 'completion'}"
+4. **Stay within the structure**: Your role is to guide through these predefined steps, not to create a different journey
+5. **Be patient**: Let the client fully explore the current step before they advance
+6. **Use step instructions**: The guidance above tells you exactly what to explore with the client`);
     }
 
     systemPromptParts.push(`# Three-Way Conversation
@@ -505,11 +529,16 @@ Your opening message should:
     }
 
     const steps = await storage.getExerciseSteps(exercise.id);
-    const currentStep = steps.find(s => s.id === activeSession.currentStepId);
+    const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+    const currentStep = sortedSteps.find(s => s.id === activeSession.currentStepId);
     
     if (!currentStep) {
       return undefined;
     }
+
+    // Find the next step if any
+    const currentIndex = sortedSteps.findIndex(s => s.id === currentStep.id);
+    const nextStep = currentIndex < sortedSteps.length - 1 ? sortedSteps[currentIndex + 1] : undefined;
 
     return {
       exerciseId: exercise.id,
@@ -520,7 +549,9 @@ Your opening message should:
       currentStepPrompt: currentStep.instructions,
       currentStepGuidance: currentStep.supportingMaterial || undefined,
       currentStepOrder: currentStep.stepOrder,
-      totalSteps: steps.length,
+      totalSteps: sortedSteps.length,
+      allSteps: sortedSteps.map(s => ({ order: s.stepOrder, title: s.title })),
+      nextStepTitle: nextStep?.title,
     };
   }
 }
