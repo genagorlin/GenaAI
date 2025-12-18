@@ -285,7 +285,7 @@ export const clientExerciseSessions = pgTable("client_exercise_sessions", {
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   exerciseId: varchar("exercise_id").notNull().references(() => guidedExercises.id, { onDelete: "cascade" }),
   threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
-  currentStepId: varchar("current_step_id").references(() => exerciseSteps.id),
+  currentStepId: varchar("current_step_id").references(() => exerciseSteps.id, { onDelete: "set null" }),
   status: text("status").notNull().default("in_progress"), // "in_progress", "completed", "abandoned"
   startedAt: timestamp("started_at").defaultNow(),
   completedAt: timestamp("completed_at"),
