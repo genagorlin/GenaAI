@@ -9,7 +9,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ExerciseMenu } from "@/components/ExerciseMenu";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
-import { ClientAuthGuard } from "@/components/ClientAuthGuard";
 import ReactMarkdown from "react-markdown";
 
 interface ReferenceDocument {
@@ -92,6 +91,25 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
+
+  // Check if user is authenticated for client access
+  const { data: authStatus, isLoading: authLoading } = useQuery({
+    queryKey: ["/api/auth/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/status");
+      if (!res.ok) return { authenticated: false };
+      return res.json();
+    },
+    retry: false
+  });
+
+  // Redirect to client login if not authenticated
+  useEffect(() => {
+    if (!authLoading && authStatus && !authStatus.authenticated && clientId) {
+      const returnTo = encodeURIComponent(`/chat/${clientId}`);
+      window.location.href = `/api/client/login?returnTo=${returnTo}`;
+    }
+  }, [authLoading, authStatus, clientId]);
 
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
@@ -458,13 +476,24 @@ export default function ChatPage() {
     );
   }
 
-  return (
-    <ClientAuthGuard clientId={clientId}>
-      <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
-        <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden relative flex flex-col">
-          <div className="absolute inset-0 z-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat"></div>
+  // Show loading while checking auth
+  if (authLoading || (!authStatus?.authenticated)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-100">
+        <div className="text-center p-6">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
+          <p className="text-muted-foreground">Connecting...</p>
+        </div>
+      </div>
+    );
+  }
 
-          <div className="z-10 flex items-center gap-3 bg-[hsl(var(--wa-header))] p-3 text-white shadow-md">
+  return (
+    <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
+      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden relative flex flex-col">
+        <div className="absolute inset-0 z-0 opacity-[0.06] pointer-events-none bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat"></div>
+
+        <div className="z-10 flex items-center gap-3 bg-[hsl(var(--wa-header))] p-3 text-white shadow-md">
           <Button
             variant="ghost"
             size="icon"
@@ -736,14 +765,13 @@ export default function ChatPage() {
         </SheetContent>
       </Sheet>
 
-        <ExerciseMenu
-          clientId={clientId || ""}
-          threadId={threadId}
-          onSelectExercise={(exercise) => startExerciseMutation.mutate(exercise)}
-          isOpen={showExercises}
-          onOpenChange={setShowExercises}
-        />
-      </div>
-    </ClientAuthGuard>
+      <ExerciseMenu
+        clientId={clientId || ""}
+        threadId={threadId}
+        onSelectExercise={(exercise) => startExerciseMutation.mutate(exercise)}
+        isOpen={showExercises}
+        onOpenChange={setShowExercises}
+      />
+    </div>
   );
 }

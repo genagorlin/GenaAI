@@ -44,11 +44,9 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
     cookie: {
       httpOnly: true,
       secure: true,
-      sameSite: "none",
       maxAge: sessionTtl,
     },
   });
@@ -346,77 +344,3 @@ export const isAdmin: RequestHandler = async (req, res, next) => {
   
   return next();
 };
-
-// Client authentication with ownership verification
-// Verifies the authenticated user's email matches the client record
-export const requireClientAuth = (getClientId: (req: any) => string | Promise<string>): RequestHandler => {
-  return async (req: any, res, next) => {
-    const user = req.user as any;
-
-    // First check if authenticated
-    if (!req.isAuthenticated() || !user?.expires_at) {
-      return res.status(401).json({ message: "Unauthorized", requiresAuth: true });
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    
-    // Handle token refresh if expired
-    if (now > user.expires_at) {
-      const refreshToken = user.refresh_token;
-      if (!refreshToken) {
-        return res.status(401).json({ message: "Session expired", requiresAuth: true });
-      }
-      try {
-        const config = await getOidcConfig();
-        const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-        updateUserSession(user, tokenResponse);
-      } catch (error) {
-        return res.status(401).json({ message: "Session expired", requiresAuth: true });
-      }
-    }
-
-    // Get client ID from route
-    let clientId: string;
-    try {
-      clientId = await getClientId(req);
-    } catch (err) {
-      return res.status(400).json({ message: "Invalid request" });
-    }
-
-    // Verify email ownership
-    const sessionEmail = user.claims?.email?.toLowerCase();
-    if (!sessionEmail) {
-      return res.status(401).json({ message: "No email in session" });
-    }
-
-    const clientRecord = await storage.getClient(clientId);
-    if (!clientRecord) {
-      return res.status(404).json({ message: "Client not found" });
-    }
-
-    // Check if client email matches session email
-    if (!clientRecord.email) {
-      // Client record exists but no email - this is a legacy record
-      // Allow access but encourage linking (the callback will update on next login)
-      console.log(`[Auth] Client ${clientId} has no email, allowing session with ${sessionEmail}`);
-      req.clientRecord = clientRecord;
-      return next();
-    }
-
-    if (clientRecord.email.toLowerCase() !== sessionEmail) {
-      console.log(`[Auth] Email mismatch: session=${sessionEmail}, client=${clientRecord.email}`);
-      return res.status(403).json({ message: "Access denied - email mismatch" });
-    }
-
-    // Attach client record to request for use in handlers
-    req.clientRecord = clientRecord;
-    return next();
-  };
-};
-
-// Helper to get clientId from thread lookup
-export async function getClientIdFromThread(threadId: string): Promise<string> {
-  const thread = await storage.getThread(threadId);
-  if (!thread) throw new Error("Thread not found");
-  return thread.clientId;
-}

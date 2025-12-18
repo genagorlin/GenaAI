@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
-import { ClientAuthGuard } from "@/components/ClientAuthGuard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -201,10 +200,9 @@ export default function InboxPage() {
   }
 
   return (
-    <ClientAuthGuard clientId={clientId}>
-      <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
-        <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col relative">
-          <div className="bg-[hsl(var(--wa-header))] text-white shadow-md">
+    <div className="h-screen w-full bg-background flex justify-center bg-zinc-100">
+      <div className="w-full h-full sm:max-w-[450px] bg-white shadow-2xl sm:border-x sm:border-zinc-200 overflow-hidden flex flex-col relative">
+        <div className="bg-[hsl(var(--wa-header))] text-white shadow-md">
           <div className="flex items-center gap-3 p-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
               <div className="flex h-full w-full items-center justify-center bg-emerald-100 text-emerald-800 font-bold text-lg">
@@ -531,8 +529,7 @@ export default function InboxPage() {
             )}
           </div>
         )}
-        </div>
       </div>
-    </ClientAuthGuard>
+    </div>
   );
 }

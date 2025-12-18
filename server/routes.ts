@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
-import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, requireClientAuth, getClientIdFromThread } from "./replitAuth";
+import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin } from "./replitAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
@@ -69,33 +69,6 @@ export async function registerRoutes(
     res.json({ 
       authenticated: !!isAuth,
       email: isAuth ? req.user.claims.email : null
-    });
-  });
-
-  // Client auth status - checks if client is authenticated and owns the clientId
-  app.get('/api/auth/client-status/:clientId', async (req: any, res) => {
-    const clientId = req.params.clientId;
-    const isAuth = req.isAuthenticated?.() && req.user?.claims;
-    
-    if (!isAuth) {
-      return res.json({ authenticated: false, authorized: false });
-    }
-    
-    const sessionEmail = req.user.claims.email?.toLowerCase();
-    const client = await storage.getClient(clientId);
-    
-    if (!client) {
-      return res.json({ authenticated: true, authorized: false, reason: "client_not_found" });
-    }
-    
-    // Check email ownership - if no email on record, allow (will be linked on login)
-    const authorized = !client.email || client.email.toLowerCase() === sessionEmail;
-    
-    res.json({ 
-      authenticated: true, 
-      authorized,
-      email: sessionEmail,
-      clientName: authorized ? client.name : null
     });
   });
 
@@ -171,8 +144,8 @@ export async function registerRoutes(
     }
   });
 
-  // Thread Routes (protected - require client authentication)
-  app.get("/api/clients/:clientId/threads", requireClientAuth((req) => req.params.clientId), async (req, res) => {
+  // Thread Routes (public for client chat interface)
+  app.get("/api/clients/:clientId/threads", async (req, res) => {
     try {
       const threads = await storage.getClientThreads(req.params.clientId);
       res.json(threads);
@@ -181,7 +154,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/threads/:id", requireClientAuth(async (req) => getClientIdFromThread(req.params.id)), async (req, res) => {
+  app.get("/api/threads/:id", async (req, res) => {
     try {
       const thread = await storage.getThread(req.params.id);
       if (!thread) {
@@ -193,7 +166,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/threads/:id", requireClientAuth(async (req) => getClientIdFromThread(req.params.id)), async (req, res) => {
+  app.delete("/api/threads/:id", async (req, res) => {
     try {
       const thread = await storage.getThread(req.params.id);
       if (!thread) {
@@ -207,7 +180,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/threads", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  app.post("/api/clients/:clientId/threads", async (req, res) => {
     try {
       const validated = insertThreadSchema.parse({
         ...req.body,
@@ -252,7 +225,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/threads/:id/title", requireClientAuth(async (req) => getClientIdFromThread(req.params.id)), async (req, res) => {
+  app.patch("/api/threads/:id/title", async (req, res) => {
     try {
       const { title } = z.object({ title: z.string() }).parse(req.body);
       const thread = await storage.updateThreadTitle(req.params.id, title);
@@ -262,7 +235,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/threads/:threadId/messages", requireClientAuth(async (req) => getClientIdFromThread(req.params.threadId)), async (req, res) => {
+  app.get("/api/threads/:threadId/messages", async (req, res) => {
     try {
       const messages = await storage.getThreadMessages(req.params.threadId);
       res.json(messages);
@@ -271,8 +244,8 @@ export async function registerRoutes(
     }
   });
 
-  // Message Routes (protected - require client authentication)
-  app.get("/api/clients/:clientId/messages", requireClientAuth((req) => req.params.clientId), async (req, res) => {
+  // Message Routes (public for client chat interface)
+  app.get("/api/clients/:clientId/messages", async (req, res) => {
     try {
       const messages = await storage.getClientMessages(req.params.clientId);
       res.json(messages);
@@ -281,7 +254,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/messages", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  app.post("/api/clients/:clientId/messages", async (req, res) => {
     try {
       const validated = insertMessageSchema.parse({
         ...req.body,
@@ -442,10 +415,15 @@ export async function registerRoutes(
     }
   });
 
-  // Client document access (protected - require client authentication)
+  // Client document access (no authentication required - security via unique link)
   // Note: Role prompts and task prompts are stored separately and not included in document sections
-  app.get("/api/chat/:clientId/document", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  app.get("/api/chat/:clientId/document", async (req: any, res) => {
     try {
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
       const document = await storage.getOrCreateClientDocument(req.params.clientId);
       const sections = await storage.getDocumentSections(document.id);
       // Remove coach notes from sections for client view
@@ -456,9 +434,14 @@ export async function registerRoutes(
     }
   });
 
-  // Client section update (protected - require client authentication)
-  app.patch("/api/chat/:clientId/sections/:sectionId", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  // Client section update (no authentication required - security via unique link)
+  app.patch("/api/chat/:clientId/sections/:sectionId", async (req: any, res) => {
     try {
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
       // Verify the section belongs to this client's document
       const document = await storage.getClientDocument(req.params.clientId);
       if (!document) {
@@ -644,8 +627,8 @@ export async function registerRoutes(
     }
   });
 
-  // Session End Route (protected - called when client session ends)
-  app.post("/api/clients/:clientId/session-end", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  // Session End Route (public - called when client session ends)
+  app.post("/api/clients/:clientId/session-end", async (req, res) => {
     try {
       const { summarizeSession, generateConversationTitle } = await import("./sessionSummarizer");
       const result = await summarizeSession(req.params.clientId);
@@ -997,8 +980,8 @@ export async function registerRoutes(
     }
   });
 
-  // Client Exercise Sessions (protected - require client authentication)
-  app.get("/api/clients/:clientId/exercise-sessions", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  // Client Exercise Sessions
+  app.get("/api/clients/:clientId/exercise-sessions", async (req, res) => {
     try {
       const sessions = await storage.getClientExerciseSessions(req.params.clientId);
       res.json(sessions);
@@ -1007,7 +990,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clients/:clientId/threads/:threadId/exercise-session", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  app.get("/api/clients/:clientId/threads/:threadId/exercise-session", async (req, res) => {
     try {
       const session = await storage.getActiveExerciseSession(
         req.params.clientId,
@@ -1027,7 +1010,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/exercise-sessions", requireClientAuth((req) => req.params.clientId), async (req: any, res) => {
+  app.post("/api/clients/:clientId/exercise-sessions", async (req, res) => {
     try {
       const { insertClientExerciseSessionSchema } = await import("@shared/schema");
       const validated = insertClientExerciseSessionSchema.parse({
@@ -1043,12 +1026,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/exercise-sessions/:id", requireClientAuth(async (req) => {
-    // Get clientId from the exercise session
-    const session = await storage.getExerciseSession(req.params.id);
-    if (!session) throw new Error("Session not found");
-    return session.clientId;
-  }), async (req: any, res) => {
+  app.patch("/api/exercise-sessions/:id", async (req, res) => {
     try {
       const session = await storage.updateExerciseSession(req.params.id, req.body);
       console.log(`[Exercise] Updated session ${req.params.id}: ${JSON.stringify(req.body)}`);
