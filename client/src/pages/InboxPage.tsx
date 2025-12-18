@@ -99,6 +99,20 @@ export default function InboxPage() {
     return acc;
   }, {} as Record<string, GuidedExercise[]>);
 
+  // Define the order categories should appear in
+  const categoryOrder = ["Values", "Emotion", "Beliefs"];
+  const sortedCategories = Object.keys(groupedExercises).sort((a, b) => {
+    const aIndex = categoryOrder.indexOf(a);
+    const bIndex = categoryOrder.indexOf(b);
+    // If both are in the order list, sort by that order
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    // If only one is in the list, it comes first
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    // Otherwise sort alphabetically
+    return a.localeCompare(b);
+  });
+
   const createThreadMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/clients/${clientId}/threads`, {
@@ -334,12 +348,12 @@ export default function InboxPage() {
                     Structured activities to deepen your reflection
                   </p>
                 </div>
-                {Object.entries(groupedExercises).map(([category, categoryExercises]) => (
+                {sortedCategories.map((category) => (
                   <div key={category}>
                     <div className="px-4 py-2 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
                       {category}
                     </div>
-                    {categoryExercises.map((exercise) => (
+                    {groupedExercises[category].map((exercise) => (
                       <button
                         key={exercise.id}
                         onClick={() => startExerciseMutation.mutate(exercise)}
