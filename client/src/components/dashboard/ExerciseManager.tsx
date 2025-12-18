@@ -183,6 +183,42 @@ export function ExerciseManager() {
     },
   });
 
+  const reorderExerciseMutation = useMutation({
+    mutationFn: async ({ id, newSortOrder }: { id: string; newSortOrder: number }) => {
+      const res = await fetch(`/api/coach/exercises/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sortOrder: newSortOrder }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder exercise");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
+    },
+    onError: () => {
+      toast.error("Failed to reorder exercise");
+    },
+  });
+
+  const moveExercise = (exerciseId: string, direction: "up" | "down") => {
+    const sortedExercises = [...exercises].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const currentIndex = sortedExercises.findIndex(e => e.id === exerciseId);
+    if (currentIndex === -1) return;
+    
+    const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (swapIndex < 0 || swapIndex >= sortedExercises.length) return;
+    
+    const currentExercise = sortedExercises[currentIndex];
+    const swapExercise = sortedExercises[swapIndex];
+    
+    const currentOrder = currentExercise.sortOrder ?? currentIndex;
+    const swapOrder = swapExercise.sortOrder ?? swapIndex;
+    
+    reorderExerciseMutation.mutate({ id: currentExercise.id, newSortOrder: swapOrder });
+    reorderExerciseMutation.mutate({ id: swapExercise.id, newSortOrder: currentOrder });
+  };
+
   const createStepMutation = useMutation({
     mutationFn: async ({ exerciseId, ...step }: typeof newStep & { exerciseId: string; stepOrder: number }) => {
       const res = await fetch(`/api/coach/exercises/${exerciseId}/steps`, {
@@ -513,90 +549,116 @@ export function ExerciseManager() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {exercises.map((exercise) => {
-                    const sortedSteps = exercise.steps ? [...exercise.steps].sort((a, b) => a.stepOrder - b.stepOrder) : [];
+                  {(() => {
+                    const sortedExercises = [...exercises].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+                    return sortedExercises.map((exercise, index) => {
+                      const sortedSteps = exercise.steps ? [...exercise.steps].sort((a, b) => a.stepOrder - b.stepOrder) : [];
+                      const isFirst = index === 0;
+                      const isLast = index === sortedExercises.length - 1;
                     
-                    return (
-                      <div key={exercise.id} className="border rounded-lg overflow-hidden">
-                        <div 
-                          className="p-3 hover:bg-muted/50 cursor-pointer"
-                          onClick={() => toggleExpanded(exercise.id)}
-                          data-testid={`exercise-row-${exercise.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-2 min-w-0 flex-1">
-                              <div className="flex-shrink-0 mt-0.5">
-                                {expandedExercises.has(exercise.id) ? (
-                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium">{exercise.title}</span>
-                                  {exercise.category && (
-                                    <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
-                                  )}
-                                  {exercise.estimatedMinutes && (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <Clock className="h-3 w-3" />
-                                      {exercise.estimatedMinutes}m
-                                    </span>
+                      return (
+                        <div key={exercise.id} className="border rounded-lg overflow-hidden">
+                          <div 
+                            className="p-3 hover:bg-muted/50 cursor-pointer"
+                            onClick={() => toggleExpanded(exercise.id)}
+                            data-testid={`exercise-row-${exercise.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
+                                <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => moveExercise(exercise.id, "up")}
+                                    disabled={isFirst || reorderExerciseMutation.isPending}
+                                    data-testid={`move-up-${exercise.id}`}
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => moveExercise(exercise.id, "down")}
+                                    disabled={isLast || reorderExerciseMutation.isPending}
+                                    data-testid={`move-down-${exercise.id}`}
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {expandedExercises.has(exercise.id) ? (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                   )}
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-1">{exercise.description}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium">{exercise.title}</span>
+                                    {exercise.category && (
+                                      <Badge variant="secondary" className="text-xs">{exercise.category}</Badge>
+                                    )}
+                                    {exercise.estimatedMinutes && (
+                                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3" />
+                                        {exercise.estimatedMinutes}m
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1">{exercise.description}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => togglePublished(exercise)}
+                                  className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
+                                  data-testid={`toggle-publish-${exercise.id}`}
+                                >
+                                  {exercise.isPublished === 1 ? (
+                                    <Eye className="h-4 w-4" />
+                                  ) : (
+                                    <EyeOff className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditing(exercise)}
+                                  data-testid={`edit-exercise-${exercise.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteExerciseMutation.mutate(exercise.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => togglePublished(exercise)}
-                                className={exercise.isPublished === 1 ? "text-green-600" : "text-muted-foreground"}
-                                data-testid={`toggle-publish-${exercise.id}`}
-                              >
-                                {exercise.isPublished === 1 ? (
-                                  <Eye className="h-4 w-4" />
-                                ) : (
-                                  <EyeOff className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => startEditing(exercise)}
-                                data-testid={`edit-exercise-${exercise.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="text-destructive" data-testid={`delete-exercise-${exercise.id}`}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete "{exercise.title}"? This will also delete all steps.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteExerciseMutation.mutate(exercise.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
                           </div>
-                        </div>
 
                         {expandedExercises.has(exercise.id) && (
                           <div className="border-t bg-muted/30 p-3 space-y-3">
@@ -799,8 +861,9 @@ export function ExerciseManager() {
                           </div>
                         )}
                       </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>

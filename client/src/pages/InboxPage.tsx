@@ -24,6 +24,7 @@ interface GuidedExercise {
   description: string;
   category?: string;
   estimatedMinutes?: number;
+  sortOrder?: number;
 }
 
 function formatWhatsAppTimestamp(dateStr: string): string {
@@ -92,6 +93,8 @@ export default function InboxPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Exercises come pre-sorted by sortOrder from the server
+  // Group by category while preserving sortOrder within each category
   const groupedExercises = exercises.reduce((acc, exercise) => {
     const category = exercise.category || "Other";
     if (!acc[category]) acc[category] = [];
@@ -99,18 +102,11 @@ export default function InboxPage() {
     return acc;
   }, {} as Record<string, GuidedExercise[]>);
 
-  // Define the order categories should appear in
-  const categoryOrder = ["Values", "Emotion", "Beliefs"];
+  // Sort categories by the lowest sortOrder of exercises within each category
   const sortedCategories = Object.keys(groupedExercises).sort((a, b) => {
-    const aIndex = categoryOrder.indexOf(a);
-    const bIndex = categoryOrder.indexOf(b);
-    // If both are in the order list, sort by that order
-    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-    // If only one is in the list, it comes first
-    if (aIndex !== -1) return -1;
-    if (bIndex !== -1) return 1;
-    // Otherwise sort alphabetically
-    return a.localeCompare(b);
+    const aMinOrder = Math.min(...groupedExercises[a].map(e => e.sortOrder ?? 0));
+    const bMinOrder = Math.min(...groupedExercises[b].map(e => e.sortOrder ?? 0));
+    return aMinOrder - bMinOrder;
   });
 
   const createThreadMutation = useMutation({
