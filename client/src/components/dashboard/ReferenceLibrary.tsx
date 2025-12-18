@@ -235,7 +235,7 @@ export function ReferenceLibrary() {
             </Button>
           )}
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 h-[calc(85vh-200px)]">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
