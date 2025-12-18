@@ -160,8 +160,8 @@ export function ReferenceLibrary() {
           Library
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5" />
             Reference Library
@@ -171,7 +171,7 @@ export function ReferenceLibrary() {
           </p>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col">
           {isCreating ? (
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
               <div className="flex items-center justify-between">
@@ -235,7 +235,7 @@ export function ReferenceLibrary() {
             </Button>
           )}
 
-          <ScrollArea className="flex-1 h-[calc(85vh-200px)]">
+          <ScrollArea className="flex-1 min-h-0">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
