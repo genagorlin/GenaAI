@@ -16,6 +16,13 @@ The v1 scope is intentionally narrow: no marketplace, no multi-coach features, n
 - Look for teaching opportunities about key terms and system design
 - Save preferences as they emerge from conversations
 
+**AI Behavior Preferences:**
+- The AI must NOT editorialize beyond Gena's writings - no generic therapeutic language or softening of her positions
+- If Gena considers something a character flaw, the AI shouldn't say "it's not a character flaw, it's human"
+- AI should stay within the "canon" of her writings and exercise instructions
+- When uncertain about her position, ask rather than assert
+- Avoid diluting her framework with generic self-compassion language
+
 **Working Process:**
 1. Receive feature request
 2. Clarify what user means in plain language
