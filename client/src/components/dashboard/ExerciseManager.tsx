@@ -756,12 +756,14 @@ export function ExerciseManager() {
                                             className="h-6 w-6 p-0"
                                             onClick={(e) => {
                                               e.stopPropagation();
+                                              e.preventDefault();
+                                              console.log('[Button] UP clicked for step:', step.title, 'idx:', idx);
                                               moveStep(exercise.id, sortedSteps, step.id, 'up');
                                             }}
                                             disabled={idx === 0}
                                             data-testid={`move-step-up-${step.id}`}
                                           >
-                                            <ArrowUp className="h-3 w-3" />
+                                            <ArrowUp className="h-3 w-3 pointer-events-none" />
                                           </Button>
                                           <Button
                                             variant="ghost"
@@ -769,12 +771,14 @@ export function ExerciseManager() {
                                             className="h-6 w-6 p-0"
                                             onClick={(e) => {
                                               e.stopPropagation();
+                                              e.preventDefault();
+                                              console.log('[Button] DOWN clicked for step:', step.title, 'idx:', idx);
                                               moveStep(exercise.id, sortedSteps, step.id, 'down');
                                             }}
                                             disabled={idx === sortedSteps.length - 1}
                                             data-testid={`move-step-down-${step.id}`}
                                           >
-                                            <ArrowDown className="h-3 w-3" />
+                                            <ArrowDown className="h-3 w-3 pointer-events-none" />
                                           </Button>
                                         </div>
                                         <Button
