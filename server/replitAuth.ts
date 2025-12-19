@@ -333,11 +333,10 @@ export const isClientAuthenticated: RequestHandler = async (req, res, next) => {
 };
 
 // Verify that the authenticated user has access to a specific client's data
-// This checks:
-// 1. The session is a client session (not a coach session)
-// 2. The boundClientId in the session matches the requested clientId
-// 3. The session email matches the client's email
-// For legacy sessions missing sessionType/boundClientId, returns 401 to trigger re-login
+// This allows access if EITHER:
+// A) User is a coach (in the authorized_users allowlist), OR
+// B) User is a client with matching session and email
+// For client sessions missing sessionType/boundClientId, returns 401 to trigger re-login
 export const verifyClientAccess = (getClientId: (req: any) => string | undefined): RequestHandler => {
   return async (req, res, next) => {
     const user = req.user as any;
@@ -353,10 +352,22 @@ export const verifyClientAccess = (getClientId: (req: any) => string | undefined
       return res.status(401).json({ message: "Unauthorized" });
     }
     
+    const userEmail = user.claims.email.toLowerCase();
+    
+    // PATH A: Check if user is a coach (in authorized_users allowlist)
+    // Coaches can access any client's data
+    const authorizedUser = await storage.getAuthorizedUserByEmail(userEmail);
+    if (authorizedUser) {
+      // User is a coach - allow access to any client data
+      return next();
+    }
+    
+    // PATH B: User is not a coach, so they must be a client
+    // Verify they have a proper client session for this specific clientId
+    
     // Handle legacy sessions that are missing sessionType/boundClientId
-    // Return 401 to trigger the frontend to redirect to re-login
     if (session.sessionType !== "client" || !session.boundClientId) {
-      console.log(`[ClientAccess] Legacy session detected - missing sessionType/boundClientId. Forcing re-login.`);
+      console.log(`[ClientAccess] Legacy client session detected - forcing re-login.`);
       return res.status(401).json({ message: "Session upgrade required", requiresReauth: true });
     }
     
@@ -365,8 +376,6 @@ export const verifyClientAccess = (getClientId: (req: any) => string | undefined
       console.log(`[ClientAccess] Rejected - session bound to different client. Bound: ${session.boundClientId}, Requested: ${clientId}`);
       return res.status(403).json({ message: "Access denied - wrong client" });
     }
-    
-    const sessionEmail = user.claims.email.toLowerCase();
     
     // Get the client record
     const clientRecord = await storage.getClient(clientId);
@@ -377,14 +386,13 @@ export const verifyClientAccess = (getClientId: (req: any) => string | undefined
     // Check if client has an email set
     const clientEmail = clientRecord.email?.toLowerCase();
     if (!clientEmail) {
-      // Client has no email set yet - this shouldn't happen if they logged in properly
-      // But we'll allow access since the callback should have bound the email
+      // Client has no email set yet - allow access since the callback should have bound the email
       return next();
     }
     
     // Verify email match
-    if (clientEmail !== sessionEmail) {
-      console.log(`[ClientAccess] Email mismatch. Session: ${sessionEmail}, Client: ${clientEmail}`);
+    if (clientEmail !== userEmail) {
+      console.log(`[ClientAccess] Email mismatch. Session: ${userEmail}, Client: ${clientEmail}`);
       return res.status(403).json({ message: "Access denied - email mismatch" });
     }
     
