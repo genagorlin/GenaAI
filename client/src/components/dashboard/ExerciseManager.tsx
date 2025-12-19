@@ -308,17 +308,32 @@ export function ExerciseManager() {
   });
 
   const moveStep = async (exerciseId: string, steps: ExerciseStep[], stepId: string, direction: 'up' | 'down') => {
-    if (!steps || steps.length === 0) return;
+    console.log('[moveStep] Called with:', { exerciseId, stepsLength: steps?.length, stepId, direction });
+    if (!steps || steps.length === 0) {
+      console.log('[moveStep] Early return: no steps');
+      return;
+    }
     
     const currentIndex = steps.findIndex(s => s.id === stepId);
-    if (currentIndex === -1) return;
+    console.log('[moveStep] currentIndex:', currentIndex);
+    if (currentIndex === -1) {
+      console.log('[moveStep] Early return: step not found');
+      return;
+    }
     
-    if (direction === 'up' && currentIndex === 0) return;
-    if (direction === 'down' && currentIndex === steps.length - 1) return;
+    if (direction === 'up' && currentIndex === 0) {
+      console.log('[moveStep] Early return: cannot move first step up');
+      return;
+    }
+    if (direction === 'down' && currentIndex === steps.length - 1) {
+      console.log('[moveStep] Early return: cannot move last step down');
+      return;
+    }
     
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     const currentStep = steps[currentIndex];
     const swapStep = steps[swapIndex];
+    console.log('[moveStep] Swapping:', { currentStep: currentStep.title, currentOrder: currentStep.stepOrder, swapStep: swapStep.title, swapOrder: swapStep.stepOrder });
     
     const newCurrentOrder = swapStep.stepOrder;
     const newSwapOrder = currentStep.stepOrder;
