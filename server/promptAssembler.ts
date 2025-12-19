@@ -255,12 +255,14 @@ ${ex.nextStepTitle ? `## NEXT STEP PREVIEW: Step ${ex.currentStepOrder + 1} - "$
 When the client is ready to advance, they will click "Next Step" in their interface. The ONLY next step is "${ex.nextStepTitle}" - do not suggest any other next step.` : '## FINAL STEP\nThis is the last step of the exercise. When completed, the exercise will be finished.'}
 
 ## STRICT RULES FOR THIS EXERCISE:
-1. **ONLY discuss the current step**: Focus entirely on Step ${ex.currentStepOrder} - "${ex.currentStepTitle}"
-2. **NEVER invent steps**: The steps above are the ONLY steps. Do not create or suggest different steps.
-3. **When user says "next step"**: Tell them to click the "Next Step" button when ready. The next step will be "${ex.nextStepTitle || 'completion'}"
-4. **Stay within the structure**: Your role is to guide through these predefined steps, not to create a different journey
-5. **Be patient**: Let the client fully explore the current step before they advance
-6. **Use step instructions**: The guidance above tells you exactly what to explore with the client`);
+1. **USE VERBATIM TEXT**: When presenting instructions, questions, or prompts to the client, use the EXACT wording from the step instructions and supporting materials above. Do NOT paraphrase, rephrase, or "improve" the language. Gena wrote these words deliberately - use them as written.
+2. **NO EDITORIALIZING**: Do not add your own interpretations, explanations, or elaborations beyond what's in the instructions. If the instructions say "Ask X", ask exactly X - don't add "What I mean by that is..." or soften the question.
+3. **QUOTE DIRECTLY**: When referencing concepts from the Coach Guidance or Exercise Reference Materials, quote them directly rather than summarizing. Say "As the exercise puts it: '[exact quote]'" when relevant.
+4. **ONLY discuss the current step**: Focus entirely on Step ${ex.currentStepOrder} - "${ex.currentStepTitle}"
+5. **NEVER invent steps**: The steps above are the ONLY steps. Do not create or suggest different steps.
+6. **When user says "next step"**: Tell them to click the "Next Step" button when ready. The next step will be "${ex.nextStepTitle || 'completion'}"
+7. **Stay within the structure**: Your role is to deliver these predefined instructions faithfully, not to create a different journey or add your own therapeutic framing.
+8. **Conversational adaptation only**: You may adapt the FORMAT for natural conversation (e.g., breaking a long instruction into dialogue), but the CONTENT and WORDING must remain faithful to the source material.`);
     }
 
     systemPromptParts.push(`# Three-Way Conversation
@@ -503,10 +505,10 @@ You are beginning a structured coaching exercise with the client.
 ${firstStep ? `\n**First Step**: "${firstStep.title}"\n${firstStep.instructions}` : ''}
 
 Your opening message should:
-1. Warmly welcome the client to this exercise
-2. Briefly explain what they'll be exploring together
-3. If there's a first step, introduce it and invite them to engage with it
-4. Be encouraging and set a supportive tone for the exercise`);
+1. Welcome the client to this exercise using the EXACT title and description provided above - do not rephrase or embellish
+2. If there's a first step, present it using the VERBATIM instructions above - do not paraphrase or add your own framing
+3. Keep your own words minimal - let Gena's written instructions do the talking
+4. Do NOT add generic therapeutic encouragement, editorializing, or explanations beyond what's in the materials`);
     } else {
       const taskSection = truncateToTokenLimit(taskPrompt.content, TOKEN_ALLOCATIONS.taskPrompt);
       if (taskSection) {
@@ -516,7 +518,7 @@ Your opening message should:
 
     const clientName = client?.name?.split(' ')[0] || 'there';
     if (exercise) {
-      systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for ${clientName} to begin the "${exercise.title}" exercise. This is the start of a guided exercise - make them feel welcomed and ready to engage with the first step.`);
+      systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for ${clientName} to begin the "${exercise.title}" exercise. Use the VERBATIM text from the exercise description and first step instructions. Do not add your own framing or editorializing.`);
     } else {
       systemPromptParts.push(`# Opening Message Task\nGenerate an opening message for this new conversation with ${clientName}. Follow the Response Instructions above exactly for how to greet them. This is the very start of a new conversation thread - there is no prior context from the user yet. Ignore any placeholder input and simply deliver your opening greeting as instructed.`);
     }

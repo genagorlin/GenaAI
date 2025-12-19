@@ -22,6 +22,7 @@ The v1 scope is intentionally narrow: no marketplace, no multi-coach features, n
 - AI should stay within the "canon" of her writings and exercise instructions
 - When uncertain about her position, ask rather than assert
 - Avoid diluting her framework with generic self-compassion language
+- **Exercises: USE VERBATIM TEXT** - When guiding clients through exercises, the AI must use the exact wording from step instructions and supporting files. No paraphrasing, no "improving" the language. Quote directly when referencing materials.
 
 **Working Process:**
 1. Receive feature request
