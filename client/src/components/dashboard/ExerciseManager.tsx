@@ -308,32 +308,17 @@ export function ExerciseManager() {
   });
 
   const moveStep = async (exerciseId: string, steps: ExerciseStep[], stepId: string, direction: 'up' | 'down') => {
-    console.log('[moveStep] Called with:', { exerciseId, stepsLength: steps?.length, stepId, direction });
-    if (!steps || steps.length === 0) {
-      console.log('[moveStep] Early return: no steps');
-      return;
-    }
+    if (!steps || steps.length === 0) return;
     
     const currentIndex = steps.findIndex(s => s.id === stepId);
-    console.log('[moveStep] currentIndex:', currentIndex);
-    if (currentIndex === -1) {
-      console.log('[moveStep] Early return: step not found');
-      return;
-    }
+    if (currentIndex === -1) return;
     
-    if (direction === 'up' && currentIndex === 0) {
-      console.log('[moveStep] Early return: cannot move first step up');
-      return;
-    }
-    if (direction === 'down' && currentIndex === steps.length - 1) {
-      console.log('[moveStep] Early return: cannot move last step down');
-      return;
-    }
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === steps.length - 1) return;
     
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     const currentStep = steps[currentIndex];
     const swapStep = steps[swapIndex];
-    console.log('[moveStep] Swapping:', { currentStep: currentStep.title, currentOrder: currentStep.stepOrder, swapStep: swapStep.title, swapOrder: swapStep.stepOrder });
     
     const newCurrentOrder = swapStep.stepOrder;
     const newSwapOrder = currentStep.stepOrder;
@@ -374,10 +359,7 @@ export function ExerciseManager() {
       if (!res1.ok || !res2.ok) {
         throw new Error("Server returned error");
       }
-      
-      console.log('[moveStep] Successfully reordered steps');
     } catch (error) {
-      console.error('[moveStep] Error:', error);
       // Revert on error
       queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       toast.error("Failed to reorder steps");
@@ -757,7 +739,6 @@ export function ExerciseManager() {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               e.preventDefault();
-                                              console.log('[Button] UP clicked for step:', step.title, 'idx:', idx);
                                               moveStep(exercise.id, sortedSteps, step.id, 'up');
                                             }}
                                             disabled={idx === 0}
@@ -772,7 +753,6 @@ export function ExerciseManager() {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               e.preventDefault();
-                                              console.log('[Button] DOWN clicked for step:', step.title, 'idx:', idx);
                                               moveStep(exercise.id, sortedSteps, step.id, 'down');
                                             }}
                                             disabled={idx === sortedSteps.length - 1}

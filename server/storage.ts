@@ -70,6 +70,7 @@ export interface IStorage {
   registerClient(data: { id: string; name: string; email: string; photoUrl?: string }): Promise<Client>;
   updateClientAuth(id: string, data: { email: string; name: string; photoUrl?: string }): Promise<void>;
   updateClientActivity(id: string, mobileAppConnected: number): Promise<void>;
+  updateClientLastActive(id: string): Promise<void>;
 
   // Threads
   getClientThreads(clientId: string): Promise<Thread[]>;
@@ -252,6 +253,12 @@ export class DatabaseStorage implements IStorage {
   async updateClientActivity(id: string, mobileAppConnected: number): Promise<void> {
     await db.update(clients)
       .set({ lastActive: new Date(), mobileAppConnected })
+      .where(eq(clients.id, id));
+  }
+
+  async updateClientLastActive(id: string): Promise<void> {
+    await db.update(clients)
+      .set({ lastActive: new Date() })
       .where(eq(clients.id, id));
   }
 
