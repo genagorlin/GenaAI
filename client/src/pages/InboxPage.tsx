@@ -86,6 +86,12 @@ export default function InboxPage() {
     queryKey: ["/api/chat", clientId, "info"],
     queryFn: async () => {
       const res = await fetch(`/api/chat/${clientId}/info`);
+      if (res.status === 401) {
+        // Session upgrade required or not authenticated - redirect to login
+        const returnTo = encodeURIComponent(`/inbox/${clientId}`);
+        window.location.href = `/api/client/login?returnTo=${returnTo}`;
+        throw new Error("reauth-required");
+      }
       if (res.status === 403) {
         throw new Error("email-mismatch");
       }
@@ -101,7 +107,7 @@ export default function InboxPage() {
 
   // Handle access denied - redirect to access denied page
   useEffect(() => {
-    if (clientError) {
+    if (clientError && clientError.message !== "reauth-required") {
       const reason = clientError.message === "email-mismatch" ? "email-mismatch" : 
                      clientError.message === "not-found" ? "not-found" : "unknown";
       setLocation(`/client-access-denied?reason=${reason}&clientId=${clientId}`);

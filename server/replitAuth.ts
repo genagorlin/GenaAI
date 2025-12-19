@@ -337,28 +337,30 @@ export const isClientAuthenticated: RequestHandler = async (req, res, next) => {
 // 1. The session is a client session (not a coach session)
 // 2. The boundClientId in the session matches the requested clientId
 // 3. The session email matches the client's email
+// For legacy sessions missing sessionType/boundClientId, returns 401 to trigger re-login
 export const verifyClientAccess = (getClientId: (req: any) => string | undefined): RequestHandler => {
   return async (req, res, next) => {
     const user = req.user as any;
     const session = req.session as any;
-    
-    // Check authentication
-    if (!req.isAuthenticated() || !user?.claims?.email) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
     
     const clientId = getClientId(req);
     if (!clientId) {
       return res.status(400).json({ message: "Client ID required" });
     }
     
-    // CRITICAL: Verify this is a client session (stored in req.session, not req.user)
-    if (session.sessionType !== "client") {
-      console.log(`[ClientAccess] Rejected - not a client session. SessionType: ${session.sessionType}`);
-      return res.status(403).json({ message: "Access denied - client session required" });
+    // Check authentication
+    if (!req.isAuthenticated() || !user?.claims?.email) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
     
-    // CRITICAL: Verify the session is bound to this specific clientId
+    // Handle legacy sessions that are missing sessionType/boundClientId
+    // Return 401 to trigger the frontend to redirect to re-login
+    if (session.sessionType !== "client" || !session.boundClientId) {
+      console.log(`[ClientAccess] Legacy session detected - missing sessionType/boundClientId. Forcing re-login.`);
+      return res.status(401).json({ message: "Session upgrade required", requiresReauth: true });
+    }
+    
+    // Verify the session is bound to this specific clientId
     if (session.boundClientId !== clientId) {
       console.log(`[ClientAccess] Rejected - session bound to different client. Bound: ${session.boundClientId}, Requested: ${clientId}`);
       return res.status(403).json({ message: "Access denied - wrong client" });
