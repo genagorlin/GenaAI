@@ -358,7 +358,7 @@ export function ExerciseManager() {
     
     // Persist to server
     try {
-      await Promise.all([
+      const [res1, res2] = await Promise.all([
         fetch(`/api/coach/steps/${currentStep.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -370,7 +370,14 @@ export function ExerciseManager() {
           body: JSON.stringify({ stepOrder: newSwapOrder }),
         }),
       ]);
+      
+      if (!res1.ok || !res2.ok) {
+        throw new Error("Server returned error");
+      }
+      
+      console.log('[moveStep] Successfully reordered steps');
     } catch (error) {
+      console.error('[moveStep] Error:', error);
       // Revert on error
       queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       toast.error("Failed to reorder steps");
