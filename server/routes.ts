@@ -148,9 +148,6 @@ export async function registerRoutes(
   // Thread Routes (protected for client chat interface)
   app.get("/api/clients/:clientId/threads", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
-      // Update lastActive when client accesses their threads
-      await storage.updateClientLastActive(req.params.clientId);
-      
       const threads = await storage.getClientThreads(req.params.clientId);
       res.json(threads);
     } catch (error) {
@@ -264,6 +261,11 @@ export async function registerRoutes(
         ...req.body,
         clientId: req.params.clientId
       });
+      
+      // Update lastActive when client sends a message
+      if (validated.role === "user") {
+        await storage.updateClientLastActive(req.params.clientId);
+      }
       
       const isFirstMessageInThread = validated.threadId 
         ? (await storage.getThreadMessages(validated.threadId)).length === 0 
