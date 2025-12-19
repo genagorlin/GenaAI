@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
-import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin } from "./replitAuth";
+import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, verifyClientAccess } from "./replitAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
@@ -104,8 +104,9 @@ export async function registerRoutes(
     }
   });
 
-  // Public endpoint for chat interface - returns limited client info
-  app.get("/api/chat/:clientId/info", async (req, res) => {
+  // Client-facing endpoint for chat interface - returns limited client info
+  // Protected by verifyClientAccess to ensure only the authorized client can access
+  app.get("/api/chat/:clientId/info", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
@@ -144,8 +145,8 @@ export async function registerRoutes(
     }
   });
 
-  // Thread Routes (public for client chat interface)
-  app.get("/api/clients/:clientId/threads", async (req, res) => {
+  // Thread Routes (protected for client chat interface)
+  app.get("/api/clients/:clientId/threads", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const threads = await storage.getClientThreads(req.params.clientId);
       res.json(threads);
@@ -180,7 +181,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/threads", async (req, res) => {
+  app.post("/api/clients/:clientId/threads", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const validated = insertThreadSchema.parse({
         ...req.body,
@@ -244,8 +245,8 @@ export async function registerRoutes(
     }
   });
 
-  // Message Routes (public for client chat interface)
-  app.get("/api/clients/:clientId/messages", async (req, res) => {
+  // Message Routes (protected for client chat interface)
+  app.get("/api/clients/:clientId/messages", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const messages = await storage.getClientMessages(req.params.clientId);
       res.json(messages);
@@ -254,7 +255,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/messages", async (req, res) => {
+  app.post("/api/clients/:clientId/messages", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const validated = insertMessageSchema.parse({
         ...req.body,
@@ -415,9 +416,9 @@ export async function registerRoutes(
     }
   });
 
-  // Client document access (no authentication required - security via unique link)
+  // Client document access (protected by verifyClientAccess)
   // Note: Role prompts and task prompts are stored separately and not included in document sections
-  app.get("/api/chat/:clientId/document", async (req: any, res) => {
+  app.get("/api/chat/:clientId/document", verifyClientAccess((req) => req.params.clientId), async (req: any, res) => {
     try {
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
@@ -434,8 +435,8 @@ export async function registerRoutes(
     }
   });
 
-  // Client section update (no authentication required - security via unique link)
-  app.patch("/api/chat/:clientId/sections/:sectionId", async (req: any, res) => {
+  // Client section update (protected by verifyClientAccess)
+  app.patch("/api/chat/:clientId/sections/:sectionId", verifyClientAccess((req) => req.params.clientId), async (req: any, res) => {
     try {
       const client = await storage.getClient(req.params.clientId);
       if (!client) {
@@ -627,8 +628,8 @@ export async function registerRoutes(
     }
   });
 
-  // Session End Route (public - called when client session ends)
-  app.post("/api/clients/:clientId/session-end", async (req, res) => {
+  // Session End Route (protected by verifyClientAccess)
+  app.post("/api/clients/:clientId/session-end", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const { summarizeSession, generateConversationTitle } = await import("./sessionSummarizer");
       const result = await summarizeSession(req.params.clientId);
@@ -980,8 +981,8 @@ export async function registerRoutes(
     }
   });
 
-  // Client Exercise Sessions
-  app.get("/api/clients/:clientId/exercise-sessions", async (req, res) => {
+  // Client Exercise Sessions (protected by verifyClientAccess)
+  app.get("/api/clients/:clientId/exercise-sessions", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const sessions = await storage.getClientExerciseSessions(req.params.clientId);
       res.json(sessions);
@@ -990,7 +991,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clients/:clientId/threads/:threadId/exercise-session", async (req, res) => {
+  app.get("/api/clients/:clientId/threads/:threadId/exercise-session", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const session = await storage.getActiveExerciseSession(
         req.params.clientId,
@@ -1010,7 +1011,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/exercise-sessions", async (req, res) => {
+  app.post("/api/clients/:clientId/exercise-sessions", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const { insertClientExerciseSessionSchema } = await import("@shared/schema");
       const validated = insertClientExerciseSessionSchema.parse({

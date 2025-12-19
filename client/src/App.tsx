@@ -11,6 +11,7 @@ import AdminPage from "@/pages/AdminPage";
 import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
 import InboxPage from "@/pages/InboxPage";
+import ClientAccessDenied from "@/pages/ClientAccessDenied";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -19,7 +20,9 @@ function Router() {
     <Switch>
       <Route path="/chat/:clientId/:threadId" component={ChatPage} />
       <Route path="/chat/:clientId" component={InboxPage} />
+      <Route path="/inbox/:clientId" component={InboxPage} />
       <Route path="/unauthorized" component={UnauthorizedPage} />
+      <Route path="/client-access-denied" component={ClientAccessDenied} />
       {isLoading ? (
         <Route path="/">
           {() => (

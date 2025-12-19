@@ -166,10 +166,32 @@ Clients can view and edit their own living document through the Inbox interface:
 - Coach notes (private coach observations)
 
 **Security Model:**
-- Clients must authenticate via Replit Auth before accessing documents
-- `isClientAuthenticated` middleware checks session without requiring coach allowlist
-- Ownership verification: `req.user.claims.email` must match `client.email`
-- Prevents cross-tenant access - clients can only view/edit their own documents
+The platform uses a two-tier authentication model with strict session isolation:
+
+**Coach Authentication:**
+- Coach logs in via `/api/login` → OAuth → `/api/callback`
+- Must be in the `authorized_users` allowlist to proceed
+- Uses `isAuthenticated` middleware which checks allowlist
+- Session type is undefined (default)
+
+**Client Authentication:**
+- Client logs in via `/api/client/login?returnTo=/inbox/{clientId}` → OAuth → `/api/callback`
+- Client must exist (created by coach first)
+- If client has an email, login email must match exactly
+- If first login (no email on record), binds the login email to client
+- Session stores: `sessionType: "client"` and `boundClientId: {clientId}`
+
+**Client API Protection (`verifyClientAccess` middleware):**
+- All client-facing routes use `verifyClientAccess` middleware
+- Three-layer security check:
+  1. `req.session.sessionType === "client"` - Rejects coach sessions
+  2. `req.session.boundClientId === clientId` - Prevents cross-client access
+  3. `req.user.claims.email === client.email` - Final email verification
+- Returns 403 with specific error message if any check fails
+
+**Access Denied Handling:**
+- `client/src/pages/ClientAccessDenied.tsx` - Shows context-specific error messages
+- Frontend redirects to this page on 403/404 responses from protected APIs
 
 **Implementation:**
 - `GET /api/chat/:clientId/document` - Fetches document with client-viewable sections

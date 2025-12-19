@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2 } from "lucide-react";
@@ -63,15 +63,50 @@ export default function InboxPage() {
   const [activeTab, setActiveTab] = useState<"chat" | "exercises" | "document" | "library">("chat");
   const [selectedDocument, setSelectedDocument] = useState<{ id: number; title: string; content: string; description: string | null } | null>(null);
 
-  const { data: client } = useQuery<Client>({
+  // Check if user is authenticated for client access
+  const { data: authStatus, isLoading: authLoading } = useQuery({
+    queryKey: ["/api/auth/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/status");
+      if (!res.ok) return { authenticated: false };
+      return res.json();
+    },
+    retry: false
+  });
+
+  // Redirect to client login if not authenticated
+  useEffect(() => {
+    if (!authLoading && authStatus && !authStatus.authenticated && clientId) {
+      const returnTo = encodeURIComponent(`/inbox/${clientId}`);
+      window.location.href = `/api/client/login?returnTo=${returnTo}`;
+    }
+  }, [authLoading, authStatus, clientId]);
+
+  const { data: client, error: clientError } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
     queryFn: async () => {
       const res = await fetch(`/api/chat/${clientId}/info`);
-      if (!res.ok) throw new Error("Client not found");
+      if (res.status === 403) {
+        throw new Error("email-mismatch");
+      }
+      if (res.status === 404) {
+        throw new Error("not-found");
+      }
+      if (!res.ok) throw new Error("unknown");
       return res.json();
     },
-    enabled: !!clientId,
+    enabled: !!clientId && authStatus?.authenticated,
+    retry: false,
   });
+
+  // Handle access denied - redirect to access denied page
+  useEffect(() => {
+    if (clientError) {
+      const reason = clientError.message === "email-mismatch" ? "email-mismatch" : 
+                     clientError.message === "not-found" ? "not-found" : "unknown";
+      setLocation(`/client-access-denied?reason=${reason}&clientId=${clientId}`);
+    }
+  }, [clientError, clientId, setLocation]);
 
   const { data: threads = [], isLoading } = useQuery<Thread[]>({
     queryKey: ["/api/clients", clientId, "threads"],
@@ -195,6 +230,18 @@ export default function InboxPage() {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-100">
         <p className="text-muted-foreground">Invalid link</p>
+      </div>
+    );
+  }
+
+  // Show loading while checking auth
+  if (authLoading || (!authStatus?.authenticated)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-100">
+        <div className="text-center p-6">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
+          <p className="text-muted-foreground">Connecting...</p>
+        </div>
       </div>
     );
   }

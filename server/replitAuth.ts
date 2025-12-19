@@ -142,11 +142,47 @@ export async function setupAuth(app: Express) {
         // Decode the URL-encoded returnTo and validate it's a same-origin path
         let clientReturnTo = decodeURIComponent(clientReturnToEncoded);
         
-        // Security: Only allow relative paths starting with /chat/ to prevent open redirect
-        if (!clientReturnTo.startsWith('/chat/') || clientReturnTo.includes('//')) {
+        // Security: Only allow relative paths starting with /chat/ or /inbox/ to prevent open redirect
+        if ((!clientReturnTo.startsWith('/chat/') && !clientReturnTo.startsWith('/inbox/')) || clientReturnTo.includes('//')) {
           clientReturnTo = '/';
         }
         console.log("[Auth Callback] Client login for email:", email, "returnTo:", clientReturnTo);
+        
+        // Extract clientId from returnTo URL
+        const chatMatch = clientReturnTo.match(/\/(?:chat|inbox)\/([^/?]+)/);
+        if (!chatMatch || !email) {
+          console.log("[Auth Callback] Invalid client login - no clientId or email");
+          return res.redirect("/client-access-denied");
+        }
+        
+        const clientId = chatMatch[1];
+        const existingClient = await storage.getClient(clientId);
+        
+        if (!existingClient) {
+          // Client doesn't exist - deny access (must be created by coach first)
+          console.log("[Auth Callback] Client not found:", clientId);
+          return res.redirect("/client-access-denied?reason=not-found");
+        }
+        
+        // Check email verification
+        const clientEmail = existingClient.email?.toLowerCase();
+        const loginEmail = email.toLowerCase();
+        
+        if (clientEmail && clientEmail !== loginEmail) {
+          // Email doesn't match - deny access
+          console.log("[Auth Callback] Email mismatch. Client email:", clientEmail, "Login email:", loginEmail);
+          return res.redirect("/client-access-denied?reason=email-mismatch");
+        }
+        
+        // First time login - bind this email to the client
+        if (!clientEmail) {
+          console.log("[Auth Callback] First login for client", clientId, "- binding email:", loginEmail);
+          await storage.updateClientAuth(clientId, {
+            email: loginEmail,
+            name: existingClient.name || `${firstName || ''} ${lastName || ''}`.trim() || loginEmail.split('@')[0],
+            photoUrl: profileImageUrl,
+          });
+        }
         
         req.login(user, async (loginErr) => {
           if (loginErr) {
@@ -154,45 +190,12 @@ export async function setupAuth(app: Express) {
             return res.redirect("/");
           }
           
-          // Extract clientId from returnTo URL if it's a chat page
-          const chatMatch = clientReturnTo.match(/\/chat\/([^/?]+)/);
-          if (chatMatch && email) {
-            const clientId = chatMatch[1];
-            
-            // Check if client exists and update or create
-            let existingClient = await storage.getClient(clientId);
-            
-            if (existingClient) {
-              // Update existing client with auth info if not already set
-              if (!existingClient.email || existingClient.email !== email) {
-                await storage.updateClientAuth(clientId, {
-                  email,
-                  name: existingClient.name || `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0],
-                  photoUrl: profileImageUrl,
-                });
-              }
-            } else {
-              // Create new client on first login
-              const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email.split('@')[0];
-              await storage.registerClient({
-                id: clientId,
-                name: fullName,
-                email,
-                photoUrl: profileImageUrl,
-              });
-              
-              // Send welcome message
-              await storage.createMessage({
-                clientId,
-                role: "ai",
-                content: `Hi ${firstName || 'there'}! Welcome to GenaGPT. I'm your thinking partner - here whenever you want to work through something. What's on your mind?`,
-                type: "text",
-              });
-              console.log("[Auth Callback] Created new client and sent welcome message:", clientId);
-            }
-          }
+          // Store session metadata in req.session (persists across requests)
+          // This must be done AFTER req.login since login creates the session
+          (req.session as any).sessionType = "client";
+          (req.session as any).boundClientId = clientId;
           
-          console.log("[Auth Callback] Client login successful, redirecting to:", clientReturnTo);
+          console.log("[Auth Callback] Client login successful for", clientId, ", redirecting to:", clientReturnTo);
           return res.redirect(clientReturnTo);
         });
         return;
@@ -233,6 +236,10 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/logout", (req, res) => {
+    // Clear client session metadata before logout
+    delete (req.session as any).sessionType;
+    delete (req.session as any).boundClientId;
+    
     req.logout(() => {
       res.redirect(
         client.buildEndSessionUrl(config, {
@@ -323,6 +330,64 @@ export const isClientAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+};
+
+// Verify that the authenticated user has access to a specific client's data
+// This checks:
+// 1. The session is a client session (not a coach session)
+// 2. The boundClientId in the session matches the requested clientId
+// 3. The session email matches the client's email
+export const verifyClientAccess = (getClientId: (req: any) => string | undefined): RequestHandler => {
+  return async (req, res, next) => {
+    const user = req.user as any;
+    const session = req.session as any;
+    
+    // Check authentication
+    if (!req.isAuthenticated() || !user?.claims?.email) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
+    const clientId = getClientId(req);
+    if (!clientId) {
+      return res.status(400).json({ message: "Client ID required" });
+    }
+    
+    // CRITICAL: Verify this is a client session (stored in req.session, not req.user)
+    if (session.sessionType !== "client") {
+      console.log(`[ClientAccess] Rejected - not a client session. SessionType: ${session.sessionType}`);
+      return res.status(403).json({ message: "Access denied - client session required" });
+    }
+    
+    // CRITICAL: Verify the session is bound to this specific clientId
+    if (session.boundClientId !== clientId) {
+      console.log(`[ClientAccess] Rejected - session bound to different client. Bound: ${session.boundClientId}, Requested: ${clientId}`);
+      return res.status(403).json({ message: "Access denied - wrong client" });
+    }
+    
+    const sessionEmail = user.claims.email.toLowerCase();
+    
+    // Get the client record
+    const clientRecord = await storage.getClient(clientId);
+    if (!clientRecord) {
+      return res.status(404).json({ message: "Client not found" });
+    }
+    
+    // Check if client has an email set
+    const clientEmail = clientRecord.email?.toLowerCase();
+    if (!clientEmail) {
+      // Client has no email set yet - this shouldn't happen if they logged in properly
+      // But we'll allow access since the callback should have bound the email
+      return next();
+    }
+    
+    // Verify email match
+    if (clientEmail !== sessionEmail) {
+      console.log(`[ClientAccess] Email mismatch. Session: ${sessionEmail}, Client: ${clientEmail}`);
+      return res.status(403).json({ message: "Access denied - email mismatch" });
+    }
+    
+    return next();
+  };
 };
 
 export const isAdmin: RequestHandler = async (req, res, next) => {

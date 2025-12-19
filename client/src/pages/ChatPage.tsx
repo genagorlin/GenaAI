@@ -111,16 +111,31 @@ export default function ChatPage() {
     }
   }, [authLoading, authStatus, clientId]);
 
-  const { data: client } = useQuery<Client>({
+  const { data: client, error: clientError } = useQuery<Client>({
     queryKey: ["/api/chat", clientId, "info"],
     queryFn: async () => {
       const res = await fetch(`/api/chat/${clientId}/info`);
-      if (!res.ok) throw new Error("Client not found");
+      if (res.status === 403) {
+        throw new Error("email-mismatch");
+      }
+      if (res.status === 404) {
+        throw new Error("not-found");
+      }
+      if (!res.ok) throw new Error("unknown");
       return res.json();
     },
-    enabled: !!clientId,
+    enabled: !!clientId && authStatus?.authenticated,
     retry: false
   });
+
+  // Handle access denied - redirect to access denied page
+  useEffect(() => {
+    if (clientError) {
+      const reason = clientError.message === "email-mismatch" ? "email-mismatch" : 
+                     clientError.message === "not-found" ? "not-found" : "unknown";
+      setLocation(`/client-access-denied?reason=${reason}&clientId=${clientId}`);
+    }
+  }, [clientError, clientId, setLocation]);
 
   const { data: thread } = useQuery<Thread>({
     queryKey: ["/api/threads", threadId],
