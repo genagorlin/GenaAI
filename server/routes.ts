@@ -104,6 +104,21 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/clients/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const client = await storage.getClient(req.params.id);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      await storage.deleteClientWithRelatedData(req.params.id);
+      console.log(`[Client] Coach deleted client: ${client.name} (${req.params.id})`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete client error:", error);
+      res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
   // Client-facing endpoint for chat interface - returns limited client info
   // Protected by verifyClientAccess to ensure only the authorized client can access
   app.get("/api/chat/:clientId/info", verifyClientAccess((req) => req.params.clientId), async (req, res) => {

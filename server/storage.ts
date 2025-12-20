@@ -71,6 +71,8 @@ export interface IStorage {
   updateClientAuth(id: string, data: { email: string; name: string; photoUrl?: string }): Promise<void>;
   updateClientActivity(id: string, mobileAppConnected: number): Promise<void>;
   updateClientLastActive(id: string): Promise<void>;
+  deleteClient(id: string): Promise<void>;
+  deleteClientWithRelatedData(id: string): Promise<void>;
 
   // Threads
   getClientThreads(clientId: string): Promise<Thread[]>;
@@ -260,6 +262,18 @@ export class DatabaseStorage implements IStorage {
     await db.update(clients)
       .set({ lastActive: new Date() })
       .where(eq(clients.id, id));
+  }
+
+  async deleteClient(id: string): Promise<void> {
+    await db.delete(clients).where(eq(clients.id, id));
+  }
+
+  async deleteClientWithRelatedData(id: string): Promise<void> {
+    // All related tables have ON DELETE CASCADE set in the schema,
+    // so deleting the client will automatically clean up:
+    // threads, messages, insights, sentimentData, livingDocuments,
+    // documentSections, rolePrompts, taskPrompts, coachMentions, clientExerciseSessions
+    await db.delete(clients).where(eq(clients.id, id));
   }
 
   // Threads
