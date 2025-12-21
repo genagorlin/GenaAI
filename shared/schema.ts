@@ -261,6 +261,7 @@ export const guidedExercises = pgTable("guided_exercises", {
   systemPrompt: text("system_prompt").notNull().default(""), // Overall instructions for AI during this exercise
   isPublished: integer("is_published").notNull().default(0), // 0 = draft, 1 = visible to clients
   sortOrder: integer("sort_order").notNull().default(0),
+  enableEmotionCapture: integer("enable_emotion_capture").notNull().default(0), // 0 = off, 1 = show emotion panel
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
