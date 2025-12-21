@@ -1359,6 +1359,96 @@ Respond with ONLY the JSON object, no other text.`;
     }
   });
 
+  // Emotion Snapshot Routes (client-facing)
+  // Get all emotion snapshots for a session
+  app.get("/api/exercises/sessions/:sessionId/emotions", async (req, res) => {
+    try {
+      const snapshots = await storage.getSessionEmotionSnapshots(req.params.sessionId);
+      res.json(snapshots);
+    } catch (error) {
+      console.error("Get emotion snapshots error:", error);
+      res.status(500).json({ error: "Failed to get emotion snapshots" });
+    }
+  });
+
+  // Create a new emotion snapshot
+  app.post("/api/exercises/sessions/:sessionId/emotions", async (req, res) => {
+    try {
+      const { emotionName, intensity, surfaceContent, tone, actionUrges, underlyingBelief, underlyingValues } = req.body;
+      
+      if (!emotionName || typeof emotionName !== "string") {
+        return res.status(400).json({ error: "emotionName is required" });
+      }
+      
+      const snapshot = await storage.createEmotionSnapshot({
+        sessionId: req.params.sessionId,
+        emotionName,
+        intensity: intensity ?? null,
+        surfaceContent: surfaceContent ?? null,
+        tone: tone ?? null,
+        actionUrges: actionUrges ?? null,
+        underlyingBelief: underlyingBelief ?? null,
+        underlyingValues: underlyingValues ?? null,
+      });
+      
+      console.log(`[Exercise] Created emotion snapshot: ${emotionName}`);
+      res.json(snapshot);
+    } catch (error) {
+      console.error("Create emotion snapshot error:", error);
+      res.status(500).json({ error: "Failed to create emotion snapshot" });
+    }
+  });
+
+  // Update an emotion snapshot
+  app.patch("/api/exercises/sessions/:sessionId/emotions/:snapshotId", async (req, res) => {
+    try {
+      const snapshot = await storage.getEmotionSnapshot(req.params.snapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ error: "Emotion snapshot not found" });
+      }
+      
+      if (snapshot.sessionId !== req.params.sessionId) {
+        return res.status(403).json({ error: "Snapshot does not belong to this session" });
+      }
+      
+      const updates: any = {};
+      const fields = ["emotionName", "intensity", "surfaceContent", "tone", "actionUrges", "underlyingBelief", "underlyingValues"];
+      for (const field of fields) {
+        if (req.body[field] !== undefined) {
+          updates[field] = req.body[field];
+        }
+      }
+      
+      const updated = await storage.updateEmotionSnapshot(req.params.snapshotId, updates);
+      console.log(`[Exercise] Updated emotion snapshot: ${req.params.snapshotId}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update emotion snapshot error:", error);
+      res.status(500).json({ error: "Failed to update emotion snapshot" });
+    }
+  });
+
+  // Delete an emotion snapshot
+  app.delete("/api/exercises/sessions/:sessionId/emotions/:snapshotId", async (req, res) => {
+    try {
+      const snapshot = await storage.getEmotionSnapshot(req.params.snapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ error: "Emotion snapshot not found" });
+      }
+      
+      if (snapshot.sessionId !== req.params.sessionId) {
+        return res.status(403).json({ error: "Snapshot does not belong to this session" });
+      }
+      
+      await storage.deleteEmotionSnapshot(req.params.snapshotId);
+      console.log(`[Exercise] Deleted emotion snapshot: ${req.params.snapshotId}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete emotion snapshot error:", error);
+      res.status(500).json({ error: "Failed to delete emotion snapshot" });
+    }
+  });
+
   // File Attachment Routes (protected - coach only)
   // Get upload URL for object storage
   app.post("/api/coach/files/upload-url", isAuthenticated, async (_req, res) => {
