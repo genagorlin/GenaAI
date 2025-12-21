@@ -57,6 +57,7 @@ interface GuidedExercise {
 interface ExerciseStep {
   id: string;
   title: string;
+  instructions: string;
   stepOrder: number;
 }
 
@@ -263,6 +264,26 @@ export default function ChatPage() {
       sessionId: exerciseSessionData.session.id, 
       updates: { status: "abandoned" } 
     });
+  };
+
+  const handleGoBack = () => {
+    console.log("[Exercise] handleGoBack called");
+    if (!exerciseSessionData?.session?.id) {
+      console.log("[Exercise] No session data or ID available for going back");
+      return;
+    }
+    const { session, currentStep, steps } = exerciseSessionData;
+    const currentIndex = currentStep ? steps.findIndex(s => s.id === currentStep.id) : -1;
+    console.log("[Exercise] Current step index:", currentIndex);
+    
+    if (currentIndex > 0) {
+      const prevStep = steps[currentIndex - 1];
+      console.log("[Exercise] Going back to step:", prevStep.id, prevStep.title);
+      updateExerciseSessionMutation.mutate({ 
+        sessionId: session.id, 
+        updates: { currentStepId: prevStep.id } 
+      });
+    }
   };
 
   const handleBackToInbox = () => {
@@ -592,6 +613,7 @@ export default function ChatPage() {
             currentStep={exerciseSessionData.currentStep}
             steps={exerciseSessionData.steps}
             onAdvanceStep={handleAdvanceStep}
+            onGoBack={handleGoBack}
             onExitExercise={handleExitExercise}
             isAdvancing={updateExerciseSessionMutation.isPending}
           />

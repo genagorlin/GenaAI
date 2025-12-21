@@ -1,11 +1,11 @@
-import { ChevronRight, X, CheckCircle2 } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 
 interface ExerciseStep {
   id: string;
   title: string;
+  instructions: string;
   stepOrder: number;
 }
 
@@ -29,6 +29,7 @@ interface ExerciseProgressProps {
   currentStep: ExerciseStep | null;
   steps: ExerciseStep[];
   onAdvanceStep: () => void;
+  onGoBack: () => void;
   onExitExercise: () => void;
   isAdvancing?: boolean;
 }
@@ -39,6 +40,7 @@ export function ExerciseProgress({
   currentStep,
   steps,
   onAdvanceStep,
+  onGoBack,
   onExitExercise,
   isAdvancing = false,
 }: ExerciseProgressProps) {
@@ -48,6 +50,7 @@ export function ExerciseProgress({
   const progress = steps.length > 0 
     ? ((currentStepIndex + 1) / steps.length) * 100 
     : 0;
+  const isFirstStep = currentStepIndex <= 0;
   const isLastStep = currentStepIndex === steps.length - 1;
   const isCompleted = session.status === "completed";
 
@@ -64,7 +67,20 @@ export function ExerciseProgress({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {!isCompleted && !isFirstStep && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onGoBack}
+              disabled={isAdvancing}
+              className="h-7 text-xs gap-1"
+              data-testid="button-prev-step"
+            >
+              <ChevronLeft className="h-3 w-3" />
+              Back
+            </Button>
+          )}
           {!isCompleted && !isLastStep && (
             <Button
               variant="ghost"
@@ -100,9 +116,14 @@ export function ExerciseProgress({
       <Progress value={progress} className="h-1.5" />
       
       {currentStep && (
-        <p className="text-xs text-muted-foreground mt-2 line-clamp-1">
-          {currentStep.title}
-        </p>
+        <div className="mt-3 space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            {currentStep.title}
+          </p>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {currentStep.instructions}
+          </p>
+        </div>
       )}
     </div>
   );
