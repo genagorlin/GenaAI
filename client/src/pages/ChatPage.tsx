@@ -203,13 +203,9 @@ export default function ChatPage() {
   });
 
   const updateExerciseSessionMutation = useMutation({
-    mutationFn: async (updates: { currentStepId?: string | null; status?: string; summary?: string }) => {
-      if (!exerciseSessionData?.session.id) {
-        console.error("[Exercise] No session ID available for update");
-        throw new Error("No session ID");
-      }
-      console.log("[Exercise] Updating session:", exerciseSessionData.session.id, "with:", updates);
-      const res = await fetch(`/api/exercise-sessions/${exerciseSessionData.session.id}`, {
+    mutationFn: async ({ sessionId, updates }: { sessionId: string; updates: { currentStepId?: string | null; status?: string; summary?: string } }) => {
+      console.log("[Exercise] Updating session:", sessionId, "with:", updates);
+      const res = await fetch(`/api/exercise-sessions/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -237,30 +233,36 @@ export default function ChatPage() {
 
   const handleAdvanceStep = () => {
     console.log("[Exercise] handleAdvanceStep called, session data:", exerciseSessionData);
-    if (!exerciseSessionData) {
-      console.log("[Exercise] No session data available");
+    if (!exerciseSessionData?.session?.id) {
+      console.log("[Exercise] No session data or ID available");
       return;
     }
-    const { currentStep, steps } = exerciseSessionData;
+    const { session, currentStep, steps } = exerciseSessionData;
     const currentIndex = currentStep ? steps.findIndex(s => s.id === currentStep.id) : -1;
     console.log("[Exercise] Current step index:", currentIndex, "of", steps.length, "steps");
     
     if (currentIndex < steps.length - 1) {
       const nextStep = steps[currentIndex + 1];
       console.log("[Exercise] Advancing to next step:", nextStep.id, nextStep.title);
-      updateExerciseSessionMutation.mutate({ currentStepId: nextStep.id });
+      updateExerciseSessionMutation.mutate({ 
+        sessionId: session.id, 
+        updates: { currentStepId: nextStep.id } 
+      });
     } else {
       console.log("[Exercise] On last step, marking as completed");
       updateExerciseSessionMutation.mutate({ 
-        status: "completed",
-        currentStepId: null,
+        sessionId: session.id,
+        updates: { status: "completed", currentStepId: null }
       });
     }
   };
 
   const handleExitExercise = () => {
-    if (!exerciseSessionData) return;
-    updateExerciseSessionMutation.mutate({ status: "abandoned" });
+    if (!exerciseSessionData?.session?.id) return;
+    updateExerciseSessionMutation.mutate({ 
+      sessionId: exerciseSessionData.session.id, 
+      updates: { status: "abandoned" } 
+    });
   };
 
   const handleBackToInbox = () => {
