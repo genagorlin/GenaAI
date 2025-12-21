@@ -287,7 +287,17 @@ export async function registerRoutes(
         : false;
       
       const mentionsCoach = detectCoachMention(validated.content) ? 1 : 0;
-      const message = await storage.createMessage({ ...validated, mentionsCoach });
+      
+      // Get current exercise step ID if in an active exercise session
+      let exerciseStepId: string | undefined;
+      if (validated.threadId) {
+        const activeSession = await storage.getActiveExerciseSession(req.params.clientId, validated.threadId);
+        if (activeSession?.currentStepId) {
+          exerciseStepId = activeSession.currentStepId;
+        }
+      }
+      
+      const message = await storage.createMessage({ ...validated, mentionsCoach, exerciseStepId });
       
       if (mentionsCoach && validated.threadId) {
         await storage.createCoachMention({
@@ -342,6 +352,7 @@ export async function registerRoutes(
           const aiMessage = await storage.createMessage({
             clientId: req.params.clientId,
             threadId: validated.threadId,
+            exerciseStepId,
             role: "ai",
             content: aiResponseContent,
             type: "text",
@@ -1061,12 +1072,13 @@ export async function registerRoutes(
         await storage.createMessage({
           clientId: req.params.clientId,
           threadId: validated.threadId,
+          exerciseStepId: session.currentStepId || undefined,
           role: "ai",
           content: aiResponseContent,
           type: "text",
         });
         
-        console.log(`[Exercise] Generated opening message for exercise ${validated.exerciseId}`);
+        console.log(`[Exercise] Generated opening message for exercise ${validated.exerciseId} (step: ${session.currentStepId})`);
       } catch (aiError) {
         console.error("[Exercise] Failed to generate exercise opening message:", aiError);
         // Session is still created, just without opening message
