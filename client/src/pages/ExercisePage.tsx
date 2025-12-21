@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, X, CheckCircle2, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, CheckCircle2, Loader2, AlertCircle, ArrowLeft, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { EmotionCapturePanel } from "@/components/EmotionCapturePanel";
 
 interface ExerciseStep {
   id: string;
@@ -42,6 +43,18 @@ interface StepResponse {
   submittedAt: string | null;
 }
 
+interface EmotionSnapshot {
+  id: string;
+  sessionId: string;
+  emotionName: string;
+  intensity: number | null;
+  surfaceContent: string | null;
+  tone: string | null;
+  actionUrges: string | null;
+  underlyingBelief: string | null;
+  underlyingValues: string | null;
+}
+
 export default function ExercisePage() {
   const { clientId, sessionId } = useParams<{ clientId: string; sessionId: string }>();
   const [, setLocation] = useLocation();
@@ -52,6 +65,7 @@ export default function ExercisePage() {
   const [answer, setAnswer] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [emotionPanelOpen, setEmotionPanelOpen] = useState(false);
 
   const { data: sessionData, isLoading: sessionLoading } = useQuery<{
     session: ExerciseSession;
@@ -77,15 +91,32 @@ export default function ExercisePage() {
     enabled: !!sessionId,
   });
 
+  const { data: emotions = [] } = useQuery<EmotionSnapshot[]>({
+    queryKey: ["/api/exercises/sessions", sessionId, "emotions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/exercises/sessions/${sessionId}/emotions`);
+      if (!res.ok) throw new Error("Failed to fetch emotions");
+      return res.json();
+    },
+    enabled: !!sessionId && sessionData?.session?.status === "completed",
+  });
+
   const session = sessionData?.session;
   const exercise = sessionData?.exercise;
   const steps = sessionData?.steps || [];
   const currentStep = currentStepIndex !== null ? steps[currentStepIndex] : null;
   const currentResponse = responses.find(r => r.stepId === currentStep?.id);
+  const showCompletion = session?.status === "completed";
 
   useEffect(() => {
     if (!hasInitialized && sessionData && steps.length > 0) {
       const { session } = sessionData;
+      
+      if (session.status === "completed") {
+        setHasInitialized(true);
+        return;
+      }
+      
       let initialIndex = 0;
       
       if (session.currentStepId) {
@@ -187,11 +218,6 @@ export default function ExercisePage() {
           currentStepId: null,
         });
         toast.success("Exercise completed!");
-        if (session?.threadId) {
-          setLocation(`/chat/${clientId}/${session.threadId}`);
-        } else {
-          setLocation(`/inbox/${clientId}`);
-        }
       }
     } catch (error) {
       toast.error("Something went wrong");
@@ -222,7 +248,7 @@ export default function ExercisePage() {
     }
   };
 
-  if (sessionLoading || currentStepIndex === null) {
+  if (sessionLoading || (!showCompletion && currentStepIndex === null)) {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-100">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
@@ -240,6 +266,145 @@ export default function ExercisePage() {
             Back to Inbox
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (showCompletion) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex flex-col">
+        <header className="bg-white border-b px-4 py-3 sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-primary" data-testid="text-exercise-complete-title">
+                {exercise.title} - Complete
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExit}
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                data-testid="button-exit-completion"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-2xl mx-auto p-4 space-y-6">
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
+              </div>
+              <h1 className="text-2xl font-semibold mb-2" data-testid="text-completion-heading">
+                Exercise Complete!
+              </h1>
+              <p className="text-muted-foreground">
+                Here's a summary of the emotions you worked through.
+              </p>
+            </div>
+
+            {emotions.length > 0 ? (
+              <div className="space-y-4">
+                <h2 className="text-lg font-medium flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-violet-500" />
+                  Emotion Summary ({emotions.length})
+                </h2>
+                
+                <div className="grid gap-4">
+                  {emotions.map((emotion) => (
+                    <Card key={emotion.id} className="overflow-hidden" data-testid={`card-summary-emotion-${emotion.id}`}>
+                      <div 
+                        className="h-2" 
+                        style={{ 
+                          backgroundColor: `hsl(${(emotion.intensity ?? 5) * 12}, 70%, 50%)` 
+                        }}
+                      />
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          <span>{emotion.emotionName}</span>
+                          {emotion.intensity !== null && (
+                            <span className="text-sm font-normal text-muted-foreground">
+                              Intensity: {emotion.intensity}/10
+                            </span>
+                          )}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        {emotion.surfaceContent && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">
+                              Surface Content
+                            </p>
+                            <p className="text-foreground">{emotion.surfaceContent}</p>
+                          </div>
+                        )}
+                        
+                        {emotion.tone && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">
+                              Tone
+                            </p>
+                            <p className="text-foreground">{emotion.tone}</p>
+                          </div>
+                        )}
+                        
+                        {emotion.actionUrges && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">
+                              Action Urges
+                            </p>
+                            <p className="text-foreground">{emotion.actionUrges}</p>
+                          </div>
+                        )}
+                        
+                        {emotion.underlyingBelief && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">
+                              Underlying Belief
+                            </p>
+                            <p className="text-foreground">{emotion.underlyingBelief}</p>
+                          </div>
+                        )}
+                        
+                        {emotion.underlyingValues && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">
+                              Underlying Values
+                            </p>
+                            <p className="text-foreground">{emotion.underlyingValues}</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Heart className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>No emotions were captured during this exercise.</p>
+                <p className="text-sm mt-1">
+                  Next time, try using the Emotions panel to track what you're feeling.
+                </p>
+              </div>
+            )}
+          </div>
+        </main>
+
+        <footer className="bg-white border-t px-4 py-4 sticky bottom-0">
+          <div className="max-w-2xl mx-auto">
+            <Button 
+              className="w-full" 
+              onClick={handleExit}
+              data-testid="button-done"
+            >
+              Done
+            </Button>
+          </div>
+        </footer>
       </div>
     );
   }
@@ -322,6 +487,12 @@ export default function ExercisePage() {
               </div>
             )}
           </div>
+
+          <EmotionCapturePanel
+            sessionId={sessionId!}
+            isExpanded={emotionPanelOpen}
+            onToggle={() => setEmotionPanelOpen(!emotionPanelOpen)}
+          />
         </div>
       </main>
 
