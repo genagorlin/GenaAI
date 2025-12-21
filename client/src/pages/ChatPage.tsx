@@ -204,14 +204,8 @@ export default function ChatPage() {
       if (!res.ok) throw new Error("Failed to start exercise");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"] 
-      });
-      // Also refetch messages to show the AI opening message
-      queryClient.invalidateQueries({
-        queryKey: ["/api/threads", threadId, "messages"]
-      });
+    onSuccess: (session) => {
+      setLocation(`/exercise/${clientId}/${session.id}`);
     },
   });
 

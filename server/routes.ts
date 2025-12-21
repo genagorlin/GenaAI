@@ -1211,6 +1211,154 @@ export async function registerRoutes(
     }
   });
 
+  // Exercise Step Response Routes (client)
+  // Get all responses for a session
+  app.get("/api/exercises/sessions/:sessionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getSessionResponses(req.params.sessionId);
+      res.json(responses);
+    } catch (error) {
+      console.error("Get session responses error:", error);
+      res.status(500).json({ error: "Failed to fetch responses" });
+    }
+  });
+
+  // Get a specific step response
+  app.get("/api/exercises/sessions/:sessionId/steps/:stepId/response", async (req, res) => {
+    try {
+      const response = await storage.getStepResponse(req.params.sessionId, req.params.stepId);
+      res.json(response || null);
+    } catch (error) {
+      console.error("Get step response error:", error);
+      res.status(500).json({ error: "Failed to fetch step response" });
+    }
+  });
+
+  // Submit or update a step response
+  app.post("/api/exercises/sessions/:sessionId/steps/:stepId/response", async (req, res) => {
+    try {
+      const { clientAnswer } = req.body;
+      if (typeof clientAnswer !== "string") {
+        return res.status(400).json({ error: "clientAnswer is required" });
+      }
+      
+      const response = await storage.upsertStepResponse({
+        sessionId: req.params.sessionId,
+        stepId: req.params.stepId,
+        clientAnswer,
+        submittedAt: new Date(),
+      });
+      
+      console.log(`[Exercise] Client submitted answer for step ${req.params.stepId}`);
+      res.json(response);
+    } catch (error) {
+      console.error("Submit step response error:", error);
+      res.status(500).json({ error: "Failed to submit response" });
+    }
+  });
+
+  // AI review of a step response
+  app.post("/api/exercises/sessions/:sessionId/steps/:stepId/review", async (req, res) => {
+    try {
+      const session = await storage.getExerciseSession(req.params.sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      
+      const step = await storage.getExerciseStep(req.params.stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+      
+      const existingResponse = await storage.getStepResponse(req.params.sessionId, req.params.stepId);
+      if (!existingResponse || !existingResponse.clientAnswer) {
+        return res.status(400).json({ error: "No answer to review" });
+      }
+      
+      // Get exercise for context
+      const exercise = await storage.getGuidedExercise(session.exerciseId);
+      if (!exercise) {
+        return res.status(404).json({ error: "Exercise not found" });
+      }
+      
+      // Build AI review prompt
+      const reviewPrompt = `You are reviewing a client's answer for an exercise step.
+
+EXERCISE: ${exercise.title}
+STEP: ${step.title}
+STEP INSTRUCTIONS: ${step.instructions}
+${step.completionCriteria ? `EXPECTED ANSWER TYPE: ${step.completionCriteria}` : ""}
+
+CLIENT'S ANSWER:
+${existingResponse.clientAnswer}
+
+Your task: Determine if the answer matches what the step is asking for.
+- If the answer is appropriate (matches the type of response requested), respond with: {"needsRevision": false, "feedback": null}
+- If the answer doesn't match (e.g., listing feelings when asked for facts, or vice versa), respond with: {"needsRevision": true, "feedback": "Brief, constructive feedback explaining what's needed"}
+
+Be generous - only flag answers that clearly miss the point. Minor imperfections are fine.
+Respond with ONLY the JSON object, no other text.`;
+
+      // Call AI for review
+      const { routeMessage } = await import("./modelRouter");
+      const { tier, model, provider } = routeMessage(existingResponse.clientAnswer);
+      
+      let reviewResult = { needsRevision: false, feedback: null as string | null };
+      
+      if (provider === "openai") {
+        const OpenAI = (await import("openai")).default;
+        const openai = new OpenAI({
+          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "https://api.openai.com/v1",
+        });
+        
+        const response = await openai.chat.completions.create({
+          model,
+          messages: [{ role: "user", content: reviewPrompt }],
+          max_tokens: 200,
+          temperature: 0.3,
+        });
+        
+        try {
+          reviewResult = JSON.parse(response.choices[0]?.message?.content || "{}");
+        } catch {
+          reviewResult = { needsRevision: false, feedback: null };
+        }
+      } else {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const anthropic = new Anthropic({
+          apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+          baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+        });
+        
+        const response = await anthropic.messages.create({
+          model,
+          max_tokens: 200,
+          messages: [{ role: "user", content: reviewPrompt }],
+        });
+        
+        try {
+          const textContent = response.content.find((c) => c.type === "text");
+          reviewResult = JSON.parse(textContent?.text || "{}");
+        } catch {
+          reviewResult = { needsRevision: false, feedback: null };
+        }
+      }
+      
+      // Update the response with AI feedback
+      const updatedResponse = await storage.updateStepResponse(existingResponse.id, {
+        aiFeedback: reviewResult.feedback,
+        needsRevision: reviewResult.needsRevision ? 1 : 0,
+      });
+      
+      console.log(`[Exercise] AI reviewed step ${req.params.stepId}: needsRevision=${reviewResult.needsRevision}`);
+      res.json(updatedResponse);
+    } catch (error) {
+      console.error("Review step response error:", error);
+      res.status(500).json({ error: "Failed to review response" });
+    }
+  });
+
   // File Attachment Routes (protected - coach only)
   // Get upload URL for object storage
   app.post("/api/coach/files/upload-url", isAuthenticated, async (_req, res) => {

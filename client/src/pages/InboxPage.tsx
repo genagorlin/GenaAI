@@ -180,7 +180,7 @@ export default function InboxPage() {
 
   const startExerciseMutation = useMutation({
     mutationFn: async (exercise: GuidedExercise) => {
-      // Pass exerciseId when creating thread so the opening message is exercise-specific
+      // Create a thread for the exercise (for later discussions)
       const threadRes = await fetch(`/api/clients/${clientId}/threads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -198,12 +198,13 @@ export default function InboxPage() {
         }),
       });
       if (!sessionRes.ok) throw new Error("Failed to start exercise");
+      const session = await sessionRes.json();
       
-      return { thread, exercise };
+      return { thread, exercise, session };
     },
-    onSuccess: ({ thread }) => {
+    onSuccess: ({ session }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-      setLocation(`/chat/${clientId}/${thread.id}`);
+      setLocation(`/exercise/${clientId}/${session.id}`);
     },
   });
 
