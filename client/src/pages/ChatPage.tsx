@@ -25,6 +25,7 @@ interface Message {
   id: string;
   clientId: string;
   threadId: string | null;
+  exerciseStepId: string | null;
   role: "user" | "ai" | "coach";
   content: string;
   type: string;
@@ -77,6 +78,12 @@ interface ExerciseSessionData {
   steps: ExerciseStep[];
 }
 
+interface MessageGroup {
+  stepId: string | null;
+  step: ExerciseStep | null;
+  messages: Message[];
+}
+
 export default function ChatPage() {
   const { clientId, threadId } = useParams<{ clientId: string; threadId: string }>();
   const [, setLocation] = useLocation();
@@ -91,6 +98,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const stepRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const queryClient = useQueryClient();
 
   // Check if user is authenticated for client access
@@ -403,6 +411,7 @@ export default function ChatPage() {
         id: `temp-${Date.now()}`,
         clientId: clientId!,
         threadId: threadId || null,
+        exerciseStepId: exerciseSessionData?.session?.currentStepId || null,
         role: "user",
         content,
         type: "text",
@@ -540,6 +549,48 @@ export default function ChatPage() {
     return fullName?.split(' ')[0] || 'there';
   };
 
+  // Group messages by exercise step for step-organized display
+  const groupMessagesByStep = (msgs: Message[], steps: ExerciseStep[]): MessageGroup[] => {
+    if (!exerciseSessionData || !steps.length) {
+      // No exercise context - return all messages as a single group
+      return [{ stepId: null, step: null, messages: msgs }];
+    }
+    
+    const groups: MessageGroup[] = [];
+    let currentGroup: MessageGroup | null = null;
+    
+    for (const msg of msgs) {
+      const stepId = msg.exerciseStepId;
+      
+      if (!currentGroup || currentGroup.stepId !== stepId) {
+        // Start a new group
+        const foundStep: ExerciseStep | null = stepId ? steps.find(s => s.id === stepId) || null : null;
+        currentGroup = { stepId, step: foundStep, messages: [] };
+        groups.push(currentGroup);
+      }
+      
+      currentGroup.messages.push(msg);
+    }
+    
+    return groups;
+  };
+
+  const scrollToStep = useCallback((stepId: string) => {
+    const stepElement = stepRefs.current.get(stepId);
+    if (stepElement && scrollRef.current) {
+      stepElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  // Scroll to current step when it changes (step navigation)
+  useEffect(() => {
+    const currentStepId = exerciseSessionData?.session?.currentStepId;
+    if (currentStepId) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => scrollToStep(currentStepId), 100);
+    }
+  }, [exerciseSessionData?.session?.currentStepId, scrollToStep]);
+
   if (!clientId) {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-100">
@@ -657,42 +708,66 @@ export default function ChatPage() {
                 </div>
               )
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  data-testid={`message-${message.id}`}
-                  className={cn(
-                    "flex max-w-[85%] flex-col rounded-lg px-2 pt-2 pb-1 shadow-sm relative",
-                    message.role === "user"
-                      ? "self-end bg-[hsl(var(--wa-outgoing))] text-slate-900 rounded-tr-none"
-                      : message.role === "coach"
-                      ? "self-start bg-violet-500 text-white rounded-tl-none"
-                      : "self-start bg-white text-slate-900 rounded-tl-none"
-                  )}
-                >
-                  {message.role === "coach" && (
-                    <div className="text-[10px] font-medium text-violet-100 px-1 mb-0.5">
-                      Coach Gena
+              groupMessagesByStep(messages, exerciseSessionData?.steps || []).map((group, groupIndex) => (
+                <div key={group.stepId || `group-${groupIndex}`}>
+                  {group.step && (
+                    <div 
+                      ref={(el) => {
+                        if (el && group.stepId) {
+                          stepRefs.current.set(group.stepId, el);
+                        }
+                      }}
+                      className="flex justify-center py-3 mt-2"
+                    >
+                      <div className={cn(
+                        "px-3 py-1.5 rounded-lg shadow-sm text-xs font-medium",
+                        exerciseSessionData?.session?.currentStepId === group.stepId
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                      )}>
+                        {group.step.title}
+                      </div>
                     </div>
                   )}
-                  <div className="text-[15px] leading-relaxed break-words px-1 prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  </div>
-                  <div className="flex items-center justify-end gap-1 mt-0.5">
-                    <span className={cn(
-                      "text-[10px]",
-                      message.role === "coach" ? "text-violet-100/80" : "text-slate-500/80"
-                    )}>
-                      {formatTime(message.timestamp)}
-                    </span>
-                    {message.role === "user" && (
-                      <span className="text-blue-500">
-                        <svg viewBox="0 0 16 15" width="16" height="15">
-                          <path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.06a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.06a.366.366 0 0 0-.064-.512z"></path>
-                        </svg>
-                      </span>
-                    )}
-                  </div>
+                  
+                  {group.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      data-testid={`message-${message.id}`}
+                      className={cn(
+                        "flex max-w-[85%] flex-col rounded-lg px-2 pt-2 pb-1 shadow-sm relative mt-2",
+                        message.role === "user"
+                          ? "self-end bg-[hsl(var(--wa-outgoing))] text-slate-900 rounded-tr-none"
+                          : message.role === "coach"
+                          ? "self-start bg-violet-500 text-white rounded-tl-none"
+                          : "self-start bg-white text-slate-900 rounded-tl-none"
+                      )}
+                    >
+                      {message.role === "coach" && (
+                        <div className="text-[10px] font-medium text-violet-100 px-1 mb-0.5">
+                          Coach Gena
+                        </div>
+                      )}
+                      <div className="text-[15px] leading-relaxed break-words px-1 prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <span className={cn(
+                          "text-[10px]",
+                          message.role === "coach" ? "text-violet-100/80" : "text-slate-500/80"
+                        )}>
+                          {formatTime(message.timestamp)}
+                        </span>
+                        {message.role === "user" && (
+                          <span className="text-blue-500">
+                            <svg viewBox="0 0 16 15" width="16" height="15">
+                              <path fill="currentColor" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.06a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.06a.366.366 0 0 0-.064-.512z"></path>
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))
             )}
