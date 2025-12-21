@@ -65,7 +65,6 @@ export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
-  exerciseStepId: varchar("exercise_step_id"), // Links message to specific exercise step (for step-grouped display)
   role: text("role").notNull(), // "user", "ai", or "coach"
   content: text("content").notNull(),
   type: text("type").notNull().default("text"), // "text" or "audio"
@@ -261,7 +260,6 @@ export const guidedExercises = pgTable("guided_exercises", {
   systemPrompt: text("system_prompt").notNull().default(""), // Overall instructions for AI during this exercise
   isPublished: integer("is_published").notNull().default(0), // 0 = draft, 1 = visible to clients
   sortOrder: integer("sort_order").notNull().default(0),
-  enableEmotionCapture: integer("enable_emotion_capture").notNull().default(0), // 0 = off, 1 = show emotion panel
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -298,37 +296,6 @@ export const insertGuidedExerciseSchema = createInsertSchema(guidedExercises).om
 export const insertExerciseStepSchema = createInsertSchema(exerciseSteps).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientExerciseSessionSchema = createInsertSchema(clientExerciseSessions).omit({ id: true, startedAt: true, completedAt: true });
 
-// Exercise Step Responses - stores client answers and AI feedback for each step
-export const exerciseStepResponses = pgTable("exercise_step_responses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  sessionId: varchar("session_id").notNull().references(() => clientExerciseSessions.id, { onDelete: "cascade" }),
-  stepId: varchar("step_id").notNull().references(() => exerciseSteps.id, { onDelete: "cascade" }),
-  clientAnswer: text("client_answer").notNull().default(""), // The client's fill-in-the-blank response
-  aiFeedback: text("ai_feedback"), // AI's review/feedback (null if no feedback needed)
-  needsRevision: integer("needs_revision").notNull().default(0), // 1 if AI flagged the answer for revision
-  submittedAt: timestamp("submitted_at"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertExerciseStepResponseSchema = createInsertSchema(exerciseStepResponses).omit({ id: true, updatedAt: true });
-
-// Exercise Emotion Snapshots - structured per-emotion data captured during exercises
-export const exerciseEmotionSnapshots = pgTable("exercise_emotion_snapshots", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  sessionId: varchar("session_id").notNull().references(() => clientExerciseSessions.id, { onDelete: "cascade" }),
-  emotionName: text("emotion_name").notNull(), // e.g., "anxiety", "frustration", "excitement"
-  intensity: integer("intensity"), // 0-10 scale
-  surfaceContent: text("surface_content"), // "I feel X because I think that ____"
-  tone: text("tone"), // e.g., "bullying", "defensive", "pessimistic"
-  actionUrges: text("action_urges"), // What it wants me to do/not do
-  underlyingBelief: text("underlying_belief"), // Core belief/mindset driving the emotion
-  underlyingValues: text("underlying_values"), // "I feel X because I care about ____"
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertEmotionSnapshotSchema = createInsertSchema(exerciseEmotionSnapshots).omit({ id: true, createdAt: true, updatedAt: true });
-
 export type InsertGuidedExercise = z.infer<typeof insertGuidedExerciseSchema>;
 export type GuidedExercise = typeof guidedExercises.$inferSelect;
 
@@ -337,12 +304,6 @@ export type ExerciseStep = typeof exerciseSteps.$inferSelect;
 
 export type InsertClientExerciseSession = z.infer<typeof insertClientExerciseSessionSchema>;
 export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
-
-export type InsertExerciseStepResponse = z.infer<typeof insertExerciseStepResponseSchema>;
-export type ExerciseStepResponse = typeof exerciseStepResponses.$inferSelect;
-
-export type InsertEmotionSnapshot = z.infer<typeof insertEmotionSnapshotSchema>;
-export type EmotionSnapshot = typeof exerciseEmotionSnapshots.$inferSelect;
 
 // File Attachments - uploaded files linked to exercises or reference documents
 export const fileAttachments = pgTable("file_attachments", {

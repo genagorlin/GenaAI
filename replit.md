@@ -2,7 +2,9 @@
 
 ## Overview
 
-GenaGPT is an AI-augmented coaching platform designed for a single coach (Gena) and her clients. Its primary purpose is to provide clients with a 24/7 AI thinking partner for deep reflection, while transforming these client-AI interactions into structured insights for the coach. The platform aims to facilitate a closed loop of client interaction leading to AI-generated insights, which then inform and enhance human coaching sessions.
+GenaGPT is a vertically integrated, AI-augmented coaching platform designed specifically for a single coach (Gena) and her clients. The core value proposition is providing clients with a 24/7 AI thinking partner for deep reflection, while transforming those client-AI interactions into structured insights for the coach.
+
+The v1 scope is intentionally narrow: no marketplace, no multi-coach features, no billing/scheduling - just the closed loop of client → AI → structured insight → coach → better human sessions.
 
 ## User Preferences
 
@@ -33,73 +35,239 @@ GenaGPT is an AI-augmented coaching platform designed for a single coach (Gena) 
 
 ### Frontend Architecture
 - **Framework**: React 18 with TypeScript
-- **Routing**: Wouter
-- **State Management**: TanStack React Query
-- **Styling**: Tailwind CSS with shadcn/ui (New York style)
-- **Build Tool**: Vite with custom Replit integration plugins
-- **Views**: Landing Page (`/`), Client Page (`/client`) for journaling, Coach Page (`/coach`) for insights and history.
+- **Routing**: Wouter (lightweight React router)
+- **State Management**: TanStack React Query for server state
+- **Styling**: Tailwind CSS with shadcn/ui component library (New York style)
+- **Build Tool**: Vite with custom plugins for Replit integration
+
+The frontend has three main views:
+1. **Landing Page** (`/`) - Marketing and entry point with coach/client portals
+2. **Client Page** (`/client`) - Mobile-first journal interface for client-AI conversations
+3. **Coach Page** (`/coach`) - Dashboard showing client insights, sentiment analysis, and conversation history
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript with ESM modules
-- **API Pattern**: RESTful JSON API under `/api`
+- **API Pattern**: RESTful JSON API under `/api` prefix
 - **Development**: Vite dev server with HMR proxied through Express
+
+Key API endpoints:
+- `/api/clients` - CRUD operations for client management
+- `/api/clients/:id/messages` - Client conversation history
+- `/api/clients/:id/insights` - AI-generated insights per client
+- `/api/clients/:id/sentiment` - Sentiment tracking data
 
 ### Data Storage
 - **Database**: PostgreSQL via Drizzle ORM
-- **Schema Location**: `shared/schema.ts`
-- **Migrations**: Drizzle Kit
-- **Core Tables**: `clients`, `messages`, `insights`, `sentimentData`
+- **Schema Location**: `shared/schema.ts` (shared between client/server)
+- **Migrations**: Drizzle Kit with `db:push` for schema sync
+
+Core tables:
+- `clients` - Client profiles with activity tracking
+- `messages` - Conversation history (user and AI messages)
+- `insights` - Categorized coaching insights (emotional spikes, recurring themes, shifts, contradictions)
+- `sentimentData` - Time-series sentiment and intensity scores
 
 ### Validation
 - **Schema Validation**: Zod with drizzle-zod for type-safe API validation
-
-### AI Integrations
-- **Multi-provider AI Architecture**: Intelligent routing based on message content.
-- **Model Router**: Analyzes messages to select optimal model/provider (OpenAI GPT for fast tier, Anthropic Claude for balanced/deep tiers).
-- **Prompt Assembly**: Dynamically constructs system prompts using role, methodology, memory context, current input, task prompt, and conversation buffer, adhering to a 30,000 token budget.
-- **Three-Way Conversations**: AI participates in conversations between client and coach, responding appropriately to each participant type.
-
-### Session Management & AI Document Updates
-- **Session Conclusion**: Triggered by goodbye detection, inactivity, or app closure.
-- **Session Summarization**: AI analyzes messages to update client living document sections (Highlights, Focus, Context, Conversation Summaries, Custom sections).
-- **Client Document Access**: Clients can view and edit their own living document sections via the Inbox interface.
-- **Security Model**: Two-tier authentication (Coach and Client) with strict session and client-specific access isolation (`verifyClientAccess` middleware).
-
-### Reference Library
-- Coaches upload writings (articles, excerpts) for AI reference and client browsing.
-- AI embodies the worldview from these writings, not just quotes them, within a 3,000 token budget.
-
-### File Attachments
-- Coaches attach files (PDFs, text files) to reference documents or exercises.
-- Files are stored in Replit Object Storage, parsed by `server/fileParser.ts`, and their content included in AI prompts (2,000 token budget per context).
-
-### Structured Emotion Capture
-- Clients capture emotions during exercises using structured fields (Emotion Name, Intensity, Surface Content, Tone, Action Urges, Underlying Belief, Underlying Values).
-- Data is saved to `exercise_emotion_snapshots` table and summarized upon exercise completion.
+- **Insert Schemas**: Auto-generated from Drizzle table definitions
 
 ## External Dependencies
 
 ### Database
-- PostgreSQL (via `DATABASE_URL` env var)
-- `connect-pg-simple` (session storage)
-- `pg` (driver with connection pooling)
+- PostgreSQL database (connection via `DATABASE_URL` environment variable)
+- `connect-pg-simple` for session storage
+- `pg` driver with connection pooling
 
 ### UI Framework
-- shadcn/ui (components)
-- Radix UI (primitives)
-- Recharts (sentiment visualization)
-- Lucide React (icons)
-- Embla Carousel (mobile interactions)
+- shadcn/ui components built on Radix UI primitives
+- Recharts for sentiment visualization
+- Lucide React for icons
+- Embla Carousel for mobile interactions
 
 ### Build & Development
-- Vite (frontend bundling)
-- esbuild (server bundling)
+- Vite for frontend bundling
+- esbuild for server bundling (production builds)
+- Custom Vite plugins for Replit deployment (meta images, cartographer, dev banner)
 
 ### AI Integrations
-- OpenAI GPT (`gpt-4o-mini`) via Replit AI Integrations
-- Anthropic Claude (`claude-sonnet-4-5`) via Replit AI Integrations
 
-### File Handling
-- Uppy dashboard (ObjectUploader component)
-- `pdf-parse` library (PDF text extraction)
+The platform uses a multi-provider AI architecture with intelligent routing:
+
+**Providers (via Replit AI Integrations - no API keys required, billed to credits):**
+- **OpenAI GPT** - Used for fast tier (simple/standard messages)
+  - Environment: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
+  - Models: `gpt-4o-mini` (fast tier)
+- **Anthropic Claude** - Used for balanced/deep tier (emotional/complex content)
+  - Environment: `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY`
+  - Models: `claude-sonnet-4-5` (balanced/deep tier)
+
+**Model Router (`server/modelRouter.ts`):**
+The router analyzes each incoming message and selects the optimal model/provider:
+- **Fast tier** (OpenAI gpt-4o-mini) - Simple greetings, short messages (<20 chars), standard messages
+- **Balanced tier** (Anthropic claude-sonnet-4-5) - Emotional content, longer messages (>200 chars)
+- **Deep tier** (Anthropic claude-sonnet-4-5) - Existential questions, complex reasoning
+
+Message analysis includes:
+- Emotional keyword detection (feel, scared, overwhelmed, etc.)
+- Deep question pattern matching (why, meaning, purpose, etc.)
+- Simple greeting detection
+
+**Prompt Assembly (`server/promptAssembler.ts`):**
+Token budgets are allocated across prompt components (total budget: 30,000 tokens):
+- Role Prompt: 500 tokens (AI personality per client)
+- Methodology Frame: 2,000 tokens (coaching frameworks)
+- Memory Context: 15,000 tokens (living document sections)
+- Current Input: 1,000 tokens
+- Task Prompt: 500 tokens (response instructions)
+- Conversation Buffer: 11,000 tokens (recent messages)
+
+**Conversation Flow:**
+1. Client or coach sends message via chat interface
+2. Model router analyzes message → selects tier/model/provider
+3. Prompt assembler builds system prompt from living document + prompts
+4. Request sent to AI provider
+5. Response saved to database and returned to sender
+
+**Three-Way Conversations:**
+The AI participates in conversations between client and coach:
+- Messages are labeled as [CLIENT] or [COACH] in conversation history
+- AI receives instructions on how to respond to each participant type
+- Coach messages automatically trigger AI responses (can disable with `triggerAI: false`)
+- `currentSpeaker` parameter identifies who is sending the current message
+- `messageAlreadyStored` flag prevents duplicate messages in prompt history
+
+## Session Conclusion & AI Document Updates
+
+A client session is concluded when:
+1. **Goodbye detection** - Pattern matching triggers when client says farewell ("goodbye", "see you", "thanks, bye", etc.)
+2. **Inactivity timeout** - Frontend detects 5+ minutes of no messages
+3. **App close/tab switch** - Visibility change or beforeunload events trigger session end
+
+**Implementation:**
+- `server/sessionSummarizer.ts` - AI analyzes messages since `lastSummarizedAt` and updates document sections
+- `POST /api/clients/:clientId/session-end` - Endpoint triggers summarization
+- Frontend ChatPage.tsx tracks inactivity and visibility changes
+- AI updates are marked with `pendingReview=1` for coach approval (accept/revert controls)
+
+## Client Document Access
+
+Clients can view and edit their own living document through the Inbox interface:
+
+**Client-Visible Sections:**
+- Highlights (key moments and quotes)
+- Focus (current priorities)
+- Context (background information)
+- Conversation Summaries
+- Custom sections
+
+**Hidden from Clients:**
+- Role prompts (AI personality instructions)
+- Task prompts (response guidelines)
+- Coach notes (private coach observations)
+
+**Security Model:**
+The platform uses a two-tier authentication model with strict session isolation:
+
+**Coach Authentication:**
+- Coach logs in via `/api/login` → OAuth → `/api/callback`
+- Must be in the `authorized_users` allowlist to proceed
+- Uses `isAuthenticated` middleware which checks allowlist
+- Session type is undefined (default)
+
+**Client Authentication:**
+- Client logs in via `/api/client/login?returnTo=/inbox/{clientId}` → OAuth → `/api/callback`
+- Client must exist (created by coach first)
+- If client has an email, login email must match exactly
+- If first login (no email on record), binds the login email to client
+- Session stores: `sessionType: "client"` and `boundClientId: {clientId}`
+
+**Client API Protection (`verifyClientAccess` middleware):**
+- All client-facing routes use `verifyClientAccess` middleware
+- Three-layer security check:
+  1. `req.session.sessionType === "client"` - Rejects coach sessions
+  2. `req.session.boundClientId === clientId` - Prevents cross-client access
+  3. `req.user.claims.email === client.email` - Final email verification
+- Returns 403 with specific error message if any check fails
+
+**Access Denied Handling:**
+- `client/src/pages/ClientAccessDenied.tsx` - Shows context-specific error messages
+- Frontend redirects to this page on 403/404 responses from protected APIs
+
+**Implementation:**
+- `GET /api/chat/:clientId/document` - Fetches document with client-viewable sections
+- `PATCH /api/chat/:clientId/sections/:sectionId` - Updates a section (marks as client-edited)
+- `client/src/components/ClientDocumentView.tsx` - Collapsible section editor
+- `client/src/pages/InboxPage.tsx` - Tab toggle between "Conversations" and "My Document"
+
+## Reference Library
+
+The coach can upload their writings (articles, book excerpts, notes) for the AI to reference when talking to clients. Clients can also browse and read these materials.
+
+**How it works:**
+- Coach adds documents via the "Library" button in the dashboard header
+- Each document has a title, optional description, and content
+
+**Client Access:**
+- Clients can browse the Library via a "Library" tab in the Inbox page
+- A book icon button in the chat header also opens the Library as a slide-out panel
+- Clients can read full documents but cannot edit them
+- API: `GET /api/reference-documents` - Public endpoint for clients to fetch documents
+- AI is instructed to **embody** this worldview, not just quote from it
+- The writings shape how the AI thinks and responds in ALL conversations
+- When directly relevant, AI may attribute: "As Gena discusses..."
+- All documents are included in every conversation (within token limits)
+
+**Token Budget:**
+- Reference documents: 3,000 tokens (~12,000 characters)
+- File attachments: 2,000 tokens (~8,000 characters)
+- If total content exceeds this, documents are truncated (oldest content cut first)
+
+**Implementation:**
+- `reference_documents` table stores title, content, description, tags
+- `file_attachments` table stores uploaded files linked to reference docs or exercises
+- `GET/POST/PATCH/DELETE /api/coach/reference-documents` - CRUD operations
+- `client/src/components/dashboard/ReferenceLibrary.tsx` - Dialog UI
+- Prompt assembler fetches all documents and adds to system prompt with attribution instructions
+
+## File Attachments
+
+Coaches can attach files (PDFs, documents, images) to both reference library documents and guided exercises. The AI can read and use the content when guiding clients.
+
+**Supported File Types:**
+- **PDFs** - Full text extraction using pdf-parse library
+- **Text files** - Direct text content extraction (txt, md, json, xml)
+- **Images** - Descriptive placeholder (AI cannot extract image content)
+- **Word documents** - Descriptive placeholder (suggests conversion to PDF)
+- **Other types** - Descriptive placeholder with file type info
+
+**How it works:**
+1. Coach uploads files via ObjectUploader component (Uppy dashboard)
+2. Files are stored in Replit Object Storage (`.private/` directory)
+3. File metadata saved to `file_attachments` table with links to parent entity
+4. During conversations, PromptAssembler fetches and parses attached files
+5. Parsed text content is included in the AI system prompt
+
+**Token Budget Allocation:**
+- Reference document attachments: 2,000 tokens
+- Exercise attachments: 2,000 tokens (within exercise context)
+
+**Implementation:**
+- `server/objectStorage.ts` - Object Storage service for file operations
+- `server/fileParser.ts` - File parsing utilities (PDF extraction, text parsing)
+- `server/promptAssembler.ts` - Includes parsed file content in AI prompts
+- `client/src/components/ObjectUploader.tsx` - Uppy-based file upload UI
+- `client/src/components/FileAttachments.tsx` - Display and manage attachments
+- `POST /api/attachments/upload-url` - Generate signed upload URLs
+- `POST /api/attachments/register` - Register uploaded files in database
+
+## Future Development Notes
+
+**Insight Generation (planned, not prioritized):**
+- Database schema exists for insights table
+- Categories: Emotional Spike, Recurring Theme, Shift, Contradiction
+- Will auto-extract from conversations when implemented
+
+**Sentiment Analysis (planned, not prioritized):**
+- Database schema exists for sentiment_data table
+- Will populate "Emotional Velocity" chart automatically when implemented

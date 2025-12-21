@@ -11,7 +11,6 @@ import AdminPage from "@/pages/AdminPage";
 import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
 import InboxPage from "@/pages/InboxPage";
-import ExercisePage from "@/pages/ExercisePage";
 import ClientAccessDenied from "@/pages/ClientAccessDenied";
 
 function Router() {
@@ -19,7 +18,6 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/exercise/:clientId/:sessionId" component={ExercisePage} />
       <Route path="/chat/:clientId/:threadId" component={ChatPage} />
       <Route path="/chat/:clientId" component={InboxPage} />
       <Route path="/inbox/:clientId" component={InboxPage} />

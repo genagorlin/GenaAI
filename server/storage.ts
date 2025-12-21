@@ -32,10 +32,6 @@ import {
   type InsertExerciseStep,
   type ClientExerciseSession,
   type InsertClientExerciseSession,
-  type ExerciseStepResponse,
-  type InsertExerciseStepResponse,
-  type EmotionSnapshot,
-  type InsertEmotionSnapshot,
   type FileAttachment,
   type InsertFileAttachment,
   clients,
@@ -57,8 +53,6 @@ import {
   guidedExercises,
   exerciseSteps,
   clientExerciseSessions,
-  exerciseStepResponses,
-  exerciseEmotionSnapshots,
   fileAttachments
 } from "@shared/schema";
 import { db } from "./db";
@@ -176,19 +170,6 @@ export interface IStorage {
   getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
-
-  // Exercise Step Responses
-  getSessionResponses(sessionId: string): Promise<ExerciseStepResponse[]>;
-  getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined>;
-  upsertStepResponse(response: InsertExerciseStepResponse): Promise<ExerciseStepResponse>;
-  updateStepResponse(id: string, updates: Partial<InsertExerciseStepResponse>): Promise<ExerciseStepResponse>;
-
-  // Emotion Snapshots
-  getSessionEmotionSnapshots(sessionId: string): Promise<EmotionSnapshot[]>;
-  getEmotionSnapshot(id: string): Promise<EmotionSnapshot | undefined>;
-  createEmotionSnapshot(snapshot: InsertEmotionSnapshot): Promise<EmotionSnapshot>;
-  updateEmotionSnapshot(id: string, updates: Partial<InsertEmotionSnapshot>): Promise<EmotionSnapshot>;
-  deleteEmotionSnapshot(id: string): Promise<void>;
 
   // File Attachments
   getFileAttachment(id: string): Promise<FileAttachment | undefined>;
@@ -814,72 +795,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clientExerciseSessions.id, id))
       .returning();
     return result;
-  }
-
-  // Exercise Step Responses
-  async getSessionResponses(sessionId: string): Promise<ExerciseStepResponse[]> {
-    return await db.select().from(exerciseStepResponses)
-      .where(eq(exerciseStepResponses.sessionId, sessionId));
-  }
-
-  async getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined> {
-    const [result] = await db.select().from(exerciseStepResponses)
-      .where(and(
-        eq(exerciseStepResponses.sessionId, sessionId),
-        eq(exerciseStepResponses.stepId, stepId)
-      ));
-    return result;
-  }
-
-  async upsertStepResponse(response: InsertExerciseStepResponse): Promise<ExerciseStepResponse> {
-    const existing = await this.getStepResponse(response.sessionId, response.stepId);
-    if (existing) {
-      const [result] = await db.update(exerciseStepResponses)
-        .set({ ...response, updatedAt: new Date() })
-        .where(eq(exerciseStepResponses.id, existing.id))
-        .returning();
-      return result;
-    }
-    const [result] = await db.insert(exerciseStepResponses).values(response).returning();
-    return result;
-  }
-
-  async updateStepResponse(id: string, updates: Partial<InsertExerciseStepResponse>): Promise<ExerciseStepResponse> {
-    const [result] = await db.update(exerciseStepResponses)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(exerciseStepResponses.id, id))
-      .returning();
-    return result;
-  }
-
-  // Emotion Snapshots
-  async getSessionEmotionSnapshots(sessionId: string): Promise<EmotionSnapshot[]> {
-    return await db.select().from(exerciseEmotionSnapshots)
-      .where(eq(exerciseEmotionSnapshots.sessionId, sessionId))
-      .orderBy(asc(exerciseEmotionSnapshots.createdAt));
-  }
-
-  async getEmotionSnapshot(id: string): Promise<EmotionSnapshot | undefined> {
-    const [result] = await db.select().from(exerciseEmotionSnapshots)
-      .where(eq(exerciseEmotionSnapshots.id, id));
-    return result;
-  }
-
-  async createEmotionSnapshot(snapshot: InsertEmotionSnapshot): Promise<EmotionSnapshot> {
-    const [result] = await db.insert(exerciseEmotionSnapshots).values(snapshot).returning();
-    return result;
-  }
-
-  async updateEmotionSnapshot(id: string, updates: Partial<InsertEmotionSnapshot>): Promise<EmotionSnapshot> {
-    const [result] = await db.update(exerciseEmotionSnapshots)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(exerciseEmotionSnapshots.id, id))
-      .returning();
-    return result;
-  }
-
-  async deleteEmotionSnapshot(id: string): Promise<void> {
-    await db.delete(exerciseEmotionSnapshots).where(eq(exerciseEmotionSnapshots.id, id));
   }
 
   // File Attachments

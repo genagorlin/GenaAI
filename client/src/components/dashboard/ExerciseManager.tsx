@@ -15,8 +15,7 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
-  ArrowLeft,
-  Heart
+  ArrowLeft
 } from "lucide-react";
 import { FileAttachments } from "@/components/FileAttachments";
 import { Button } from "@/components/ui/button";
@@ -50,7 +49,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 interface ExerciseStep {
@@ -73,7 +71,6 @@ interface GuidedExercise {
   systemPrompt: string;
   isPublished: number;
   sortOrder: number;
-  enableEmotionCapture: number;
   steps?: ExerciseStep[];
 }
 
@@ -94,8 +91,7 @@ export function ExerciseManager() {
     description: "", 
     category: "",
     estimatedMinutes: 15,
-    systemPrompt: "",
-    enableEmotionCapture: 0
+    systemPrompt: "" 
   });
   const [newStep, setNewStep] = useState({
     title: "",
@@ -129,7 +125,7 @@ export function ExerciseManager() {
         queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       }
       setIsCreating(false);
-      setNewExercise({ title: "", description: "", category: "", estimatedMinutes: 15, systemPrompt: "", enableEmotionCapture: 0 });
+      setNewExercise({ title: "", description: "", category: "", estimatedMinutes: 15, systemPrompt: "" });
       toast.success("Exercise created");
     },
     onError: () => {
@@ -430,8 +426,7 @@ export function ExerciseManager() {
       description: editingExercise.description,
       category: editingExercise.category,
       estimatedMinutes: editingExercise.estimatedMinutes,
-      systemPrompt: editingExercise.systemPrompt,
-      enableEmotionCapture: editingExercise.enableEmotionCapture
+      systemPrompt: editingExercise.systemPrompt
     });
   };
 
@@ -937,24 +932,6 @@ export function ExerciseManager() {
                   rows={4}
                   className="mt-1"
                   data-testid="input-edit-exercise-prompt"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 px-4 bg-violet-50 rounded-lg border border-violet-200">
-                <div className="flex items-center gap-3">
-                  <Heart className="h-5 w-5 text-violet-600" />
-                  <div>
-                    <p className="text-sm font-medium text-violet-900">Emotion Capture</p>
-                    <p className="text-xs text-violet-600">Let clients capture structured emotions during this exercise</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={editingExercise.enableEmotionCapture === 1}
-                  onCheckedChange={(checked) => setEditingExercise({ 
-                    ...editingExercise, 
-                    enableEmotionCapture: checked ? 1 : 0 
-                  })}
-                  data-testid="switch-emotion-capture"
                 />
               </div>
               
