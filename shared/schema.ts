@@ -65,6 +65,7 @@ export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
   threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
+  exerciseStepId: varchar("exercise_step_id"), // Links message to specific exercise step (for step-grouped display)
   role: text("role").notNull(), // "user", "ai", or "coach"
   content: text("content").notNull(),
   type: text("type").notNull().default("text"), // "text" or "audio"
