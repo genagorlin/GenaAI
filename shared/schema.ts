@@ -311,6 +311,23 @@ export const exerciseStepResponses = pgTable("exercise_step_responses", {
 
 export const insertExerciseStepResponseSchema = createInsertSchema(exerciseStepResponses).omit({ id: true, updatedAt: true });
 
+// Exercise Emotion Snapshots - structured per-emotion data captured during exercises
+export const exerciseEmotionSnapshots = pgTable("exercise_emotion_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => clientExerciseSessions.id, { onDelete: "cascade" }),
+  emotionName: text("emotion_name").notNull(), // e.g., "anxiety", "frustration", "excitement"
+  intensity: integer("intensity"), // 0-10 scale
+  surfaceContent: text("surface_content"), // "I feel X because I think that ____"
+  tone: text("tone"), // e.g., "bullying", "defensive", "pessimistic"
+  actionUrges: text("action_urges"), // What it wants me to do/not do
+  underlyingBelief: text("underlying_belief"), // Core belief/mindset driving the emotion
+  underlyingValues: text("underlying_values"), // "I feel X because I care about ____"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmotionSnapshotSchema = createInsertSchema(exerciseEmotionSnapshots).omit({ id: true, createdAt: true, updatedAt: true });
+
 export type InsertGuidedExercise = z.infer<typeof insertGuidedExerciseSchema>;
 export type GuidedExercise = typeof guidedExercises.$inferSelect;
 
@@ -322,6 +339,9 @@ export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
 
 export type InsertExerciseStepResponse = z.infer<typeof insertExerciseStepResponseSchema>;
 export type ExerciseStepResponse = typeof exerciseStepResponses.$inferSelect;
+
+export type InsertEmotionSnapshot = z.infer<typeof insertEmotionSnapshotSchema>;
+export type EmotionSnapshot = typeof exerciseEmotionSnapshots.$inferSelect;
 
 // File Attachments - uploaded files linked to exercises or reference documents
 export const fileAttachments = pgTable("file_attachments", {
