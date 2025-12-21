@@ -529,17 +529,29 @@ Your opening message should:
   }
 
   async getExerciseContext(clientId: string, threadId: string): Promise<ExerciseContext | undefined> {
+    console.log(`[Exercise] getExerciseContext called for client ${clientId}, thread ${threadId}`);
     const sessions = await storage.getClientExerciseSessions(clientId);
-    const activeSession = sessions.find(s => s.threadId === threadId && s.status === "in_progress");
+    console.log(`[Exercise] Found ${sessions.length} sessions for client`);
     
-    if (!activeSession || !activeSession.currentStepId) {
+    const activeSession = sessions.find(s => s.threadId === threadId && s.status === "in_progress");
+    console.log(`[Exercise] Active session for thread:`, activeSession ? `id=${activeSession.id}, stepId=${activeSession.currentStepId}, status=${activeSession.status}` : 'none');
+    
+    if (!activeSession) {
+      console.log(`[Exercise] No active session found for thread ${threadId}`);
+      return undefined;
+    }
+    
+    if (!activeSession.currentStepId) {
+      console.log(`[Exercise] Active session has no currentStepId`);
       return undefined;
     }
 
     const exercise = await storage.getGuidedExercise(activeSession.exerciseId);
     if (!exercise) {
+      console.log(`[Exercise] Exercise ${activeSession.exerciseId} not found`);
       return undefined;
     }
+    console.log(`[Exercise] Found exercise: ${exercise.title}`);
 
     const steps = await storage.getExerciseSteps(exercise.id);
     const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);

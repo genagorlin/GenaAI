@@ -319,6 +319,8 @@ export async function registerRoutes(
             ? await promptAssembler.getExerciseContext(req.params.clientId, validated.threadId)
             : undefined;
           
+          console.log(`[AI] Exercise context for thread ${validated.threadId}:`, exerciseContext ? `exercise="${exerciseContext.exerciseTitle}", step=${exerciseContext.currentStepOrder}` : 'none');
+          
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
             currentMessage: validated.content,
