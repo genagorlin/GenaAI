@@ -48,9 +48,10 @@ export default function ExercisePage() {
   const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
   const [answer, setAnswer] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const { data: sessionData, isLoading: sessionLoading } = useQuery<{
     session: ExerciseSession;
@@ -79,8 +80,25 @@ export default function ExercisePage() {
   const session = sessionData?.session;
   const exercise = sessionData?.exercise;
   const steps = sessionData?.steps || [];
-  const currentStep = steps[currentStepIndex];
+  const currentStep = currentStepIndex !== null ? steps[currentStepIndex] : null;
   const currentResponse = responses.find(r => r.stepId === currentStep?.id);
+
+  useEffect(() => {
+    if (!hasInitialized && sessionData && steps.length > 0) {
+      const { session } = sessionData;
+      let initialIndex = 0;
+      
+      if (session.currentStepId) {
+        const savedIndex = steps.findIndex(s => s.id === session.currentStepId);
+        if (savedIndex >= 0) {
+          initialIndex = savedIndex;
+        }
+      }
+      
+      setCurrentStepIndex(initialIndex);
+      setHasInitialized(true);
+    }
+  }, [sessionData, steps, hasInitialized]);
 
   useEffect(() => {
     if (currentResponse) {
@@ -143,7 +161,7 @@ export default function ExercisePage() {
   });
 
   const handleSubmitAndContinue = async () => {
-    if (!currentStep || !answer.trim()) return;
+    if (!currentStep || !answer.trim() || currentStepIndex === null) return;
     
     setIsReviewing(true);
     try {
@@ -183,17 +201,17 @@ export default function ExercisePage() {
   };
 
   const handleGoBack = async () => {
-    if (currentStepIndex > 0) {
-      if (answer.trim() && currentStep) {
-        await submitResponseMutation.mutateAsync({
-          stepId: currentStep.id,
-          clientAnswer: answer.trim(),
-        });
-      }
-      const prevStep = steps[currentStepIndex - 1];
-      await updateSessionMutation.mutateAsync({ currentStepId: prevStep.id });
-      setCurrentStepIndex(currentStepIndex - 1);
+    if (currentStepIndex === null || currentStepIndex <= 0) return;
+    
+    if (answer.trim() && currentStep) {
+      await submitResponseMutation.mutateAsync({
+        stepId: currentStep.id,
+        clientAnswer: answer.trim(),
+      });
     }
+    const prevStep = steps[currentStepIndex - 1];
+    await updateSessionMutation.mutateAsync({ currentStepId: prevStep.id });
+    setCurrentStepIndex(currentStepIndex - 1);
   };
 
   const handleExit = () => {
@@ -204,7 +222,7 @@ export default function ExercisePage() {
     }
   };
 
-  if (sessionLoading) {
+  if (sessionLoading || currentStepIndex === null) {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-100">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
@@ -226,9 +244,10 @@ export default function ExercisePage() {
     );
   }
 
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
-  const isFirstStep = currentStepIndex === 0;
-  const isLastStep = currentStepIndex === steps.length - 1;
+  const stepIndex = currentStepIndex;
+  const progress = ((stepIndex + 1) / steps.length) * 100;
+  const isFirstStep = stepIndex === 0;
+  const isLastStep = stepIndex === steps.length - 1;
   const hasAnswer = answer.trim().length > 0;
 
   return (
@@ -241,7 +260,7 @@ export default function ExercisePage() {
                 {exercise.title}
               </span>
               <span className="text-xs text-muted-foreground shrink-0">
-                Step {currentStepIndex + 1} of {steps.length}
+                Step {stepIndex + 1} of {steps.length}
               </span>
             </div>
             <Button
