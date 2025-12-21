@@ -32,6 +32,8 @@ import {
   type InsertExerciseStep,
   type ClientExerciseSession,
   type InsertClientExerciseSession,
+  type ExerciseStepResponse,
+  type InsertExerciseStepResponse,
   type FileAttachment,
   type InsertFileAttachment,
   clients,
@@ -53,6 +55,7 @@ import {
   guidedExercises,
   exerciseSteps,
   clientExerciseSessions,
+  exerciseStepResponses,
   fileAttachments
 } from "@shared/schema";
 import { db } from "./db";
@@ -170,6 +173,12 @@ export interface IStorage {
   getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
+
+  // Exercise Step Responses
+  getSessionResponses(sessionId: string): Promise<ExerciseStepResponse[]>;
+  getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined>;
+  upsertStepResponse(response: InsertExerciseStepResponse): Promise<ExerciseStepResponse>;
+  updateStepResponse(id: string, updates: Partial<InsertExerciseStepResponse>): Promise<ExerciseStepResponse>;
 
   // File Attachments
   getFileAttachment(id: string): Promise<FileAttachment | undefined>;
@@ -793,6 +802,42 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db.update(clientExerciseSessions)
       .set(updates)
       .where(eq(clientExerciseSessions.id, id))
+      .returning();
+    return result;
+  }
+
+  // Exercise Step Responses
+  async getSessionResponses(sessionId: string): Promise<ExerciseStepResponse[]> {
+    return await db.select().from(exerciseStepResponses)
+      .where(eq(exerciseStepResponses.sessionId, sessionId));
+  }
+
+  async getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined> {
+    const [result] = await db.select().from(exerciseStepResponses)
+      .where(and(
+        eq(exerciseStepResponses.sessionId, sessionId),
+        eq(exerciseStepResponses.stepId, stepId)
+      ));
+    return result;
+  }
+
+  async upsertStepResponse(response: InsertExerciseStepResponse): Promise<ExerciseStepResponse> {
+    const existing = await this.getStepResponse(response.sessionId, response.stepId);
+    if (existing) {
+      const [result] = await db.update(exerciseStepResponses)
+        .set({ ...response, updatedAt: new Date() })
+        .where(eq(exerciseStepResponses.id, existing.id))
+        .returning();
+      return result;
+    }
+    const [result] = await db.insert(exerciseStepResponses).values(response).returning();
+    return result;
+  }
+
+  async updateStepResponse(id: string, updates: Partial<InsertExerciseStepResponse>): Promise<ExerciseStepResponse> {
+    const [result] = await db.update(exerciseStepResponses)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(exerciseStepResponses.id, id))
       .returning();
     return result;
   }
