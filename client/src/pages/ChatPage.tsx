@@ -200,6 +200,10 @@ export default function ChatPage() {
       queryClient.invalidateQueries({ 
         queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"] 
       });
+      // Also refetch messages to show the AI opening message
+      queryClient.invalidateQueries({
+        queryKey: ["/api/threads", threadId, "messages"]
+      });
     },
   });
 

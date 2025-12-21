@@ -1040,6 +1040,38 @@ export async function registerRoutes(
       });
       const session = await storage.createExerciseSession(validated);
       console.log(`[Exercise] Client ${req.params.clientId} started exercise session: ${session.id}`);
+      
+      // Generate AI opening message for the exercise
+      try {
+        const { promptAssembler } = await import("./promptAssembler");
+        const { generateAIResponse } = await import("./modelRouter");
+        
+        const { systemPrompt } = await promptAssembler.assembleOpeningPrompt(
+          req.params.clientId, 
+          validated.exerciseId
+        );
+        
+        const aiResponseContent = await generateAIResponse({
+          systemPrompt,
+          conversationHistory: [{ role: "user", content: "." }],
+          model: "claude-sonnet-4-5",
+          provider: "anthropic",
+        });
+        
+        await storage.createMessage({
+          clientId: req.params.clientId,
+          threadId: validated.threadId,
+          role: "ai",
+          content: aiResponseContent,
+          type: "text",
+        });
+        
+        console.log(`[Exercise] Generated opening message for exercise ${validated.exerciseId}`);
+      } catch (aiError) {
+        console.error("[Exercise] Failed to generate exercise opening message:", aiError);
+        // Session is still created, just without opening message
+      }
+      
       res.status(201).json(session);
     } catch (error) {
       console.error("Create exercise session error:", error);
