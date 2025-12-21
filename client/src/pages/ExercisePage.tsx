@@ -22,6 +22,7 @@ interface GuidedExercise {
   id: string;
   title: string;
   description: string;
+  enableEmotionCapture?: number;
 }
 
 interface ExerciseSession {
@@ -488,11 +489,13 @@ export default function ExercisePage() {
             )}
           </div>
 
-          <EmotionCapturePanel
-            sessionId={sessionId!}
-            isExpanded={emotionPanelOpen}
-            onToggle={() => setEmotionPanelOpen(!emotionPanelOpen)}
-          />
+          {exercise?.enableEmotionCapture === 1 && (
+            <EmotionCapturePanel
+              sessionId={sessionId!}
+              isExpanded={emotionPanelOpen}
+              onToggle={() => setEmotionPanelOpen(!emotionPanelOpen)}
+            />
+          )}
         </div>
       </main>
 
