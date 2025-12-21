@@ -195,8 +195,8 @@ export async function setupAuth(app: Express) {
           (req.session as any).sessionType = "client";
           (req.session as any).boundClientId = clientId;
           
-          // Update lastActive timestamp on every login
-          await storage.updateClientLastActive(clientId);
+          // Update lastActive timestamp and mark as connected on login
+          await storage.updateClientActivity(clientId, 1);
           
           console.log("[Auth Callback] Client login successful for", clientId, ", redirecting to:", clientReturnTo);
           return res.redirect(clientReturnTo);
