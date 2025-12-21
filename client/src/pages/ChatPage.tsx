@@ -165,7 +165,7 @@ export default function ChatPage() {
     staleTime: 5 * 60 * 1000
   });
 
-  const { data: exerciseSessionData, refetch: refetchExerciseSession } = useQuery<ExerciseSessionData | null>({
+  const { data: exerciseSessionData } = useQuery<ExerciseSessionData | null>({
     queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"],
     queryFn: async () => {
       const res = await fetch(`/api/clients/${clientId}/threads/${threadId}/exercise-session`);
@@ -196,38 +196,64 @@ export default function ChatPage() {
       return res.json();
     },
     onSuccess: () => {
-      refetchExerciseSession();
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"] 
+      });
     },
   });
 
   const updateExerciseSessionMutation = useMutation({
-    mutationFn: async (updates: { currentStepId?: string; status?: string; summary?: string }) => {
-      if (!exerciseSessionData?.session.id) return;
+    mutationFn: async (updates: { currentStepId?: string | null; status?: string; summary?: string }) => {
+      if (!exerciseSessionData?.session.id) {
+        console.error("[Exercise] No session ID available for update");
+        throw new Error("No session ID");
+      }
+      console.log("[Exercise] Updating session:", exerciseSessionData.session.id, "with:", updates);
       const res = await fetch(`/api/exercise-sessions/${exerciseSessionData.session.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error("Failed to update exercise session");
-      return res.json();
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("[Exercise] Update failed:", res.status, errorText);
+        throw new Error("Failed to update exercise session");
+      }
+      const result = await res.json();
+      console.log("[Exercise] Update result:", result);
+      return result;
     },
     onSuccess: () => {
-      refetchExerciseSession();
+      console.log("[Exercise] Invalidating and refetching session data after update");
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/clients", clientId, "threads", threadId, "exercise-session"] 
+      });
+    },
+    onError: (error) => {
+      console.error("[Exercise] Mutation error:", error);
     },
   });
 
   const handleAdvanceStep = () => {
-    if (!exerciseSessionData) return;
+    console.log("[Exercise] handleAdvanceStep called, session data:", exerciseSessionData);
+    if (!exerciseSessionData) {
+      console.log("[Exercise] No session data available");
+      return;
+    }
     const { currentStep, steps } = exerciseSessionData;
     const currentIndex = currentStep ? steps.findIndex(s => s.id === currentStep.id) : -1;
+    console.log("[Exercise] Current step index:", currentIndex, "of", steps.length, "steps");
     
     if (currentIndex < steps.length - 1) {
       const nextStep = steps[currentIndex + 1];
+      console.log("[Exercise] Advancing to next step:", nextStep.id, nextStep.title);
       updateExerciseSessionMutation.mutate({ currentStepId: nextStep.id });
     } else {
+      console.log("[Exercise] On last step, marking as completed");
       updateExerciseSessionMutation.mutate({ 
         status: "completed",
-        currentStepId: undefined,
+        currentStepId: null,
       });
     }
   };
