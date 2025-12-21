@@ -297,6 +297,20 @@ export const insertGuidedExerciseSchema = createInsertSchema(guidedExercises).om
 export const insertExerciseStepSchema = createInsertSchema(exerciseSteps).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientExerciseSessionSchema = createInsertSchema(clientExerciseSessions).omit({ id: true, startedAt: true, completedAt: true });
 
+// Exercise Step Responses - stores client answers and AI feedback for each step
+export const exerciseStepResponses = pgTable("exercise_step_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => clientExerciseSessions.id, { onDelete: "cascade" }),
+  stepId: varchar("step_id").notNull().references(() => exerciseSteps.id, { onDelete: "cascade" }),
+  clientAnswer: text("client_answer").notNull().default(""), // The client's fill-in-the-blank response
+  aiFeedback: text("ai_feedback"), // AI's review/feedback (null if no feedback needed)
+  needsRevision: integer("needs_revision").notNull().default(0), // 1 if AI flagged the answer for revision
+  submittedAt: timestamp("submitted_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertExerciseStepResponseSchema = createInsertSchema(exerciseStepResponses).omit({ id: true, updatedAt: true });
+
 export type InsertGuidedExercise = z.infer<typeof insertGuidedExerciseSchema>;
 export type GuidedExercise = typeof guidedExercises.$inferSelect;
 
@@ -305,6 +319,9 @@ export type ExerciseStep = typeof exerciseSteps.$inferSelect;
 
 export type InsertClientExerciseSession = z.infer<typeof insertClientExerciseSessionSchema>;
 export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
+
+export type InsertExerciseStepResponse = z.infer<typeof insertExerciseStepResponseSchema>;
+export type ExerciseStepResponse = typeof exerciseStepResponses.$inferSelect;
 
 // File Attachments - uploaded files linked to exercises or reference documents
 export const fileAttachments = pgTable("file_attachments", {
