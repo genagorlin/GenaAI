@@ -180,6 +180,11 @@ export default function InboxPage() {
 
   const startExerciseMutation = useMutation({
     mutationFn: async (exercise: GuidedExercise) => {
+      // Fetch exercise steps to get the first step ID
+      const stepsRes = await fetch(`/api/exercises/${exercise.id}/steps`);
+      const steps = await stepsRes.json();
+      const firstStep = steps.length > 0 ? steps[0] : null;
+      
       // Pass exerciseId when creating thread so the opening message is exercise-specific
       const threadRes = await fetch(`/api/clients/${clientId}/threads`, {
         method: "POST",
@@ -194,7 +199,9 @@ export default function InboxPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           exerciseId: exercise.id, 
-          threadId: thread.id 
+          threadId: thread.id,
+          currentStepId: firstStep?.id || null,
+          status: "in_progress",
         }),
       });
       if (!sessionRes.ok) throw new Error("Failed to start exercise");
