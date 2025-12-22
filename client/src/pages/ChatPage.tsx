@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Mic, BookOpen, Smile, Loader2, Square, ArrowLeft, ChevronRight, X, Dumbbell } from "lucide-react";
+import { Send, Mic, BookOpen, Smile, Loader2, Square, ArrowLeft, ChevronRight, X, Dumbbell, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -87,10 +87,17 @@ export default function ChatPage() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [showExercises, setShowExercises] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<ReferenceDocument | null>(null);
+  const [voiceModeEnabled, setVoiceModeEnabled] = useState(() => {
+    // Persist voice mode preference in localStorage
+    const saved = localStorage.getItem("voiceModeEnabled");
+    return saved === "true";
+  });
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const queryClient = useQueryClient();
 
   // Check if user is authenticated for client access
@@ -380,6 +387,83 @@ export default function ChatPage() {
     return () => clearTimeout(timeout);
   }, [messages.length]);
 
+  // Toggle voice mode and persist preference
+  const toggleVoiceMode = useCallback(() => {
+    setVoiceModeEnabled(prev => {
+      const newValue = !prev;
+      localStorage.setItem("voiceModeEnabled", String(newValue));
+      return newValue;
+    });
+    // Stop any playing audio when disabling
+    if (voiceModeEnabled && currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+      setIsPlayingAudio(false);
+    }
+  }, [voiceModeEnabled]);
+
+  // Play text-to-speech for a message
+  const playTTS = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    
+    // Stop any currently playing audio
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    
+    try {
+      setIsPlayingAudio(true);
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: "nova" }) // nova is a warm, friendly voice
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("TTS error:", errorData);
+        return;
+      }
+      
+      const { audio, format } = await response.json();
+      
+      // Convert base64 to audio and play
+      const audioData = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+      const blob = new Blob([audioData], { type: `audio/${format}` });
+      const url = URL.createObjectURL(blob);
+      
+      const audioElement = new Audio(url);
+      currentAudioRef.current = audioElement;
+      
+      audioElement.onended = () => {
+        setIsPlayingAudio(false);
+        currentAudioRef.current = null;
+        URL.revokeObjectURL(url);
+      };
+      
+      audioElement.onerror = () => {
+        setIsPlayingAudio(false);
+        currentAudioRef.current = null;
+        URL.revokeObjectURL(url);
+      };
+      
+      await audioElement.play();
+    } catch (error) {
+      console.error("Failed to play TTS:", error);
+      setIsPlayingAudio(false);
+    }
+  }, []);
+
+  // Stop currently playing audio
+  const stopAudio = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+      setIsPlayingAudio(false);
+    }
+  }, []);
+
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       const res = await fetch(`/api/clients/${clientId}/messages`, {
@@ -415,9 +499,14 @@ export default function ChatPage() {
       
       return { previousMessages };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/threads", threadId, "messages"] });
       setIsAiTyping(false);
+      
+      // Auto-play AI response if voice mode is enabled
+      if (voiceModeEnabled && data?.aiMessage?.content) {
+        playTTS(data.aiMessage.content);
+      }
     },
     onError: (err, content, context) => {
       if (context?.previousMessages) {
@@ -634,6 +723,25 @@ export default function ChatPage() {
             data-testid="button-library"
           >
             <BookOpen className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={isPlayingAudio ? stopAudio : toggleVoiceMode}
+            className={cn(
+              "h-8 w-8 hover:bg-white/10",
+              voiceModeEnabled ? "text-emerald-300" : "text-white"
+            )}
+            data-testid="button-voice-mode"
+            title={voiceModeEnabled ? "Voice mode ON - click to disable" : "Enable voice mode"}
+          >
+            {isPlayingAudio ? (
+              <Square className="h-4 w-4" />
+            ) : voiceModeEnabled ? (
+              <Volume2 className="h-5 w-5" />
+            ) : (
+              <VolumeX className="h-5 w-5" />
+            )}
           </Button>
         </div>
 

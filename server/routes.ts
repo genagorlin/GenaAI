@@ -1305,6 +1305,50 @@ export async function registerRoutes(
     res.json(manifest);
   });
 
+  // Text-to-Speech Route (public for client chat)
+  app.post("/api/tts", async (req, res) => {
+    try {
+      const { text, voice = "alloy" } = req.body;
+      
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        console.error("[TTS] OPENAI_API_KEY not configured");
+        return res.status(500).json({ error: "Voice synthesis not configured" });
+      }
+
+      // Limit text length to prevent excessive costs (roughly 4000 chars = ~$0.06)
+      const truncatedText = text.slice(0, 4000);
+      console.log("[TTS] Generating speech for", truncatedText.length, "characters");
+
+      const openai = new OpenAI({ 
+        apiKey: process.env.OPENAI_API_KEY 
+      });
+
+      const mp3 = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer",
+        input: truncatedText,
+      });
+
+      // Get the audio as a buffer
+      const buffer = Buffer.from(await mp3.arrayBuffer());
+      
+      console.log("[TTS] Generated audio:", buffer.length, "bytes");
+      
+      // Send as base64 for easy client-side handling
+      res.json({ 
+        audio: buffer.toString("base64"),
+        format: "mp3"
+      });
+    } catch (error: any) {
+      console.error("[TTS] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to generate speech", details: error?.message });
+    }
+  });
+
   // Audio Transcription Route (public for client chat)
   app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     try {
