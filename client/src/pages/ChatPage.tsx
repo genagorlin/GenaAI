@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ExerciseMenu } from "@/components/ExerciseMenu";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
 
 interface ReferenceDocument {
   id: number;
@@ -98,6 +99,7 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAudioUrlRef = useRef<string | null>(null);
   const voiceModeRef = useRef(voiceModeEnabled);
   const queryClient = useQueryClient();
 
@@ -393,45 +395,68 @@ export default function ChatPage() {
     voiceModeRef.current = voiceModeEnabled;
   }, [voiceModeEnabled]);
 
-  // Toggle voice mode and persist preference
-  const toggleVoiceMode = useCallback(() => {
-    setVoiceModeEnabled(prev => {
-      const newValue = !prev;
-      localStorage.setItem("voiceModeEnabled", String(newValue));
-      voiceModeRef.current = newValue;
-      return newValue;
-    });
-    // Stop any playing audio when disabling
-    if (voiceModeEnabled && currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-      setIsPlayingAudio(false);
-    }
-  }, [voiceModeEnabled]);
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if (currentAudioUrlRef.current) {
+        URL.revokeObjectURL(currentAudioUrlRef.current);
+        currentAudioUrlRef.current = null;
+      }
+    };
+  }, []);
 
-  // Play text-to-speech for a message
-  const playTTS = useCallback(async (text: string) => {
-    console.log("[Voice] playTTS called with text length:", text?.length);
-    if (!text.trim()) return;
-    
-    // Stop any currently playing audio
+  // Helper to clean up audio resources
+  const cleanupAudio = useCallback(() => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
+    if (currentAudioUrlRef.current) {
+      URL.revokeObjectURL(currentAudioUrlRef.current);
+      currentAudioUrlRef.current = null;
+    }
+    setIsPlayingAudio(false);
+  }, []);
+
+  // Toggle voice mode and persist preference
+  const toggleVoiceMode = useCallback(() => {
+    const newValue = !voiceModeRef.current;
+    setVoiceModeEnabled(newValue);
+    localStorage.setItem("voiceModeEnabled", String(newValue));
+    voiceModeRef.current = newValue;
+    
+    // Stop any playing audio when disabling voice mode
+    if (!newValue) {
+      cleanupAudio();
+    }
+  }, [cleanupAudio]);
+
+  // Play text-to-speech for a message
+  const playTTS = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    
+    // Clean up any existing audio first
+    cleanupAudio();
     
     try {
       setIsPlayingAudio(true);
-      console.log("[Voice] Calling /api/tts...");
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: "nova" }) // nova is a warm, friendly voice
+        body: JSON.stringify({ text, voice: "nova" })
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error("TTS error:", errorData);
+        toast.error("Voice playback unavailable", {
+          description: "The AI response will be shown as text only."
+        });
+        setIsPlayingAudio(false);
         return;
       }
       
@@ -441,37 +466,46 @@ export default function ChatPage() {
       const audioData = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
       const blob = new Blob([audioData], { type: `audio/${format}` });
       const url = URL.createObjectURL(blob);
+      currentAudioUrlRef.current = url;
       
       const audioElement = new Audio(url);
       currentAudioRef.current = audioElement;
       
       audioElement.onended = () => {
-        setIsPlayingAudio(false);
+        if (currentAudioUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          currentAudioUrlRef.current = null;
+        }
         currentAudioRef.current = null;
-        URL.revokeObjectURL(url);
+        setIsPlayingAudio(false);
       };
       
       audioElement.onerror = () => {
-        setIsPlayingAudio(false);
+        if (currentAudioUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          currentAudioUrlRef.current = null;
+        }
         currentAudioRef.current = null;
-        URL.revokeObjectURL(url);
+        setIsPlayingAudio(false);
+        toast.error("Voice playback failed", {
+          description: "There was a problem playing the audio."
+        });
       };
       
       await audioElement.play();
     } catch (error) {
       console.error("Failed to play TTS:", error);
-      setIsPlayingAudio(false);
+      cleanupAudio();
+      toast.error("Voice playback unavailable", {
+        description: "Could not generate voice response."
+      });
     }
-  }, []);
+  }, [cleanupAudio]);
 
   // Stop currently playing audio
   const stopAudio = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-      setIsPlayingAudio(false);
-    }
-  }, []);
+    cleanupAudio();
+  }, [cleanupAudio]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -513,9 +547,7 @@ export default function ChatPage() {
       setIsAiTyping(false);
       
       // Auto-play AI response if voice mode is enabled (use ref for current value)
-      console.log("[Voice] onSuccess - voiceModeRef:", voiceModeRef.current, "aiMessage:", data?.aiMessage?.content?.substring(0, 50));
       if (voiceModeRef.current && data?.aiMessage?.content) {
-        console.log("[Voice] Playing TTS for AI response");
         playTTS(data.aiMessage.content);
       }
     },
