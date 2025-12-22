@@ -465,7 +465,22 @@ export default function ChatPage() {
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      
+      // Try to find a supported MIME type
+      let mimeType = "audio/webm";
+      if (!MediaRecorder.isTypeSupported("audio/webm")) {
+        if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+          mimeType = "audio/ogg";
+        } else {
+          // Fallback - let browser choose
+          mimeType = "";
+        }
+      }
+      
+      const recorderOptions = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -478,23 +493,35 @@ export default function ChatPage() {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
         
-        if (audioChunksRef.current.length === 0) return;
+        if (audioChunksRef.current.length === 0) {
+          console.log("No audio chunks recorded");
+          return;
+        }
         
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const actualMimeType = mediaRecorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
+        console.log("Audio recorded:", audioBlob.size, "bytes, type:", actualMimeType);
         setIsTranscribing(true);
         
         try {
           const formData = new FormData();
-          formData.append("audio", audioBlob, "recording.webm");
+          // Use appropriate extension based on mime type
+          const ext = actualMimeType.includes("mp4") ? "m4a" : actualMimeType.includes("ogg") ? "ogg" : "webm";
+          formData.append("audio", audioBlob, `recording.${ext}`);
           
           const response = await fetch("/api/transcribe", {
             method: "POST",
             body: formData,
           });
           
-          if (!response.ok) throw new Error("Transcription failed");
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Transcription API error:", response.status, errorData);
+            throw new Error("Transcription failed");
+          }
           
           const { text } = await response.json();
+          console.log("Transcription result:", text);
           if (text && text.trim()) {
             resetInactivityTimer();
             sendMessageMutation.mutate(text.trim());
@@ -506,10 +533,12 @@ export default function ChatPage() {
         }
       };
 
-      mediaRecorder.start();
+      // Request data every second to ensure we capture audio
+      mediaRecorder.start(1000);
       setIsRecording(true);
     } catch (error) {
       console.error("Failed to start recording:", error);
+      alert("Could not access microphone. Please check your browser permissions.");
     }
   }, [sendMessageMutation, resetInactivityTimer]);
 
