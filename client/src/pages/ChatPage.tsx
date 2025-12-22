@@ -411,6 +411,7 @@ export default function ChatPage() {
 
   // Play text-to-speech for a message
   const playTTS = useCallback(async (text: string) => {
+    console.log("[Voice] playTTS called with text length:", text?.length);
     if (!text.trim()) return;
     
     // Stop any currently playing audio
@@ -421,6 +422,7 @@ export default function ChatPage() {
     
     try {
       setIsPlayingAudio(true);
+      console.log("[Voice] Calling /api/tts...");
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -511,7 +513,9 @@ export default function ChatPage() {
       setIsAiTyping(false);
       
       // Auto-play AI response if voice mode is enabled (use ref for current value)
+      console.log("[Voice] onSuccess - voiceModeRef:", voiceModeRef.current, "aiMessage:", data?.aiMessage?.content?.substring(0, 50));
       if (voiceModeRef.current && data?.aiMessage?.content) {
+        console.log("[Voice] Playing TTS for AI response");
         playTTS(data.aiMessage.content);
       }
     },
