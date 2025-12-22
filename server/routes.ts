@@ -1309,7 +1309,15 @@ export async function registerRoutes(
   app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     try {
       if (!req.file) {
+        console.log("[Transcribe] No audio file in request");
         return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      console.log("[Transcribe] Received audio:", req.file.originalname, req.file.mimetype, req.file.size, "bytes");
+
+      if (!process.env.OPENAI_API_KEY) {
+        console.error("[Transcribe] OPENAI_API_KEY not configured");
+        return res.status(500).json({ error: "Voice transcription not configured" });
       }
 
       // Use the user's OpenAI API key for Whisper transcription
@@ -1318,19 +1326,33 @@ export async function registerRoutes(
         apiKey: process.env.OPENAI_API_KEY 
       });
 
-      const audioFile = await toFile(req.file.buffer, "audio.webm", {
-        type: req.file.mimetype || "audio/webm",
+      // Determine file extension from mime type or original name
+      const mimeType = req.file.mimetype || "audio/webm";
+      let ext = "webm";
+      if (mimeType.includes("mp4") || mimeType.includes("m4a")) ext = "m4a";
+      else if (mimeType.includes("ogg")) ext = "ogg";
+      else if (mimeType.includes("wav")) ext = "wav";
+      else if (mimeType.includes("mpeg") || mimeType.includes("mp3")) ext = "mp3";
+      
+      const filename = `audio.${ext}`;
+      console.log("[Transcribe] Converting to file:", filename, "mimeType:", mimeType);
+
+      const audioFile = await toFile(req.file.buffer, filename, {
+        type: mimeType,
       });
 
+      console.log("[Transcribe] Sending to Whisper API...");
       const transcription = await openai.audio.transcriptions.create({
         file: audioFile,
         model: "whisper-1",
       });
 
+      console.log("[Transcribe] Result:", transcription.text?.substring(0, 100));
       res.json({ text: transcription.text });
-    } catch (error) {
-      console.error("Transcription error:", error);
-      res.status(500).json({ error: "Failed to transcribe audio" });
+    } catch (error: any) {
+      console.error("[Transcribe] Error:", error?.message || error);
+      console.error("[Transcribe] Full error:", JSON.stringify(error, null, 2));
+      res.status(500).json({ error: "Failed to transcribe audio", details: error?.message });
     }
   });
 
