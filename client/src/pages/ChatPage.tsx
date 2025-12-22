@@ -98,6 +98,7 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceModeRef = useRef(voiceModeEnabled);
   const queryClient = useQueryClient();
 
   // Check if user is authenticated for client access
@@ -387,11 +388,17 @@ export default function ChatPage() {
     return () => clearTimeout(timeout);
   }, [messages.length]);
 
+  // Keep ref in sync with state for use in callbacks
+  useEffect(() => {
+    voiceModeRef.current = voiceModeEnabled;
+  }, [voiceModeEnabled]);
+
   // Toggle voice mode and persist preference
   const toggleVoiceMode = useCallback(() => {
     setVoiceModeEnabled(prev => {
       const newValue = !prev;
       localStorage.setItem("voiceModeEnabled", String(newValue));
+      voiceModeRef.current = newValue;
       return newValue;
     });
     // Stop any playing audio when disabling
@@ -503,8 +510,8 @@ export default function ChatPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/threads", threadId, "messages"] });
       setIsAiTyping(false);
       
-      // Auto-play AI response if voice mode is enabled
-      if (voiceModeEnabled && data?.aiMessage?.content) {
+      // Auto-play AI response if voice mode is enabled (use ref for current value)
+      if (voiceModeRef.current && data?.aiMessage?.content) {
         playTTS(data.aiMessage.content);
       }
     },
