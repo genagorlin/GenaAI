@@ -1312,7 +1312,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      // Use the Replit AI integration API key for Whisper
+      // Note: We don't use the base URL here as Whisper needs the direct OpenAI endpoint
+      const openai = new OpenAI({ 
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY 
+      });
 
       const audioFile = await toFile(req.file.buffer, "audio.webm", {
         type: req.file.mimetype || "audio/webm",
