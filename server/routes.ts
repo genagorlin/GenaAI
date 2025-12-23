@@ -1250,6 +1250,275 @@ export async function registerRoutes(
     }
   });
 
+  // ============ SURVEY EXERCISES ROUTES ============
+
+  // Survey Exercises - Public endpoints for clients
+  app.get("/api/surveys", async (_req, res) => {
+    try {
+      const surveys = await storage.getPublishedSurveyExercises();
+      res.json(surveys);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch surveys" });
+    }
+  });
+
+  app.get("/api/surveys/:id", async (req, res) => {
+    try {
+      const survey = await storage.getSurveyExercise(req.params.id);
+      if (!survey) {
+        return res.status(404).json({ error: "Survey not found" });
+      }
+      const questions = await storage.getSurveyQuestions(req.params.id);
+      res.json({ ...survey, questions });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey" });
+    }
+  });
+
+  // Client survey sessions
+  app.get("/api/clients/:clientId/survey-sessions", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
+    try {
+      const sessions = await storage.getClientSurveySessions(req.params.clientId);
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey sessions" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/survey-sessions/:surveyId/active", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
+    try {
+      const session = await storage.getActiveSurveySession(req.params.clientId, req.params.surveyId);
+      res.json(session || null);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active survey session" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/survey-sessions", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
+    try {
+      const { insertSurveySessionSchema } = await import("@shared/schema");
+      const validated = insertSurveySessionSchema.parse({
+        ...req.body,
+        clientId: req.params.clientId,
+      });
+      const session = await storage.createSurveySession(validated);
+      console.log(`[Survey] Client ${req.params.clientId} started survey session: ${session.id}`);
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Create survey session error:", error);
+      res.status(400).json({ error: "Failed to start survey session" });
+    }
+  });
+
+  app.get("/api/survey-sessions/:id", async (req, res) => {
+    try {
+      const session = await storage.getSurveySession(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: "Survey session not found" });
+      }
+      const responses = await storage.getSessionResponses(req.params.id);
+      res.json({ ...session, responses });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey session" });
+    }
+  });
+
+  app.patch("/api/survey-sessions/:id", async (req, res) => {
+    try {
+      const session = await storage.updateSurveySession(req.params.id, req.body);
+      console.log(`[Survey] Updated session ${req.params.id}: ${JSON.stringify(req.body)}`);
+      res.json(session);
+    } catch (error) {
+      console.error("Update survey session error:", error);
+      res.status(400).json({ error: "Failed to update survey session" });
+    }
+  });
+
+  // Survey responses
+  app.post("/api/survey-sessions/:sessionId/responses", async (req, res) => {
+    try {
+      const { insertSurveyResponseSchema } = await import("@shared/schema");
+      const validated = insertSurveyResponseSchema.parse({
+        ...req.body,
+        sessionId: req.params.sessionId,
+      });
+      // Check if response already exists (update) or create new
+      const existing = await storage.getSurveyResponse(req.params.sessionId, validated.questionId);
+      if (existing) {
+        const updated = await storage.updateSurveyResponse(existing.id, validated);
+        res.json(updated);
+      } else {
+        const response = await storage.createSurveyResponse(validated);
+        res.status(201).json(response);
+      }
+    } catch (error) {
+      console.error("Create/update survey response error:", error);
+      res.status(400).json({ error: "Failed to save survey response" });
+    }
+  });
+
+  app.get("/api/survey-sessions/:sessionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getSessionResponses(req.params.sessionId);
+      res.json(responses);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey responses" });
+    }
+  });
+
+  app.post("/api/ai/summarize-survey", async (req, res) => {
+    try {
+      if (!req.session?.passport?.user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { responses, prompt } = req.body;
+      if (!responses || !prompt) {
+        return res.status(400).json({ error: "Missing responses or prompt" });
+      }
+
+      const { OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY });
+
+      const systemPrompt = `You are a thoughtful coaching assistant. Your task is to summarize survey responses for a coaching client. ${prompt}`;
+      const userMessage = `Here are the survey responses:\n\n${responses}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      });
+
+      const summary = completion.choices[0]?.message?.content || "Unable to generate summary";
+      res.json({ summary });
+    } catch (error) {
+      console.error("Survey summarization error:", error);
+      res.status(500).json({ error: "Failed to generate summary" });
+    }
+  });
+
+  // Survey Exercises - Coach management (protected)
+  app.get("/api/coach/surveys", isAuthenticated, async (_req, res) => {
+    try {
+      const surveys = await storage.getAllSurveyExercises();
+      res.json(surveys);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch surveys" });
+    }
+  });
+
+  app.get("/api/coach/surveys/:id", isAuthenticated, async (req, res) => {
+    try {
+      const survey = await storage.getSurveyExercise(req.params.id);
+      if (!survey) {
+        return res.status(404).json({ error: "Survey not found" });
+      }
+      const questions = await storage.getSurveyQuestions(req.params.id);
+      res.json({ ...survey, questions });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey" });
+    }
+  });
+
+  app.post("/api/coach/surveys", isAuthenticated, async (req, res) => {
+    try {
+      const { insertSurveyExerciseSchema } = await import("@shared/schema");
+      const validated = insertSurveyExerciseSchema.parse(req.body);
+      const survey = await storage.createSurveyExercise(validated);
+      console.log(`[Survey] Coach created survey: ${survey.title}`);
+      res.status(201).json(survey);
+    } catch (error) {
+      console.error("Create survey error:", error);
+      res.status(400).json({ error: "Failed to create survey" });
+    }
+  });
+
+  app.patch("/api/coach/surveys/:id", isAuthenticated, async (req, res) => {
+    try {
+      const survey = await storage.updateSurveyExercise(req.params.id, req.body);
+      console.log(`[Survey] Coach updated survey: ${survey.title}`);
+      res.json(survey);
+    } catch (error) {
+      console.error("Update survey error:", error);
+      res.status(400).json({ error: "Failed to update survey" });
+    }
+  });
+
+  app.delete("/api/coach/surveys/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteSurveyExercise(req.params.id);
+      console.log(`[Survey] Coach deleted survey: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete survey" });
+    }
+  });
+
+  // Survey Questions Routes (coach)
+  app.get("/api/coach/surveys/:surveyId/questions", isAuthenticated, async (req, res) => {
+    try {
+      const questions = await storage.getSurveyQuestions(req.params.surveyId);
+      res.json(questions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch survey questions" });
+    }
+  });
+
+  app.post("/api/coach/surveys/:surveyId/questions", isAuthenticated, async (req, res) => {
+    try {
+      const { insertSurveyQuestionSchema } = await import("@shared/schema");
+      const validated = insertSurveyQuestionSchema.parse({
+        ...req.body,
+        surveyId: req.params.surveyId,
+      });
+      const question = await storage.createSurveyQuestion(validated);
+      console.log(`[Survey] Coach added question to survey ${req.params.surveyId}`);
+      res.status(201).json(question);
+    } catch (error) {
+      console.error("Create question error:", error);
+      res.status(400).json({ error: "Failed to create survey question" });
+    }
+  });
+
+  app.patch("/api/coach/questions/:id", isAuthenticated, async (req, res) => {
+    try {
+      const question = await storage.updateSurveyQuestion(req.params.id, req.body);
+      console.log(`[Survey] Coach updated question: ${req.params.id}`);
+      res.json(question);
+    } catch (error) {
+      console.error("Update question error:", error);
+      res.status(400).json({ error: "Failed to update survey question" });
+    }
+  });
+
+  app.delete("/api/coach/questions/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteSurveyQuestion(req.params.id);
+      console.log(`[Survey] Coach deleted question: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete survey question" });
+    }
+  });
+
+  app.post("/api/coach/surveys/:surveyId/reorder-questions", isAuthenticated, async (req, res) => {
+    try {
+      const { questionIds } = req.body;
+      if (!Array.isArray(questionIds)) {
+        return res.status(400).json({ error: "questionIds must be an array" });
+      }
+      await storage.reorderSurveyQuestions(req.params.surveyId, questionIds);
+      console.log(`[Survey] Coach reordered questions for survey ${req.params.surveyId}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder survey questions" });
+    }
+  });
+
   // Serve uploaded files (public for now - coach uploads are visible)
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {

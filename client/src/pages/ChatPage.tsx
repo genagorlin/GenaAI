@@ -9,6 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ExerciseMenu } from "@/components/ExerciseMenu";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
+import { SurveyMenu } from "@/components/SurveyMenu";
+import { SurveyPlayer } from "@/components/SurveyPlayer";
+import { ClipboardList } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -87,6 +90,8 @@ export default function ChatPage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showExercises, setShowExercises] = useState(false);
+  const [showSurveys, setShowSurveys] = useState(false);
+  const [activeSurveyId, setActiveSurveyId] = useState<string | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<ReferenceDocument | null>(null);
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(() => {
     // Persist voice mode preference in localStorage
@@ -761,6 +766,15 @@ export default function ChatPage() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => setShowSurveys(true)}
+            className="h-8 w-8 text-white hover:bg-white/10"
+            data-testid="button-surveys"
+          >
+            <ClipboardList className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setShowLibrary(true)}
             className="h-8 w-8 text-white hover:bg-white/10"
             data-testid="button-library"
@@ -1025,6 +1039,27 @@ export default function ChatPage() {
         isOpen={showExercises}
         onOpenChange={setShowExercises}
       />
+
+      <SurveyMenu
+        clientId={clientId || ""}
+        isOpen={showSurveys}
+        onOpenChange={setShowSurveys}
+        onSelectSurvey={(surveyId) => {
+          setShowSurveys(false);
+          setActiveSurveyId(surveyId);
+        }}
+      />
+
+      {activeSurveyId && (
+        <SurveyPlayer
+          clientId={clientId || ""}
+          surveyId={activeSurveyId}
+          onClose={() => setActiveSurveyId(null)}
+          onComplete={(summary) => {
+            toast.success("Survey completed!");
+          }}
+        />
+      )}
     </div>
   );
 }

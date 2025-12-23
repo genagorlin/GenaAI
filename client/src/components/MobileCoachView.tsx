@@ -25,6 +25,7 @@ import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
+import { SurveyManager } from "@/components/dashboard/SurveyManager";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
@@ -202,6 +203,7 @@ export function MobileCoachView() {
           <div className="flex items-center gap-2">
             <ReferenceLibrary />
             <ExerciseManager />
+            <SurveyManager />
             <Button 
               variant="outline" 
               size="sm"

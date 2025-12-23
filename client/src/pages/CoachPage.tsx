@@ -40,6 +40,7 @@ import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
+import { SurveyManager } from "@/components/dashboard/SurveyManager";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -571,6 +572,7 @@ function DesktopCoachView() {
              </Popover>
              <ReferenceLibrary />
              <ExerciseManager />
+             <SurveyManager />
              <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                Prepare Session <ArrowRight className="h-4 w-4" />
              </Button>

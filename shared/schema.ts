@@ -322,3 +322,73 @@ export const fileAttachments = pgTable("file_attachments", {
 export const insertFileAttachmentSchema = createInsertSchema(fileAttachments).omit({ id: true, createdAt: true });
 export type InsertFileAttachment = z.infer<typeof insertFileAttachmentSchema>;
 export type FileAttachment = typeof fileAttachments.$inferSelect;
+
+// Survey Exercises - structured question-based assessments (separate from conversational exercises)
+export const surveyExercises = pgTable("survey_exercises", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category"), // e.g., "Assessment", "Intake", "Values", "Goals"
+  estimatedMinutes: integer("estimated_minutes"),
+  summaryPrompt: text("summary_prompt"), // AI instructions for generating summary
+  isPublished: integer("is_published").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Survey Questions - individual questions within a survey
+export const surveyQuestions = pgTable("survey_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  surveyId: varchar("survey_id").notNull().references(() => surveyExercises.id, { onDelete: "cascade" }),
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull(), // "text", "multipleChoice", "selectAll", "rating"
+  options: jsonb("options"), // For multiple choice/select all: ["Option A", "Option B", ...]
+  ratingMin: integer("rating_min"), // For rating questions
+  ratingMax: integer("rating_max"), // For rating questions
+  ratingLabels: jsonb("rating_labels"), // { min: "Not at all", max: "Extremely" }
+  isRequired: integer("is_required").notNull().default(1),
+  questionOrder: integer("question_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Survey Sessions - tracks client progress through a survey
+export const surveySessions = pgTable("survey_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  surveyId: varchar("survey_id").notNull().references(() => surveyExercises.id, { onDelete: "cascade" }),
+  currentQuestionId: varchar("current_question_id").references(() => surveyQuestions.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("in_progress"), // "in_progress", "completed", "abandoned"
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  aiSummary: text("ai_summary"), // AI-generated summary after completion
+});
+
+// Survey Responses - stores individual answers to survey questions
+export const surveyResponses = pgTable("survey_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => surveySessions.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => surveyQuestions.id, { onDelete: "cascade" }),
+  textResponse: text("text_response"), // For text questions
+  selectedOptions: jsonb("selected_options"), // For multiple choice/select all: ["Option A"] or ["Option A", "Option B"]
+  ratingValue: integer("rating_value"), // For rating questions
+  answeredAt: timestamp("answered_at").defaultNow(),
+});
+
+export const insertSurveyExerciseSchema = createInsertSchema(surveyExercises).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSurveyQuestionSchema = createInsertSchema(surveyQuestions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSurveySessionSchema = createInsertSchema(surveySessions).omit({ id: true, startedAt: true, completedAt: true });
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({ id: true, answeredAt: true });
+
+export type InsertSurveyExercise = z.infer<typeof insertSurveyExerciseSchema>;
+export type SurveyExercise = typeof surveyExercises.$inferSelect;
+
+export type InsertSurveyQuestion = z.infer<typeof insertSurveyQuestionSchema>;
+export type SurveyQuestion = typeof surveyQuestions.$inferSelect;
+
+export type InsertSurveySession = z.infer<typeof insertSurveySessionSchema>;
+export type SurveySession = typeof surveySessions.$inferSelect;
+
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
+export type SurveyResponse = typeof surveyResponses.$inferSelect;

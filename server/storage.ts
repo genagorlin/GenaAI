@@ -34,6 +34,14 @@ import {
   type InsertClientExerciseSession,
   type FileAttachment,
   type InsertFileAttachment,
+  type SurveyExercise,
+  type InsertSurveyExercise,
+  type SurveyQuestion,
+  type InsertSurveyQuestion,
+  type SurveySession,
+  type InsertSurveySession,
+  type SurveyResponse,
+  type InsertSurveyResponse,
   clients,
   threads,
   messages,
@@ -53,7 +61,11 @@ import {
   guidedExercises,
   exerciseSteps,
   clientExerciseSessions,
-  fileAttachments
+  fileAttachments,
+  surveyExercises,
+  surveyQuestions,
+  surveySessions,
+  surveyResponses
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt } from "drizzle-orm";
@@ -178,6 +190,35 @@ export interface IStorage {
   createFileAttachment(attachment: InsertFileAttachment): Promise<FileAttachment>;
   updateFileAttachment(id: string, updates: Partial<InsertFileAttachment>): Promise<FileAttachment>;
   deleteFileAttachment(id: string): Promise<void>;
+
+  // Survey Exercises
+  getAllSurveyExercises(): Promise<SurveyExercise[]>;
+  getPublishedSurveyExercises(): Promise<SurveyExercise[]>;
+  getSurveyExercise(id: string): Promise<SurveyExercise | undefined>;
+  createSurveyExercise(exercise: InsertSurveyExercise): Promise<SurveyExercise>;
+  updateSurveyExercise(id: string, updates: Partial<InsertSurveyExercise>): Promise<SurveyExercise>;
+  deleteSurveyExercise(id: string): Promise<void>;
+
+  // Survey Questions
+  getSurveyQuestions(surveyId: string): Promise<SurveyQuestion[]>;
+  getSurveyQuestion(id: string): Promise<SurveyQuestion | undefined>;
+  createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion>;
+  updateSurveyQuestion(id: string, updates: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion>;
+  deleteSurveyQuestion(id: string): Promise<void>;
+  reorderSurveyQuestions(surveyId: string, questionIds: string[]): Promise<void>;
+
+  // Survey Sessions
+  getClientSurveySessions(clientId: string): Promise<SurveySession[]>;
+  getActiveSurveySession(clientId: string, surveyId: string): Promise<SurveySession | undefined>;
+  getSurveySession(id: string): Promise<SurveySession | undefined>;
+  createSurveySession(session: InsertSurveySession): Promise<SurveySession>;
+  updateSurveySession(id: string, updates: Partial<SurveySession>): Promise<SurveySession>;
+
+  // Survey Responses
+  getSessionResponses(sessionId: string): Promise<SurveyResponse[]>;
+  getSurveyResponse(sessionId: string, questionId: string): Promise<SurveyResponse | undefined>;
+  createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse>;
+  updateSurveyResponse(id: string, updates: Partial<InsertSurveyResponse>): Promise<SurveyResponse>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -830,6 +871,140 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFileAttachment(id: string): Promise<void> {
     await db.delete(fileAttachments).where(eq(fileAttachments.id, id));
+  }
+
+  // Survey Exercises
+  async getAllSurveyExercises(): Promise<SurveyExercise[]> {
+    return await db.select().from(surveyExercises).orderBy(asc(surveyExercises.sortOrder));
+  }
+
+  async getPublishedSurveyExercises(): Promise<SurveyExercise[]> {
+    return await db.select().from(surveyExercises)
+      .where(eq(surveyExercises.isPublished, 1))
+      .orderBy(asc(surveyExercises.sortOrder));
+  }
+
+  async getSurveyExercise(id: string): Promise<SurveyExercise | undefined> {
+    const [result] = await db.select().from(surveyExercises).where(eq(surveyExercises.id, id));
+    return result;
+  }
+
+  async createSurveyExercise(exercise: InsertSurveyExercise): Promise<SurveyExercise> {
+    const [result] = await db.insert(surveyExercises).values(exercise).returning();
+    return result;
+  }
+
+  async updateSurveyExercise(id: string, updates: Partial<InsertSurveyExercise>): Promise<SurveyExercise> {
+    const [result] = await db.update(surveyExercises)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(surveyExercises.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteSurveyExercise(id: string): Promise<void> {
+    await db.delete(surveyExercises).where(eq(surveyExercises.id, id));
+  }
+
+  // Survey Questions
+  async getSurveyQuestions(surveyId: string): Promise<SurveyQuestion[]> {
+    return await db.select().from(surveyQuestions)
+      .where(eq(surveyQuestions.surveyId, surveyId))
+      .orderBy(asc(surveyQuestions.questionOrder));
+  }
+
+  async getSurveyQuestion(id: string): Promise<SurveyQuestion | undefined> {
+    const [result] = await db.select().from(surveyQuestions).where(eq(surveyQuestions.id, id));
+    return result;
+  }
+
+  async createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion> {
+    const [result] = await db.insert(surveyQuestions).values(question).returning();
+    return result;
+  }
+
+  async updateSurveyQuestion(id: string, updates: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion> {
+    const [result] = await db.update(surveyQuestions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(surveyQuestions.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteSurveyQuestion(id: string): Promise<void> {
+    await db.delete(surveyQuestions).where(eq(surveyQuestions.id, id));
+  }
+
+  async reorderSurveyQuestions(surveyId: string, questionIds: string[]): Promise<void> {
+    for (let i = 0; i < questionIds.length; i++) {
+      await db.update(surveyQuestions)
+        .set({ questionOrder: i })
+        .where(and(eq(surveyQuestions.id, questionIds[i]), eq(surveyQuestions.surveyId, surveyId)));
+    }
+  }
+
+  // Survey Sessions
+  async getClientSurveySessions(clientId: string): Promise<SurveySession[]> {
+    return await db.select().from(surveySessions)
+      .where(eq(surveySessions.clientId, clientId))
+      .orderBy(desc(surveySessions.startedAt));
+  }
+
+  async getActiveSurveySession(clientId: string, surveyId: string): Promise<SurveySession | undefined> {
+    const [result] = await db.select().from(surveySessions)
+      .where(and(
+        eq(surveySessions.clientId, clientId),
+        eq(surveySessions.surveyId, surveyId),
+        eq(surveySessions.status, "in_progress")
+      ));
+    return result;
+  }
+
+  async getSurveySession(id: string): Promise<SurveySession | undefined> {
+    const [result] = await db.select().from(surveySessions).where(eq(surveySessions.id, id));
+    return result;
+  }
+
+  async createSurveySession(session: InsertSurveySession): Promise<SurveySession> {
+    const [result] = await db.insert(surveySessions).values(session).returning();
+    return result;
+  }
+
+  async updateSurveySession(id: string, updates: Partial<SurveySession>): Promise<SurveySession> {
+    const [result] = await db.update(surveySessions)
+      .set(updates)
+      .where(eq(surveySessions.id, id))
+      .returning();
+    return result;
+  }
+
+  // Survey Responses
+  async getSessionResponses(sessionId: string): Promise<SurveyResponse[]> {
+    return await db.select().from(surveyResponses)
+      .where(eq(surveyResponses.sessionId, sessionId))
+      .orderBy(asc(surveyResponses.answeredAt));
+  }
+
+  async getSurveyResponse(sessionId: string, questionId: string): Promise<SurveyResponse | undefined> {
+    const [result] = await db.select().from(surveyResponses)
+      .where(and(
+        eq(surveyResponses.sessionId, sessionId),
+        eq(surveyResponses.questionId, questionId)
+      ));
+    return result;
+  }
+
+  async createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse> {
+    const [result] = await db.insert(surveyResponses).values(response).returning();
+    return result;
+  }
+
+  async updateSurveyResponse(id: string, updates: Partial<InsertSurveyResponse>): Promise<SurveyResponse> {
+    const [result] = await db.update(surveyResponses)
+      .set({ ...updates, answeredAt: new Date() })
+      .where(eq(surveyResponses.id, id))
+      .returning();
+    return result;
   }
 }
 
