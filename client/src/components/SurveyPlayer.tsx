@@ -70,6 +70,7 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
     text?: string;
     options?: string[];
     rating?: number;
+    otherText?: string;
   }>>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -115,10 +116,23 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
             const loadedAnswers: typeof answers = {};
             
             for (const resp of responses) {
+              let options = resp.selectedOptions as string[] | undefined;
+              let otherText: string | undefined;
+              
+              // Parse "Other: ..." entries back into options + otherText
+              if (options) {
+                const otherEntry = options.find(opt => opt.startsWith("Other: "));
+                if (otherEntry) {
+                  otherText = otherEntry.replace("Other: ", "");
+                  options = options.map(opt => opt.startsWith("Other: ") ? "Other" : opt);
+                }
+              }
+              
               loadedAnswers[resp.questionId] = {
                 text: resp.textResponse || undefined,
-                options: resp.selectedOptions as string[] | undefined,
+                options,
                 rating: resp.ratingValue ?? undefined,
+                otherText,
               };
             }
             
@@ -164,13 +178,20 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
       answer: typeof answers[string];
     }) => {
       if (!sessionId) return;
+      // Include "Other" write-in text if selected
+      let finalOptions = answer.options || null;
+      if (finalOptions && answer.otherText && finalOptions.includes("Other")) {
+        finalOptions = finalOptions.map(opt => 
+          opt === "Other" ? `Other: ${answer.otherText}` : opt
+        );
+      }
       const res = await fetch(`/api/survey-sessions/${sessionId}/responses`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           questionId,
           textResponse: answer.text || null,
-          selectedOptions: answer.options || null,
+          selectedOptions: finalOptions,
           ratingValue: answer.rating ?? null,
         }),
       });
@@ -389,7 +410,7 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
           {currentQuestion?.questionType === "multipleChoice" && currentQuestion.options && (
             <RadioGroup
               value={currentAnswer?.options?.[0] || ""}
-              onValueChange={(value) => handleAnswer({ options: [value] })}
+              onValueChange={(value) => handleAnswer({ options: [value], otherText: value === "Other" ? currentAnswer?.otherText : undefined })}
               className="space-y-3"
             >
               {(currentQuestion.options as string[]).map((option, idx) => (
@@ -400,6 +421,21 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
                   </Label>
                 </div>
               ))}
+              <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <RadioGroupItem value="Other" id="option-other" data-testid="survey-option-other" />
+                <Label htmlFor="option-other" className="cursor-pointer">
+                  Other
+                </Label>
+              </div>
+              {currentAnswer?.options?.[0] === "Other" && (
+                <Input
+                  placeholder="Please specify..."
+                  value={currentAnswer?.otherText || ""}
+                  onChange={(e) => handleAnswer({ ...(currentAnswer || {}), otherText: e.target.value })}
+                  className="mt-2"
+                  data-testid="survey-other-input"
+                />
+              )}
             </RadioGroup>
           )}
 
@@ -416,11 +452,12 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
                       id={`checkbox-${idx}`}
                       checked={isSelected}
                       onCheckedChange={(checked) => {
-                        const currentOptions = currentAnswer?.options || [];
+                        const current = currentAnswer || {};
+                        const currentOptions = current.options || [];
                         if (checked) {
-                          handleAnswer({ options: [...currentOptions, option] });
+                          handleAnswer({ ...current, options: [...currentOptions, option] });
                         } else {
-                          handleAnswer({ options: currentOptions.filter(o => o !== option) });
+                          handleAnswer({ ...current, options: currentOptions.filter(o => o !== option) });
                         }
                       }}
                       data-testid={`survey-checkbox-${idx}`}
@@ -431,6 +468,34 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
                   </div>
                 );
               })}
+              <div className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                <Checkbox
+                  id="checkbox-other"
+                  checked={currentAnswer?.options?.includes("Other") || false}
+                  onCheckedChange={(checked) => {
+                    const current = currentAnswer || {};
+                    const currentOptions = current.options || [];
+                    if (checked) {
+                      handleAnswer({ ...current, options: [...currentOptions, "Other"] });
+                    } else {
+                      handleAnswer({ ...current, options: currentOptions.filter(o => o !== "Other"), otherText: undefined });
+                    }
+                  }}
+                  data-testid="survey-checkbox-other"
+                />
+                <Label htmlFor="checkbox-other" className="cursor-pointer">
+                  Other
+                </Label>
+              </div>
+              {currentAnswer?.options?.includes("Other") && (
+                <Input
+                  placeholder="Please specify..."
+                  value={currentAnswer?.otherText || ""}
+                  onChange={(e) => handleAnswer({ ...(currentAnswer || {}), otherText: e.target.value })}
+                  className="mt-2"
+                  data-testid="survey-other-input-selectall"
+                />
+              )}
             </div>
           )}
 
@@ -478,7 +543,6 @@ export function SurveyPlayer({ clientId, surveyId, onClose, onComplete }: Survey
         </Button>
         <Button
           onClick={handleNext}
-          disabled={currentQuestion?.isRequired === 1 && !hasAnswer()}
           data-testid="survey-next-button"
         >
           {currentQuestionIndex === questions.length - 1 ? (
