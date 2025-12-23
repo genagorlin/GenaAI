@@ -376,8 +376,18 @@ export const surveyResponses = pgTable("survey_responses", {
   answeredAt: timestamp("answered_at").defaultNow(),
 });
 
-export const insertSurveyExerciseSchema = createInsertSchema(surveyExercises).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertSurveyQuestionSchema = createInsertSchema(surveyQuestions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSurveyExerciseSchema = createInsertSchema(surveyExercises)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    isPublished: z.number().optional().default(0),
+    sortOrder: z.number().optional().default(0),
+  });
+export const insertSurveyQuestionSchema = createInsertSchema(surveyQuestions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    isRequired: z.number().optional().default(1),
+    questionOrder: z.number().optional().default(0),
+  });
 export const insertSurveySessionSchema = createInsertSchema(surveySessions).omit({ id: true, startedAt: true, completedAt: true });
 export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({ id: true, answeredAt: true });
 
