@@ -286,8 +286,6 @@ export const clientExerciseSessions = pgTable("client_exercise_sessions", {
   exerciseId: varchar("exercise_id").notNull().references(() => guidedExercises.id, { onDelete: "cascade" }),
   threadId: varchar("thread_id").references(() => threads.id, { onDelete: "cascade" }),
   currentStepId: varchar("current_step_id").references(() => exerciseSteps.id, { onDelete: "set null" }),
-  stepMessageCount: integer("step_message_count").notNull().default(0), // Messages exchanged in current step
-  stepProgress: text("step_progress"), // AI's notes on what's been covered in current step
   status: text("status").notNull().default("in_progress"), // "in_progress", "completed", "abandoned"
   startedAt: timestamp("started_at").defaultNow(),
   completedAt: timestamp("completed_at"),

@@ -24,9 +24,6 @@ interface ExerciseContext {
   totalSteps: number;
   allSteps: { order: number; title: string }[]; // All step titles in order for context
   nextStepTitle?: string; // The title of the next step, if any
-  stepMessageCount?: number; // Number of messages exchanged in this step
-  stepProgress?: string; // AI's notes on what's been covered so far
-  sessionId?: string; // Session ID for tracking
 }
 
 interface PromptContext {
@@ -238,27 +235,6 @@ ${referenceContent}`);
         .map(s => `${s.order}. ${s.title}${s.order === ex.currentStepOrder ? ' ← CURRENT' : ''}`)
         .join('\n');
 
-      // Build step progress section if we have progress info
-      const stepMessageCount = ex.stepMessageCount || 0;
-      let progressSection = "";
-      if (stepMessageCount > 0) {
-        progressSection = `\n\n## STEP PROGRESS TRACKER
-**Messages in this step**: ${stepMessageCount}
-${ex.stepProgress ? `**What's been covered**: ${ex.stepProgress}` : '**Progress note**: This step has just begun.'}
-
-⚠️ REMINDER: You are STILL on Step ${ex.currentStepOrder} - "${ex.currentStepTitle}". 
-RE-READ the instructions above before responding. Do NOT drift into new topics or invent your own prompts.`;
-      }
-
-      // Determine if we need extra reinforcement (every 4 messages, add stronger reminder)
-      const needsReinforcement = stepMessageCount > 0 && stepMessageCount % 4 === 0;
-      const reinforcementNote = needsReinforcement ? `
-
-🔴 **CHECKPOINT - RE-READ INSTRUCTIONS NOW**: You've exchanged ${stepMessageCount} messages in this step. 
-PAUSE and re-read the "Instructions for This Step" section above VERBATIM before your next response.
-Ask yourself: Am I still following the EXACT instructions, or have I started improvising?
-If you've drifted, return to the written instructions now.` : "";
-
       systemPromptParts.push(`# ACTIVE GUIDED EXERCISE
 **CRITICAL**: The client is working through a STRUCTURED exercise with PREDEFINED steps. You MUST follow these exact steps - do NOT invent or suggest different steps.
 
@@ -268,12 +244,12 @@ If you've drifted, return to the written instructions now.` : "";
 ## COMPLETE EXERCISE STRUCTURE (follow this exactly):
 ${stepListFormatted}
 
-## CURRENT STEP: Step ${ex.currentStepOrder} of ${ex.totalSteps} - "${ex.currentStepTitle}"
+## CURRENT STEP: Step ${ex.currentStepOrder} - "${ex.currentStepTitle}"
 
-### Instructions for This Step (FOLLOW EXACTLY):
+### Instructions for This Step:
 ${ex.currentStepPrompt}
 
-${ex.currentStepGuidance ? `### Coach Guidance for This Step:\n${ex.currentStepGuidance}` : ''}${exerciseAttachmentContent}${progressSection}${reinforcementNote}
+${ex.currentStepGuidance ? `### Coach Guidance for This Step:\n${ex.currentStepGuidance}` : ''}${exerciseAttachmentContent}
 
 ${ex.nextStepTitle ? `## NEXT STEP PREVIEW: Step ${ex.currentStepOrder + 1} - "${ex.nextStepTitle}"
 When the client is ready to advance, they will click "Next Step" in their interface. The ONLY next step is "${ex.nextStepTitle}" - do not suggest any other next step.` : '## FINAL STEP\nThis is the last step of the exercise. When completed, the exercise will be finished.'}
@@ -286,8 +262,7 @@ When the client is ready to advance, they will click "Next Step" in their interf
 5. **NEVER invent steps**: The steps above are the ONLY steps. Do not create or suggest different steps.
 6. **When user says "next step"**: Tell them to click the "Next Step" button when ready. The next step will be "${ex.nextStepTitle || 'completion'}"
 7. **Stay within the structure**: Your role is to deliver these predefined instructions faithfully, not to create a different journey or add your own therapeutic framing.
-8. **Conversational adaptation only**: You may adapt the FORMAT for natural conversation (e.g., breaking a long instruction into dialogue), but the CONTENT and WORDING must remain faithful to the source material.
-9. **CHECK YOURSELF**: Before each response, mentally verify: "Am I using the exact text from the instructions, or am I making things up?"`);
+8. **Conversational adaptation only**: You may adapt the FORMAT for natural conversation (e.g., breaking a long instruction into dialogue), but the CONTENT and WORDING must remain faithful to the source material.`);
     }
 
     systemPromptParts.push(`# Three-Way Conversation
@@ -602,9 +577,6 @@ Your opening message should:
       totalSteps: sortedSteps.length,
       allSteps: sortedSteps.map(s => ({ order: s.stepOrder, title: s.title })),
       nextStepTitle: nextStep?.title,
-      stepMessageCount: activeSession.stepMessageCount || 0,
-      stepProgress: activeSession.stepProgress || undefined,
-      sessionId: activeSession.id,
     };
   }
 }

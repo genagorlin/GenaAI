@@ -315,18 +315,11 @@ export async function registerRoutes(
             : await promptAssembler.getRecentMessages(req.params.clientId);
           
           // Get exercise context if there's an active exercise in this thread
-          let exerciseContext = validated.threadId 
+          const exerciseContext = validated.threadId 
             ? await promptAssembler.getExerciseContext(req.params.clientId, validated.threadId)
             : undefined;
           
-          // Increment step message count BEFORE assembling prompt so reinforcement fires at the right time
-          if (exerciseContext?.sessionId) {
-            await storage.incrementStepMessageCount(exerciseContext.sessionId);
-            // Re-fetch context to get updated count
-            exerciseContext = await promptAssembler.getExerciseContext(req.params.clientId, validated.threadId!);
-          }
-          
-          console.log(`[AI] Exercise context for thread ${validated.threadId}:`, exerciseContext ? `exercise="${exerciseContext.exerciseTitle}", step=${exerciseContext.currentStepOrder}, msgCount=${exerciseContext.stepMessageCount}` : 'none');
+          console.log(`[AI] Exercise context for thread ${validated.threadId}:`, exerciseContext ? `exercise="${exerciseContext.exerciseTitle}", step=${exerciseContext.currentStepOrder}` : 'none');
           
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
@@ -761,14 +754,7 @@ export async function registerRoutes(
           const recentMessages = await promptAssembler.getThreadMessages(thread.id);
           
           // Get exercise context if there's an active exercise in this thread
-          let exerciseContext = await promptAssembler.getExerciseContext(thread.clientId, thread.id);
-          
-          // Increment step message count BEFORE assembling prompt so reinforcement fires at the right time
-          if (exerciseContext?.sessionId) {
-            await storage.incrementStepMessageCount(exerciseContext.sessionId);
-            // Re-fetch context to get updated count
-            exerciseContext = await promptAssembler.getExerciseContext(thread.clientId, thread.id);
-          }
+          const exerciseContext = await promptAssembler.getExerciseContext(thread.clientId, thread.id);
           
           const assembled = await promptAssembler.assemblePrompt({
             clientId: thread.clientId,
@@ -1065,15 +1051,6 @@ export async function registerRoutes(
 
   app.patch("/api/exercise-sessions/:id", async (req, res) => {
     try {
-      // If changing steps to a DIFFERENT step, reset the step progress counter
-      if (req.body.currentStepId) {
-        const currentSession = await storage.getExerciseSession(req.params.id);
-        // Only reset if the step is actually changing
-        if (currentSession && currentSession.currentStepId !== req.body.currentStepId) {
-          await storage.resetStepProgress(req.params.id);
-          console.log(`[Exercise] Step changed from ${currentSession.currentStepId} to ${req.body.currentStepId}, resetting progress`);
-        }
-      }
       const session = await storage.updateExerciseSession(req.params.id, req.body);
       console.log(`[Exercise] Updated session ${req.params.id}: ${JSON.stringify(req.body)}`);
       res.json(session);

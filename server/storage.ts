@@ -182,9 +182,6 @@ export interface IStorage {
   getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
-  incrementStepMessageCount(sessionId: string): Promise<void>;
-  updateStepProgress(sessionId: string, progress: string): Promise<void>;
-  resetStepProgress(sessionId: string): Promise<void>;
 
   // File Attachments
   getFileAttachment(id: string): Promise<FileAttachment | undefined>;
@@ -839,27 +836,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clientExerciseSessions.id, id))
       .returning();
     return result;
-  }
-
-  async incrementStepMessageCount(sessionId: string): Promise<void> {
-    const session = await this.getExerciseSession(sessionId);
-    if (session) {
-      await db.update(clientExerciseSessions)
-        .set({ stepMessageCount: (session.stepMessageCount || 0) + 1 })
-        .where(eq(clientExerciseSessions.id, sessionId));
-    }
-  }
-
-  async updateStepProgress(sessionId: string, progress: string): Promise<void> {
-    await db.update(clientExerciseSessions)
-      .set({ stepProgress: progress })
-      .where(eq(clientExerciseSessions.id, sessionId));
-  }
-
-  async resetStepProgress(sessionId: string): Promise<void> {
-    await db.update(clientExerciseSessions)
-      .set({ stepMessageCount: 0, stepProgress: null })
-      .where(eq(clientExerciseSessions.id, sessionId));
   }
 
   // File Attachments
