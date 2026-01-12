@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
-import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, verifyClientAccess } from "./replitAuth";
+import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, verifyClientAccess } from "./magicLinkAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
@@ -54,8 +54,20 @@ export async function registerRoutes(
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      const email = req.user.claims.email;
+      const user = await storage.getUser(email);
+      if (!user) {
+        // Create user if doesn't exist
+        await storage.upsertUser({
+          id: email,
+          email,
+          firstName: null,
+          lastName: null,
+          profileImageUrl: null,
+        });
+        const newUser = await storage.getUser(email);
+        return res.json(newUser);
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -65,10 +77,11 @@ export async function registerRoutes(
 
   // Auth status check (no middleware - returns auth state)
   app.get('/api/auth/status', (req: any, res) => {
-    const isAuth = req.isAuthenticated?.() && req.user?.claims;
-    res.json({ 
-      authenticated: !!isAuth,
-      email: isAuth ? req.user.claims.email : null
+    const session = req.session as any;
+    const isAuth = !!session?.user?.email;
+    res.json({
+      authenticated: isAuth,
+      email: isAuth ? session.user.email : null
     });
   });
 

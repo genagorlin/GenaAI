@@ -3,7 +3,7 @@ import { pgTable, text, varchar, timestamp, integer, index, jsonb } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Session storage table for Replit Auth
+// Session storage table
 export const sessions = pgTable(
   "sessions",
   {
@@ -13,6 +13,16 @@ export const sessions = pgTable(
   },
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
+
+// Magic link tokens for email authentication
+export const magicLinkTokens = pgTable("magic_link_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 // User storage table for Replit Auth (coaches)
 export const users = pgTable("users", {
