@@ -1,12 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema } from "@shared/schema";
+import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema, users } from "@shared/schema";
 import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, verifyClientAccess } from "./magicLinkAuth";
 import { z } from "zod";
 import multer from "multer";
 import OpenAI, { toFile } from "openai";
 import { detectCoachMention } from "./mentionDetector";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -55,17 +57,17 @@ export async function registerRoutes(
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const email = req.user.claims.email;
-      const user = await storage.getUser(email);
+      // Look up user by email (not ID) since migrated users have different IDs
+      const [user] = await db.select().from(users).where(eq(users.email, email));
       if (!user) {
         // Create user if doesn't exist
-        await storage.upsertUser({
+        const [newUser] = await db.insert(users).values({
           id: email,
           email,
           firstName: null,
           lastName: null,
           profileImageUrl: null,
-        });
-        const newUser = await storage.getUser(email);
+        }).returning();
         return res.json(newUser);
       }
       res.json(user);
