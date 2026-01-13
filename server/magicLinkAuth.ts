@@ -239,9 +239,9 @@ export async function setupAuth(app: Express) {
 
     console.log("[MagicLink] User logged in:", email, "role:", userRole);
 
-    // Redirect clients to their portal, coaches to dashboard
+    // Redirect clients to their inbox, coaches to dashboard
     if (clientUser && !authorizedUser) {
-      res.redirect(`/client/${clientUser.id}`);
+      res.redirect(`/inbox/${clientUser.id}`);
     } else {
       res.redirect("/");
     }
