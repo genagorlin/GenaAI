@@ -19,6 +19,7 @@ export const magicLinkTokens = pgTable("magic_link_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
+  code: text("code").notNull().default("000000"), // 6-digit code for PWA login
   expiresAt: timestamp("expires_at").notNull(),
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow(),

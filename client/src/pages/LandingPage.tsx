@@ -1,15 +1,24 @@
-import { useState } from "react";
-import { ArrowRight, Sparkles, Activity, ShieldCheck, Smartphone, Mail, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ArrowRight, Sparkles, Activity, ShieldCheck, Smartphone, Mail, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function LandingPage() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSent, setIsSent] = useState(false);
+  const [step, setStep] = useState<"email" | "code">("email");
   const [error, setError] = useState("");
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Focus first code input when step changes to code
+  useEffect(() => {
+    if (step === "code" && codeInputRefs.current[0]) {
+      codeInputRefs.current[0].focus();
+    }
+  }, [step]);
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
@@ -24,12 +33,78 @@ export default function LandingPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to send login link");
+        throw new Error(data.error || "Failed to send code");
       }
 
-      setIsSent(true);
+      setStep("code");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCodeChange = (index: number, value: string) => {
+    // Only allow digits
+    if (value && !/^\d$/.test(value)) return;
+
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      codeInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (value && index === 5 && newCode.every(d => d)) {
+      handleCodeSubmit(newCode.join(""));
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !code[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 6) {
+      const newCode = pasted.split("");
+      setCode(newCode);
+      handleCodeSubmit(pasted);
+    }
+  };
+
+  const handleCodeSubmit = async (fullCode?: string) => {
+    const codeToSubmit = fullCode || code.join("");
+    if (codeToSubmit.length !== 6) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: codeToSubmit }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Invalid code");
+      }
+
+      // Redirect to the appropriate page
+      window.location.href = data.redirectUrl || "/";
+    } catch (err: any) {
+      setError(err.message || "Invalid code");
+      setCode(["", "", "", "", "", ""]);
+      codeInputRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
     }
@@ -87,25 +162,65 @@ export default function LandingPage() {
                 <p className="text-sm text-muted-foreground mt-1">Access your professional workspace</p>
              </div>
 
-             {isSent ? (
-               <div className="space-y-4 text-center">
-                 <div className="flex justify-center">
-                   <CheckCircle className="h-12 w-12 text-emerald-500" />
-                 </div>
-                 <h3 className="font-medium text-lg">Check your email</h3>
-                 <p className="text-sm text-muted-foreground">
-                   We've sent a sign-in link to <strong>{email}</strong>. Click the link in the email to sign in.
-                 </p>
-                 <Button
-                   variant="outline"
-                   onClick={() => { setIsSent(false); setEmail(""); }}
-                   className="mt-4"
+             {step === "code" ? (
+               <div className="space-y-6">
+                 <button
+                   type="button"
+                   onClick={() => { setStep("email"); setCode(["", "", "", "", "", ""]); setError(""); }}
+                   className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
                  >
-                   Use a different email
-                 </Button>
+                   <ArrowLeft className="h-4 w-4 mr-1" />
+                   Back
+                 </button>
+
+                 <div className="text-center">
+                   <h3 className="font-medium text-lg">Enter your code</h3>
+                   <p className="text-sm text-muted-foreground mt-1">
+                     We sent a 6-digit code to <strong>{email}</strong>
+                   </p>
+                 </div>
+
+                 <div className="flex justify-center gap-2">
+                   {code.map((digit, index) => (
+                     <Input
+                       key={index}
+                       ref={(el) => { codeInputRefs.current[index] = el; }}
+                       type="text"
+                       inputMode="numeric"
+                       maxLength={1}
+                       value={digit}
+                       onChange={(e) => handleCodeChange(index, e.target.value)}
+                       onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                       onPaste={handleCodePaste}
+                       className="w-12 h-14 text-center text-2xl font-mono"
+                       disabled={isLoading}
+                     />
+                   ))}
+                 </div>
+
+                 {error && (
+                   <p className="text-sm text-red-500 text-center">{error}</p>
+                 )}
+
+                 {isLoading && (
+                   <div className="flex justify-center">
+                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                   </div>
+                 )}
+
+                 <p className="text-xs text-center text-muted-foreground">
+                   Didn't receive a code?{" "}
+                   <button
+                     type="button"
+                     onClick={() => { setStep("email"); setCode(["", "", "", "", "", ""]); }}
+                     className="text-primary hover:underline"
+                   >
+                     Try again
+                   </button>
+                 </p>
                </div>
              ) : (
-               <form onSubmit={handleSubmit} className="space-y-4">
+               <form onSubmit={handleEmailSubmit} className="space-y-4">
                  <div className="space-y-2">
                    <label htmlFor="email" className="text-sm font-medium">
                      Email address
@@ -137,17 +252,17 @@ export default function LandingPage() {
                    {isLoading ? (
                      <>
                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                       Sending link...
+                       Sending code...
                      </>
                    ) : (
                      <>
-                       Send sign-in link <ArrowRight className="ml-2 h-4 w-4" />
+                       Send sign-in code <ArrowRight className="ml-2 h-4 w-4" />
                      </>
                    )}
                  </Button>
 
                  <p className="text-xs text-center text-muted-foreground">
-                   We'll email you a magic link to sign in
+                   We'll email you a 6-digit code to sign in
                  </p>
                </form>
              )}

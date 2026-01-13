@@ -14,6 +14,11 @@ function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+function generateCode(): string {
+  // Generate a 6-digit numeric code
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
@@ -49,31 +54,46 @@ export function getSession() {
   });
 }
 
-async function sendMagicLinkEmail(email: string, token: string): Promise<{ success: boolean; error?: string }> {
+async function sendMagicLinkEmail(email: string, token: string, code: string): Promise<{ success: boolean; error?: string }> {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const magicLink = `${appUrl}/api/auth/verify?token=${token}`;
   const emailFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
 
   console.log("[MagicLink] Attempting to send email to:", email, "from:", emailFrom);
-  console.log("[MagicLink] Magic link:", magicLink);
+  console.log("[MagicLink] Code:", code);
 
   try {
     const result = await resend.emails.send({
       from: emailFrom,
       to: email,
-      subject: "Sign in to GenaAI",
+      subject: "Your GenaAI sign-in code",
       html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Sign in to GenaAI</h2>
-          <p>Click the button below to sign in. This link expires in 15 minutes.</p>
-          <a href="${magicLink}" style="display: inline-block; background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-            Sign In
-          </a>
-          <p style="color: #666; font-size: 14px;">
-            If you didn't request this email, you can safely ignore it.
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #333; margin-bottom: 24px;">Sign in to GenaAI</h2>
+
+          <p style="color: #666; margin-bottom: 16px;">Enter this code in the app to sign in:</p>
+
+          <div style="background-color: #f3f4f6; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+            <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #7c3aed;">
+              ${code}
+            </span>
+          </div>
+
+          <p style="color: #666; font-size: 14px; margin-bottom: 24px;">
+            This code expires in 15 minutes.
           </p>
-          <p style="color: #999; font-size: 12px;">
-            Or copy this link: ${magicLink}
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+
+          <p style="color: #999; font-size: 13px;">
+            Or click this link to sign in directly:
+          </p>
+          <a href="${magicLink}" style="color: #7c3aed; font-size: 13px; word-break: break-all;">
+            ${magicLink}
+          </a>
+
+          <p style="color: #999; font-size: 12px; margin-top: 24px;">
+            If you didn't request this email, you can safely ignore it.
           </p>
         </div>
       `,
@@ -87,17 +107,19 @@ async function sendMagicLinkEmail(email: string, token: string): Promise<{ succe
   }
 }
 
-async function createMagicLinkToken(email: string): Promise<string> {
+async function createMagicLinkToken(email: string): Promise<{ token: string; code: string }> {
   const token = generateToken();
+  const code = generateCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
   await db.insert(magicLinkTokens).values({
     email: email.toLowerCase(),
     token,
+    code,
     expiresAt,
   });
 
-  return token;
+  return { token, code };
 }
 
 async function verifyAndConsumeToken(token: string): Promise<string | null> {
@@ -109,6 +131,38 @@ async function verifyAndConsumeToken(token: string): Promise<string | null> {
     .where(
       and(
         eq(magicLinkTokens.token, token),
+        gt(magicLinkTokens.expiresAt, now),
+        isNull(magicLinkTokens.usedAt)
+      )
+    )
+    .limit(1);
+
+  if (result.length === 0) {
+    return null;
+  }
+
+  const tokenRecord = result[0];
+
+  // Mark token as used
+  await db
+    .update(magicLinkTokens)
+    .set({ usedAt: now })
+    .where(eq(magicLinkTokens.id, tokenRecord.id));
+
+  return tokenRecord.email;
+}
+
+async function verifyAndConsumeCode(email: string, code: string): Promise<string | null> {
+  const now = new Date();
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const result = await db
+    .select()
+    .from(magicLinkTokens)
+    .where(
+      and(
+        eq(magicLinkTokens.email, normalizedEmail),
+        eq(magicLinkTokens.code, code),
         gt(magicLinkTokens.expiresAt, now),
         isNull(magicLinkTokens.usedAt)
       )
@@ -157,8 +211,8 @@ export async function setupAuth(app: Express) {
       }
     }
 
-    const token = await createMagicLinkToken(normalizedEmail);
-    const result = await sendMagicLinkEmail(normalizedEmail, token);
+    const { token, code } = await createMagicLinkToken(normalizedEmail);
+    const result = await sendMagicLinkEmail(normalizedEmail, token, code);
 
     if (!result.success) {
       console.error("[MagicLink] Email send failed for:", normalizedEmail, "Error:", result.error);
@@ -245,6 +299,78 @@ export async function setupAuth(app: Express) {
     } else {
       res.redirect("/");
     }
+  });
+
+  // Verify code (for PWA login)
+  app.post("/api/auth/verify-code", async (req, res) => {
+    const { email, code } = req.body;
+
+    if (!email || typeof email !== "string" || !code || typeof code !== "string") {
+      return res.status(400).json({ error: "Email and code are required" });
+    }
+
+    const verifiedEmail = await verifyAndConsumeCode(email, code);
+
+    if (!verifiedEmail) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    // Bootstrap mode: if no authorized users exist, create the first user as admin
+    const allUsers = await storage.getAllAuthorizedUsers();
+    if (allUsers.length === 0) {
+      console.log("[MagicLink] No authorized users exist - bootstrapping first user as admin:", verifiedEmail);
+      await storage.createAuthorizedUser(verifiedEmail, "admin");
+    }
+
+    // Check if user is a coach (authorized_user) or a client
+    const authorizedUser = await storage.getAuthorizedUserByEmail(verifiedEmail);
+    const clientUser = await storage.getClientByEmail(verifiedEmail);
+
+    if (!authorizedUser && !clientUser) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Update last login for coaches
+    if (authorizedUser) {
+      await storage.updateAuthorizedUserLastLogin(verifiedEmail);
+    }
+
+    // Check if user already exists by email, if not create one (for coaches)
+    if (authorizedUser) {
+      const existingUser = await storage.getUser(verifiedEmail);
+      if (!existingUser) {
+        const { db } = await import("./db");
+        const { users } = await import("@shared/schema");
+        const { eq } = await import("drizzle-orm");
+        const [userByEmail] = await db.select().from(users).where(eq(users.email, verifiedEmail));
+
+        if (!userByEmail) {
+          await storage.upsertUser({
+            id: verifiedEmail,
+            email: verifiedEmail,
+            firstName: null,
+            lastName: null,
+            profileImageUrl: null,
+          });
+        }
+      }
+    }
+
+    // Create session
+    const userRole = authorizedUser ? authorizedUser.role : "client";
+    const clientId = clientUser ? clientUser.id : null;
+
+    (req.session as any).user = {
+      email: verifiedEmail,
+      role: userRole,
+      clientId,
+    };
+
+    console.log("[MagicLink] User logged in via code:", verifiedEmail, "role:", userRole);
+
+    // Return redirect URL for client to navigate
+    const redirectUrl = (clientUser && !authorizedUser) ? `/inbox/${clientUser.id}` : "/";
+    res.json({ success: true, redirectUrl });
   });
 
   // Logout
