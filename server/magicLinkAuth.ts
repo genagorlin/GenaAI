@@ -197,14 +197,27 @@ export async function setupAuth(app: Express) {
     // Update last login
     await storage.updateAuthorizedUserLastLogin(email);
 
-    // Upsert user record
-    await storage.upsertUser({
-      id: email, // Use email as ID for simplicity
-      email,
-      firstName: null,
-      lastName: null,
-      profileImageUrl: null,
-    });
+    // Check if user already exists by email, if not create one
+    const existingUser = await storage.getUser(email);
+    if (!existingUser) {
+      // Check if there's a user with this email but different ID (from Replit migration)
+      const { db } = await import("./db");
+      const { users } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [userByEmail] = await db.select().from(users).where(eq(users.email, email));
+
+      if (!userByEmail) {
+        // No user exists at all, create one
+        await storage.upsertUser({
+          id: email,
+          email,
+          firstName: null,
+          lastName: null,
+          profileImageUrl: null,
+        });
+      }
+      // If userByEmail exists, user is already in the system via migration
+    }
 
     // Create session
     (req.session as any).user = {
