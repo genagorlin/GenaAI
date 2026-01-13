@@ -49,13 +49,16 @@ export function getSession() {
   });
 }
 
-async function sendMagicLinkEmail(email: string, token: string): Promise<boolean> {
+async function sendMagicLinkEmail(email: string, token: string): Promise<{ success: boolean; error?: string }> {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const magicLink = `${appUrl}/api/auth/verify?token=${token}`;
-  const emailFrom = process.env.EMAIL_FROM || "noreply@example.com";
+  const emailFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
+
+  console.log("[MagicLink] Attempting to send email to:", email, "from:", emailFrom);
+  console.log("[MagicLink] Magic link:", magicLink);
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: emailFrom,
       to: email,
       subject: "Sign in to GenaAI",
@@ -75,10 +78,12 @@ async function sendMagicLinkEmail(email: string, token: string): Promise<boolean
         </div>
       `,
     });
-    return true;
-  } catch (error) {
+    console.log("[MagicLink] Email sent successfully:", result);
+    return { success: true };
+  } catch (error: any) {
     console.error("[MagicLink] Failed to send email:", error);
-    return false;
+    const errorMessage = error?.message || error?.toString() || "Unknown error";
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -151,10 +156,11 @@ export async function setupAuth(app: Express) {
     }
 
     const token = await createMagicLinkToken(normalizedEmail);
-    const sent = await sendMagicLinkEmail(normalizedEmail, token);
+    const result = await sendMagicLinkEmail(normalizedEmail, token);
 
-    if (!sent) {
-      return res.status(500).json({ error: "Failed to send email" });
+    if (!result.success) {
+      console.error("[MagicLink] Email send failed for:", normalizedEmail, "Error:", result.error);
+      return res.status(500).json({ error: `Failed to send email: ${result.error}` });
     }
 
     console.log("[MagicLink] Sent magic link to:", normalizedEmail);
