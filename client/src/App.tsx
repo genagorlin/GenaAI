@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,6 +12,27 @@ import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
 import InboxPage from "@/pages/InboxPage";
 import ClientAccessDenied from "@/pages/ClientAccessDenied";
+
+// Component to handle client redirect at root
+function ClientHome() {
+  const { clientId, isClient, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // If user is a client with a clientId, redirect to their inbox
+  if (isClient && clientId) {
+    return <Redirect to={`/inbox/${clientId}`} />;
+  }
+
+  // Otherwise show coach dashboard
+  return <CoachPage />;
+}
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -35,7 +56,7 @@ function Router() {
         <Route path="/" component={LandingPage} />
       ) : (
         <>
-          <Route path="/" component={CoachPage} />
+          <Route path="/" component={ClientHome} />
           <Route path="/admin" component={AdminPage} />
         </>
       )}

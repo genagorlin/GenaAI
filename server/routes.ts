@@ -83,7 +83,9 @@ export async function registerRoutes(
     const isAuth = !!session?.user?.email;
     res.json({
       authenticated: isAuth,
-      email: isAuth ? session.user.email : null
+      email: isAuth ? session.user.email : null,
+      role: isAuth ? session.user.role : null,
+      clientId: isAuth ? session.user.clientId : null,
     });
   });
 
