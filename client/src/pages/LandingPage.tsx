@@ -158,8 +158,8 @@ export default function LandingPage() {
         <div className="w-full max-w-md flex-1">
           <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
              <div className="mb-8 text-center lg:text-left">
-                <h2 className="font-serif text-2xl font-medium">Welcome back</h2>
-                <p className="text-sm text-muted-foreground mt-1">Sign in to continue</p>
+                <h2 className="font-serif text-2xl font-medium">Welcome to GenaAI</h2>
+                <p className="text-sm text-muted-foreground mt-1">Your AI-powered coaching platform</p>
              </div>
 
              {step === "code" ? (
