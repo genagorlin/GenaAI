@@ -747,7 +747,7 @@ export default function ChatPage() {
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <h2 className="truncate text-lg font-medium leading-tight" data-testid="text-chat-title">GenaGPT</h2>
+            <h2 className="truncate text-lg font-medium leading-tight" data-testid="text-chat-title">GenaAI</h2>
             {isAiTyping ? (
               <p className="truncate text-xs text-white/80">typing...</p>
             ) : (

@@ -1563,8 +1563,8 @@ export async function registerRoutes(
     }
 
     const manifest = {
-      name: "GenaGPT - AI Coaching Journal",
-      short_name: "GenaGPT",
+      name: "GenaAI - AI Coaching Journal",
+      short_name: "GenaAI",
       description: "Your AI-powered coaching journal and thinking partner",
       start_url: startUrl,
       display: "standalone",

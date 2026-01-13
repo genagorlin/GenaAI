@@ -129,7 +129,7 @@ export default function AdminPage() {
               Add New User
             </CardTitle>
             <CardDescription>
-              Grant access to GenaGPT by adding their email address
+              Grant access to GenaAI by adding their email address
             </CardDescription>
           </CardHeader>
           <CardContent>

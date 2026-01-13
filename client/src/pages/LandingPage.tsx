@@ -126,7 +126,7 @@ export default function LandingPage() {
              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <Sparkles className="h-5 w-5" />
              </div>
-             <span className="font-serif text-2xl font-medium tracking-tight">GenaGPT</span>
+             <span className="font-serif text-2xl font-medium tracking-tight">GenaAI</span>
            </div>
 
            <h1 className="font-serif text-5xl font-medium leading-[1.1] text-foreground">

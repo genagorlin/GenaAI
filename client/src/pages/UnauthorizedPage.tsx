@@ -14,7 +14,7 @@ export default function UnauthorizedPage() {
             Access Not Authorized
           </CardTitle>
           <CardDescription className="text-base" data-testid="text-unauthorized-description">
-            Your account is not currently approved to access GenaGPT.
+            Your account is not currently approved to access GenaAI.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

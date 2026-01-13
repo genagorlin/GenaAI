@@ -157,7 +157,7 @@ export function JournalInterface() {
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
-          <h2 className="truncate text-lg font-medium leading-tight">GenaGPT</h2>
+          <h2 className="truncate text-lg font-medium leading-tight">GenaAI</h2>
           {isTyping ? (
             <p className="truncate text-xs text-white/80">typing...</p>
           ) : (

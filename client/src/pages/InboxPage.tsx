@@ -261,7 +261,7 @@ export default function InboxPage() {
             </div>
             <div className="flex-1 overflow-hidden">
               <h2 className="truncate text-lg font-medium leading-tight" data-testid="text-inbox-title">
-                GenaGPT
+                GenaAI
               </h2>
               <p className="truncate text-xs text-white/80">
                 {client?.name ? `Hi ${client.name.split(' ')[0]}!` : 'Your thinking partner'}

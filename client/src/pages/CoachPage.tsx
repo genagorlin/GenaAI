@@ -724,7 +724,7 @@ function DesktopCoachView() {
                                             : 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
                                         }`}>
                                           <p className={`text-[10px] font-medium mb-1 ${isCoach ? 'text-violet-100' : 'opacity-70'}`}>
-                                            {isClient ? selectedClient?.name : isCoach ? ((user as any)?.firstName || 'Coach') : 'GenaGPT'}
+                                            {isClient ? selectedClient?.name : isCoach ? ((user as any)?.firstName || 'Coach') : 'GenaAI'}
                                           </p>
                                           <p className="text-sm leading-relaxed whitespace-pre-wrap">
                                             {msg.content}
