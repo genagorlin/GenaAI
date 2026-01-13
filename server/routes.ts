@@ -53,8 +53,8 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Auth routes - use isClientAuthenticated to allow both coaches and clients
+  app.get('/api/auth/user', isClientAuthenticated, async (req: any, res) => {
     try {
       const email = req.user.claims.email;
       // Look up user by email (not ID) since migrated users have different IDs
