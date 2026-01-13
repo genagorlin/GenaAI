@@ -144,11 +144,13 @@ export async function setupAuth(app: Express) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user is authorized (bootstrap: if no users exist, allow anyone)
+    // Check if user is authorized (coach in authorized_users OR client in clients table)
+    // Bootstrap: if no authorized users exist, allow anyone
     const allUsers = await storage.getAllAuthorizedUsers();
     if (allUsers.length > 0) {
       const authorizedUser = await storage.getAuthorizedUserByEmail(normalizedEmail);
-      if (!authorizedUser) {
+      const clientUser = await storage.getClientByEmail(normalizedEmail);
+      if (!authorizedUser && !clientUser) {
         // Still send success to prevent email enumeration
         console.log("[MagicLink] Unauthorized email attempted login:", normalizedEmail);
         return res.json({ success: true, message: "If this email is registered, you will receive a sign-in link." });
@@ -188,45 +190,61 @@ export async function setupAuth(app: Express) {
       await storage.createAuthorizedUser(email, "admin");
     }
 
-    // Verify user is authorized
+    // Check if user is a coach (authorized_user) or a client
     const authorizedUser = await storage.getAuthorizedUserByEmail(email);
-    if (!authorizedUser) {
+    const clientUser = await storage.getClientByEmail(email);
+
+    if (!authorizedUser && !clientUser) {
       return res.redirect("/unauthorized");
     }
 
-    // Update last login
-    await storage.updateAuthorizedUserLastLogin(email);
-
-    // Check if user already exists by email, if not create one
-    const existingUser = await storage.getUser(email);
-    if (!existingUser) {
-      // Check if there's a user with this email but different ID (from Replit migration)
-      const { db } = await import("./db");
-      const { users } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
-      const [userByEmail] = await db.select().from(users).where(eq(users.email, email));
-
-      if (!userByEmail) {
-        // No user exists at all, create one
-        await storage.upsertUser({
-          id: email,
-          email,
-          firstName: null,
-          lastName: null,
-          profileImageUrl: null,
-        });
-      }
-      // If userByEmail exists, user is already in the system via migration
+    // Update last login for coaches
+    if (authorizedUser) {
+      await storage.updateAuthorizedUserLastLogin(email);
     }
 
-    // Create session
+    // Check if user already exists by email, if not create one (for coaches)
+    if (authorizedUser) {
+      const existingUser = await storage.getUser(email);
+      if (!existingUser) {
+        // Check if there's a user with this email but different ID (from Replit migration)
+        const { db } = await import("./db");
+        const { users } = await import("@shared/schema");
+        const { eq } = await import("drizzle-orm");
+        const [userByEmail] = await db.select().from(users).where(eq(users.email, email));
+
+        if (!userByEmail) {
+          // No user exists at all, create one
+          await storage.upsertUser({
+            id: email,
+            email,
+            firstName: null,
+            lastName: null,
+            profileImageUrl: null,
+          });
+        }
+        // If userByEmail exists, user is already in the system via migration
+      }
+    }
+
+    // Create session - different roles for coaches vs clients
+    const userRole = authorizedUser ? authorizedUser.role : "client";
+    const clientId = clientUser ? clientUser.id : null;
+
     (req.session as any).user = {
       email,
-      role: authorizedUser.role,
+      role: userRole,
+      clientId, // Only set for client logins
     };
 
-    console.log("[MagicLink] User logged in:", email);
-    res.redirect("/");
+    console.log("[MagicLink] User logged in:", email, "role:", userRole);
+
+    // Redirect clients to their portal, coaches to dashboard
+    if (clientUser && !authorizedUser) {
+      res.redirect(`/client/${clientUser.id}`);
+    } else {
+      res.redirect("/");
+    }
   });
 
   // Logout
