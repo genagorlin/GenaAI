@@ -1,9 +1,9 @@
-import { 
-  type Client, 
-  type InsertClient, 
+import {
+  type Client,
+  type InsertClient,
   type Thread,
   type InsertThread,
-  type Message, 
+  type Message,
   type InsertMessage,
   type Insight,
   type InsertInsight,
@@ -32,6 +32,8 @@ import {
   type InsertExerciseStep,
   type ClientExerciseSession,
   type InsertClientExerciseSession,
+  type ExerciseStepResponse,
+  type InsertExerciseStepResponse,
   type FileAttachment,
   type InsertFileAttachment,
   type SurveyExercise,
@@ -42,6 +44,12 @@ import {
   type InsertSurveySession,
   type SurveyResponse,
   type InsertSurveyResponse,
+  type ReminderTemplate,
+  type InsertReminderTemplate,
+  type ClientReminder,
+  type InsertClientReminder,
+  type ReminderHistory,
+  type InsertReminderHistory,
   clients,
   threads,
   messages,
@@ -61,14 +69,18 @@ import {
   guidedExercises,
   exerciseSteps,
   clientExerciseSessions,
+  exerciseStepResponses,
   fileAttachments,
   surveyExercises,
   surveyQuestions,
   surveySessions,
-  surveyResponses
+  surveyResponses,
+  reminderTemplates,
+  clientReminders,
+  reminderHistory
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, gt } from "drizzle-orm";
+import { eq, desc, asc, and, gt, lte } from "drizzle-orm";
 
 export interface IStorage {
   // Users (Replit Auth)
@@ -184,6 +196,12 @@ export interface IStorage {
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
 
+  // Exercise Step Responses
+  getSessionStepResponses(sessionId: string): Promise<ExerciseStepResponse[]>;
+  getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined>;
+  upsertStepResponse(data: InsertExerciseStepResponse): Promise<ExerciseStepResponse>;
+  updateStepResponseGuidance(id: string, guidance: any[]): Promise<ExerciseStepResponse>;
+
   // File Attachments
   getFileAttachment(id: string): Promise<FileAttachment | undefined>;
   getExerciseAttachments(exerciseId: string): Promise<FileAttachment[]>;
@@ -220,6 +238,31 @@ export interface IStorage {
   getSurveyResponse(sessionId: string, questionId: string): Promise<SurveyResponse | undefined>;
   createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse>;
   updateSurveyResponse(id: string, updates: Partial<InsertSurveyResponse>): Promise<SurveyResponse>;
+
+  // Reminder Templates
+  getAllReminderTemplates(): Promise<ReminderTemplate[]>;
+  getActiveReminderTemplates(): Promise<ReminderTemplate[]>;
+  getReminderTemplate(id: string): Promise<ReminderTemplate | undefined>;
+  createReminderTemplate(template: InsertReminderTemplate): Promise<ReminderTemplate>;
+  updateReminderTemplate(id: string, updates: Partial<InsertReminderTemplate>): Promise<ReminderTemplate>;
+  deleteReminderTemplate(id: string): Promise<void>;
+
+  // Client Reminders
+  getClientReminders(clientId: string): Promise<(ClientReminder & { template: ReminderTemplate })[]>;
+  getClientReminder(id: string): Promise<ClientReminder | undefined>;
+  createClientReminder(reminder: InsertClientReminder): Promise<ClientReminder>;
+  updateClientReminder(id: string, updates: Partial<ClientReminder>): Promise<ClientReminder>;
+  deleteClientReminder(id: string): Promise<void>;
+  getDueReminders(): Promise<(ClientReminder & { template: ReminderTemplate; client: Client })[]>;
+  getClientsWithTemplate(templateId: string): Promise<(ClientReminder & { client: Client })[]>;
+
+  // Reminder History
+  createReminderHistory(history: InsertReminderHistory): Promise<ReminderHistory>;
+  getClientReminderHistory(clientId: string): Promise<ReminderHistory[]>;
+  getReminderHistory(clientReminderId: string): Promise<ReminderHistory[]>;
+
+  // Client Timezone
+  updateClientTimezone(clientId: string, timezone: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -844,6 +887,44 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  // Exercise Step Responses
+  async getSessionStepResponses(sessionId: string): Promise<ExerciseStepResponse[]> {
+    return await db.select().from(exerciseStepResponses)
+      .where(eq(exerciseStepResponses.sessionId, sessionId))
+      .orderBy(asc(exerciseStepResponses.createdAt));
+  }
+
+  async getStepResponse(sessionId: string, stepId: string): Promise<ExerciseStepResponse | undefined> {
+    const [result] = await db.select().from(exerciseStepResponses)
+      .where(and(
+        eq(exerciseStepResponses.sessionId, sessionId),
+        eq(exerciseStepResponses.stepId, stepId)
+      ));
+    return result;
+  }
+
+  async upsertStepResponse(data: InsertExerciseStepResponse): Promise<ExerciseStepResponse> {
+    // Try to find existing response
+    const existing = await this.getStepResponse(data.sessionId, data.stepId);
+    if (existing) {
+      const [result] = await db.update(exerciseStepResponses)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(exerciseStepResponses.id, existing.id))
+        .returning();
+      return result;
+    }
+    const [result] = await db.insert(exerciseStepResponses).values(data).returning();
+    return result;
+  }
+
+  async updateStepResponseGuidance(id: string, guidance: any[]): Promise<ExerciseStepResponse> {
+    const [result] = await db.update(exerciseStepResponses)
+      .set({ aiGuidance: guidance, updatedAt: new Date() })
+      .where(eq(exerciseStepResponses.id, id))
+      .returning();
+    return result;
+  }
+
   // File Attachments
   async getFileAttachment(id: string): Promise<FileAttachment | undefined> {
     const [result] = await db.select().from(fileAttachments).where(eq(fileAttachments.id, id));
@@ -1011,6 +1092,128 @@ export class DatabaseStorage implements IStorage {
       .where(eq(surveyResponses.id, id))
       .returning();
     return result;
+  }
+
+  // Reminder Templates
+  async getAllReminderTemplates(): Promise<ReminderTemplate[]> {
+    return await db.select().from(reminderTemplates).orderBy(asc(reminderTemplates.sortOrder));
+  }
+
+  async getActiveReminderTemplates(): Promise<ReminderTemplate[]> {
+    return await db.select().from(reminderTemplates)
+      .where(eq(reminderTemplates.isActive, 1))
+      .orderBy(asc(reminderTemplates.sortOrder));
+  }
+
+  async getReminderTemplate(id: string): Promise<ReminderTemplate | undefined> {
+    const [result] = await db.select().from(reminderTemplates).where(eq(reminderTemplates.id, id));
+    return result;
+  }
+
+  async createReminderTemplate(template: InsertReminderTemplate): Promise<ReminderTemplate> {
+    const [result] = await db.insert(reminderTemplates).values(template).returning();
+    return result;
+  }
+
+  async updateReminderTemplate(id: string, updates: Partial<InsertReminderTemplate>): Promise<ReminderTemplate> {
+    const [result] = await db.update(reminderTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(reminderTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteReminderTemplate(id: string): Promise<void> {
+    await db.delete(reminderTemplates).where(eq(reminderTemplates.id, id));
+  }
+
+  // Client Reminders
+  async getClientReminders(clientId: string): Promise<(ClientReminder & { template: ReminderTemplate })[]> {
+    const results = await db.select()
+      .from(clientReminders)
+      .innerJoin(reminderTemplates, eq(clientReminders.templateId, reminderTemplates.id))
+      .where(eq(clientReminders.clientId, clientId))
+      .orderBy(desc(clientReminders.createdAt));
+    return results.map((r: { client_reminders: ClientReminder; reminder_templates: ReminderTemplate }) => ({
+      ...r.client_reminders,
+      template: r.reminder_templates
+    }));
+  }
+
+  async getClientReminder(id: string): Promise<ClientReminder | undefined> {
+    const [result] = await db.select().from(clientReminders).where(eq(clientReminders.id, id));
+    return result;
+  }
+
+  async createClientReminder(reminder: InsertClientReminder): Promise<ClientReminder> {
+    const [result] = await db.insert(clientReminders).values(reminder).returning();
+    return result;
+  }
+
+  async updateClientReminder(id: string, updates: Partial<ClientReminder>): Promise<ClientReminder> {
+    const [result] = await db.update(clientReminders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(clientReminders.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteClientReminder(id: string): Promise<void> {
+    await db.delete(clientReminders).where(eq(clientReminders.id, id));
+  }
+
+  async getDueReminders(): Promise<(ClientReminder & { template: ReminderTemplate; client: Client })[]> {
+    const now = new Date();
+    const results = await db.select()
+      .from(clientReminders)
+      .innerJoin(reminderTemplates, eq(clientReminders.templateId, reminderTemplates.id))
+      .innerJoin(clients, eq(clientReminders.clientId, clients.id))
+      .where(and(
+        eq(clientReminders.isEnabled, 1),
+        eq(clientReminders.isPaused, 0),
+        lte(clientReminders.nextScheduledAt, now)
+      ));
+    return results.map((r: { client_reminders: ClientReminder; reminder_templates: ReminderTemplate; clients: Client }) => ({
+      ...r.client_reminders,
+      template: r.reminder_templates,
+      client: r.clients
+    }));
+  }
+
+  async getClientsWithTemplate(templateId: string): Promise<(ClientReminder & { client: Client })[]> {
+    const results = await db.select()
+      .from(clientReminders)
+      .innerJoin(clients, eq(clientReminders.clientId, clients.id))
+      .where(eq(clientReminders.templateId, templateId));
+    return results.map((r: { client_reminders: ClientReminder; clients: Client }) => ({
+      ...r.client_reminders,
+      client: r.clients
+    }));
+  }
+
+  // Reminder History
+  async createReminderHistory(history: InsertReminderHistory): Promise<ReminderHistory> {
+    const [result] = await db.insert(reminderHistory).values(history).returning();
+    return result;
+  }
+
+  async getClientReminderHistory(clientId: string): Promise<ReminderHistory[]> {
+    return await db.select().from(reminderHistory)
+      .where(eq(reminderHistory.clientId, clientId))
+      .orderBy(desc(reminderHistory.sentAt));
+  }
+
+  async getReminderHistory(clientReminderId: string): Promise<ReminderHistory[]> {
+    return await db.select().from(reminderHistory)
+      .where(eq(reminderHistory.clientReminderId, clientReminderId))
+      .orderBy(desc(reminderHistory.sentAt));
+  }
+
+  // Client Timezone
+  async updateClientTimezone(clientId: string, timezone: string): Promise<void> {
+    await db.update(clients)
+      .set({ timezone })
+      .where(eq(clients.id, clientId));
   }
 }
 

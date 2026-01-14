@@ -61,6 +61,7 @@ export const clients = pgTable("clients", {
   lastActive: timestamp("last_active").defaultNow(),
   mobileAppConnected: integer("mobile_app_connected").notNull().default(0),
   lastSummarizedAt: timestamp("last_summarized_at"),
+  timezone: text("timezone").default("America/New_York"),
 });
 
 // Conversation threads - each client can have multiple threads
@@ -303,9 +304,22 @@ export const clientExerciseSessions = pgTable("client_exercise_sessions", {
   summary: text("summary"), // AI-generated summary upon completion
 });
 
+// Exercise Step Responses - stores client responses for each step
+export const exerciseStepResponses = pgTable("exercise_step_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => clientExerciseSessions.id, { onDelete: "cascade" }),
+  stepId: varchar("step_id").notNull().references(() => exerciseSteps.id, { onDelete: "cascade" }),
+  response: text("response").notNull().default(""),
+  status: text("status").notNull().default("in_progress"), // "in_progress", "completed", "skipped"
+  aiGuidance: jsonb("ai_guidance"), // Array of {role, content, timestamp} for guidance chat
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertGuidedExerciseSchema = createInsertSchema(guidedExercises).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertExerciseStepSchema = createInsertSchema(exerciseSteps).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientExerciseSessionSchema = createInsertSchema(clientExerciseSessions).omit({ id: true, startedAt: true, completedAt: true });
+export const insertExerciseStepResponseSchema = createInsertSchema(exerciseStepResponses).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type InsertGuidedExercise = z.infer<typeof insertGuidedExerciseSchema>;
 export type GuidedExercise = typeof guidedExercises.$inferSelect;
@@ -315,6 +329,9 @@ export type ExerciseStep = typeof exerciseSteps.$inferSelect;
 
 export type InsertClientExerciseSession = z.infer<typeof insertClientExerciseSessionSchema>;
 export type ClientExerciseSession = typeof clientExerciseSessions.$inferSelect;
+
+export type InsertExerciseStepResponse = z.infer<typeof insertExerciseStepResponseSchema>;
+export type ExerciseStepResponse = typeof exerciseStepResponses.$inferSelect;
 
 // File Attachments - uploaded files linked to exercises or reference documents
 export const fileAttachments = pgTable("file_attachments", {
@@ -413,3 +430,64 @@ export type SurveySession = typeof surveySessions.$inferSelect;
 
 export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
 export type SurveyResponse = typeof surveyResponses.$inferSelect;
+
+// Email Reminder Templates - global templates that can be assigned to clients
+export const reminderTemplates = pgTable("reminder_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(), // HTML body with {{variables}}
+  category: text("category"),
+  isActive: integer("is_active").notNull().default(1),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Client Reminders - per-client reminder configuration
+export const clientReminders = pgTable("client_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  templateId: varchar("template_id").notNull().references(() => reminderTemplates.id, { onDelete: "cascade" }),
+  scheduleType: text("schedule_type").notNull(), // "daily", "weekly", "custom"
+  scheduleDays: jsonb("schedule_days"), // For weekly: ["monday", "wednesday", "friday"]
+  scheduleTime: text("schedule_time").notNull(), // "09:00" in client's timezone
+  customIntervalDays: integer("custom_interval_days"), // For custom: every N days
+  timezone: text("timezone").notNull().default("America/New_York"),
+  isEnabled: integer("is_enabled").notNull().default(1),
+  isPaused: integer("is_paused").notNull().default(0),
+  pausedUntil: timestamp("paused_until"),
+  lastSentAt: timestamp("last_sent_at"),
+  nextScheduledAt: timestamp("next_scheduled_at"),
+  subjectOverride: text("subject_override"),
+  bodyOverride: text("body_override"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Reminder History - audit log of sent reminders
+export const reminderHistory = pgTable("reminder_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientReminderId: varchar("client_reminder_id").notNull().references(() => clientReminders.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  templateId: varchar("template_id").references(() => reminderTemplates.id, { onDelete: "set null" }),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  status: text("status").notNull(), // "sent", "failed", "skipped"
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at").defaultNow(),
+});
+
+export const insertReminderTemplateSchema = createInsertSchema(reminderTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertClientReminderSchema = createInsertSchema(clientReminders).omit({ id: true, createdAt: true, updatedAt: true, lastSentAt: true });
+export const insertReminderHistorySchema = createInsertSchema(reminderHistory).omit({ id: true, sentAt: true });
+
+export type InsertReminderTemplate = z.infer<typeof insertReminderTemplateSchema>;
+export type ReminderTemplate = typeof reminderTemplates.$inferSelect;
+
+export type InsertClientReminder = z.infer<typeof insertClientReminderSchema>;
+export type ClientReminder = typeof clientReminders.$inferSelect;
+
+export type InsertReminderHistory = z.infer<typeof insertReminderHistorySchema>;
+export type ReminderHistory = typeof reminderHistory.$inferSelect;

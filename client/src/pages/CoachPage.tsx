@@ -41,6 +41,8 @@ import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog"
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
 import { SurveyManager } from "@/components/dashboard/SurveyManager";
+import { ReminderManager } from "@/components/dashboard/ReminderManager";
+import { ClientRemindersPanel } from "@/components/dashboard/ClientRemindersPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,6 +115,33 @@ interface Mention {
 }
 
 type ViewMode = "document" | "signals" | "messages";
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function formatDateTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => {
@@ -379,7 +408,7 @@ function DesktopCoachView() {
                   <div className="flex flex-col items-start">
                     <span>{client.name}</span>
                     <span className={`text-[10px] ${selectedClient?.id === client.id ? "text-white/70" : "text-muted-foreground"}`}>
-                      {client.mobileAppConnected ? "Mobile App Active" : "Last seen 2d ago"}
+                      {client.mobileAppConnected ? "Mobile App Active" : `Last active ${formatRelativeTime(client.lastActive)}`}
                     </span>
                   </div>
                 </div>
@@ -477,6 +506,9 @@ function DesktopCoachView() {
                 )}
               </Button>
             )}
+            {selectedClient && (
+              <ClientRemindersPanel client={selectedClient} />
+            )}
             {selectedClient?.mobileAppConnected === 1 && (
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-900/30">
                  <Smartphone className="h-3 w-3" />
@@ -573,6 +605,7 @@ function DesktopCoachView() {
              <ReferenceLibrary />
              <ExerciseManager />
              <SurveyManager />
+             <ReminderManager />
              <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                Prepare Session <ArrowRight className="h-4 w-4" />
              </Button>
@@ -618,12 +651,9 @@ function DesktopCoachView() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between gap-2">
                                     <h4 className="font-medium text-sm truncate">{thread.title}</h4>
-                                    <span className="text-[10px] text-muted-foreground shrink-0">
-                                      {new Date(thread.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                    </span>
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                    {new Date(thread.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {formatDateTime(thread.lastMessageAt)}
                                   </p>
                                 </div>
                               </div>

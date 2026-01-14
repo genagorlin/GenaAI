@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema, users } from "@shared/schema";
+import { insertMessageSchema, insertInsightSchema, insertClientSchema, insertSentimentDataSchema, insertDocumentSectionSchema, registerClientSchema, insertThreadSchema, insertReminderTemplateSchema, insertClientReminderSchema, users } from "@shared/schema";
 import { setupAuth, isAuthenticated, isClientAuthenticated, isAdmin, verifyClientAccess } from "./magicLinkAuth";
 import { z } from "zod";
 import multer from "multer";
@@ -1077,6 +1077,214 @@ export async function registerRoutes(
     }
   });
 
+  // Exercise Step Responses - Survey-style exercise flow
+  app.get("/api/exercise-sessions/:sessionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getSessionStepResponses(req.params.sessionId);
+      res.json(responses);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch step responses" });
+    }
+  });
+
+  app.get("/api/exercise-sessions/:sessionId/responses/:stepId", async (req, res) => {
+    try {
+      const response = await storage.getStepResponse(req.params.sessionId, req.params.stepId);
+      res.json(response || null);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch step response" });
+    }
+  });
+
+  app.put("/api/exercise-sessions/:sessionId/responses/:stepId", async (req, res) => {
+    try {
+      const { response, status } = req.body;
+      const stepResponse = await storage.upsertStepResponse({
+        sessionId: req.params.sessionId,
+        stepId: req.params.stepId,
+        response: response || "",
+        status: status || "in_progress",
+      });
+      res.json(stepResponse);
+    } catch (error) {
+      console.error("Upsert step response error:", error);
+      res.status(400).json({ error: "Failed to save step response" });
+    }
+  });
+
+  // AI Guidance for specific step
+  app.post("/api/exercise-sessions/:sessionId/responses/:stepId/guidance", async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const session = await storage.getExerciseSession(req.params.sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      const step = await storage.getExerciseStep(req.params.stepId);
+      if (!step) {
+        return res.status(404).json({ error: "Step not found" });
+      }
+
+      const exercise = await storage.getGuidedExercise(session.exerciseId);
+      const stepResponse = await storage.getStepResponse(req.params.sessionId, req.params.stepId);
+
+      // Build guidance conversation history
+      const existingGuidance = (stepResponse?.aiGuidance as any[]) || [];
+      const newGuidance = [
+        ...existingGuidance,
+        { role: "user", content: message, timestamp: new Date().toISOString() }
+      ];
+
+      // Generate AI response
+      const { generateAIResponse } = await import("./modelRouter");
+
+      const systemPrompt = `You are a supportive coaching assistant helping a client through an exercise called "${exercise?.title || 'this exercise'}".
+
+Current step: ${step.title}
+Instructions: ${step.instructions}
+${step.completionCriteria ? `Completion criteria: ${step.completionCriteria}` : ''}
+${step.supportingMaterial ? `Supporting material: ${step.supportingMaterial}` : ''}
+
+The client's current response to this step:
+"${stepResponse?.response || '(no response yet)'}"
+
+Your role:
+- Stay focused on THIS specific step
+- Defer to the step instructions - don't add your own requirements
+- Gently prompt if the client seems stuck or has missed key parts of the instructions
+- Keep responses brief and supportive (2-4 sentences typically)
+- Don't repeat what the client has already written unless clarifying`;
+
+      const conversationHistory = existingGuidance.map((g: any) => ({
+        role: g.role === "user" ? "user" as const : "assistant" as const,
+        content: g.content
+      }));
+      conversationHistory.push({ role: "user" as const, content: message });
+
+      const aiResponse = await generateAIResponse({
+        systemPrompt,
+        conversationHistory,
+        model: "claude-sonnet-4-5",
+        provider: "anthropic",
+      });
+
+      // Add AI response to guidance history
+      newGuidance.push({ role: "ai", content: aiResponse, timestamp: new Date().toISOString() });
+
+      // Save updated guidance
+      if (stepResponse) {
+        await storage.updateStepResponseGuidance(stepResponse.id, newGuidance);
+      } else {
+        // Create step response if it doesn't exist
+        await storage.upsertStepResponse({
+          sessionId: req.params.sessionId,
+          stepId: req.params.stepId,
+          response: "",
+          status: "in_progress",
+          aiGuidance: newGuidance,
+        });
+      }
+
+      console.log(`[Exercise] AI guidance for session ${req.params.sessionId}, step ${req.params.stepId}`);
+      res.json({ guidance: newGuidance, latestResponse: aiResponse });
+    } catch (error) {
+      console.error("Step guidance error:", error);
+      res.status(500).json({ error: "Failed to get AI guidance" });
+    }
+  });
+
+  // Generate exercise summary
+  app.post("/api/exercise-sessions/:sessionId/summary", async (req, res) => {
+    try {
+      const session = await storage.getExerciseSession(req.params.sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      const exercise = await storage.getGuidedExercise(session.exerciseId);
+      const steps = await storage.getExerciseSteps(session.exerciseId);
+      const responses = await storage.getSessionStepResponses(req.params.sessionId);
+
+      // Build summary of all responses
+      const responseSummary = steps.map(step => {
+        const response = responses.find(r => r.stepId === step.id);
+        return {
+          stepTitle: step.title,
+          response: response?.response || "(skipped)",
+          status: response?.status || "skipped"
+        };
+      });
+
+      // Generate AI summary
+      const { generateAIResponse } = await import("./modelRouter");
+
+      const systemPrompt = `You are a thoughtful coaching assistant creating a summary of a client's completed exercise.
+
+Exercise: ${exercise?.title || 'Coaching Exercise'}
+${exercise?.description ? `Description: ${exercise.description}` : ''}
+
+The client's responses to each step:
+${responseSummary.map(r => `
+### ${r.stepTitle}
+${r.status === "skipped" ? "(Client skipped this step)" : r.response}
+`).join('\n')}
+
+Create a brief, supportive summary (3-5 sentences) that:
+- Synthesizes the key themes from their responses
+- Stays close to the client's own words and insights
+- Highlights any patterns or connections you notice
+- Ends with an encouraging observation about their reflection
+
+Do NOT:
+- Add new advice or suggestions
+- Be overly complimentary
+- Make assumptions beyond what they wrote`;
+
+      const summary = await generateAIResponse({
+        systemPrompt,
+        conversationHistory: [{ role: "user", content: "Please summarize my exercise responses." }],
+        model: "claude-sonnet-4-5",
+        provider: "anthropic",
+      });
+
+      // Save summary to session
+      await storage.updateExerciseSession(req.params.sessionId, {
+        summary,
+        status: "completed",
+        completedAt: new Date()
+      });
+
+      console.log(`[Exercise] Generated summary for session ${req.params.sessionId}`);
+      res.json({ summary });
+    } catch (error) {
+      console.error("Generate summary error:", error);
+      res.status(500).json({ error: "Failed to generate summary" });
+    }
+  });
+
+  // Get session with full data for exercise player
+  app.get("/api/exercise-sessions/:sessionId/full", async (req, res) => {
+    try {
+      const session = await storage.getExerciseSession(req.params.sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      const exercise = await storage.getGuidedExercise(session.exerciseId);
+      const steps = await storage.getExerciseSteps(session.exerciseId);
+      const responses = await storage.getSessionStepResponses(req.params.sessionId);
+
+      res.json({ session, exercise, steps, responses });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exercise session" });
+    }
+  });
+
   // Guided Exercises Routes - Coach management (protected)
   app.get("/api/coach/exercises", isAuthenticated, async (_req, res) => {
     try {
@@ -1383,9 +1591,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/ai/summarize-survey", async (req, res) => {
+  app.post("/api/ai/summarize-survey", async (req: any, res) => {
     try {
-      if (!req.session?.passport?.user) {
+      if (!req.session?.user?.email) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
@@ -1533,6 +1741,315 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to reorder survey questions" });
+    }
+  });
+
+  // ============ EMAIL REMINDERS ROUTES ============
+
+  // Reminder Templates (coach)
+  app.get("/api/coach/reminder-templates", isAuthenticated, async (_req, res) => {
+    try {
+      const templates = await storage.getAllReminderTemplates();
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reminder templates" });
+    }
+  });
+
+  app.get("/api/coach/reminder-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.getReminderTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reminder template" });
+    }
+  });
+
+  app.post("/api/coach/reminder-templates", isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertReminderTemplateSchema.parse(req.body);
+      const template = await storage.createReminderTemplate(validated);
+      console.log(`[Reminder] Coach created template: ${template.title}`);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Create reminder template error:", error);
+      res.status(400).json({ error: "Failed to create reminder template" });
+    }
+  });
+
+  app.patch("/api/coach/reminder-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.updateReminderTemplate(req.params.id, req.body);
+      console.log(`[Reminder] Coach updated template: ${template.title}`);
+      res.json(template);
+    } catch (error) {
+      console.error("Update reminder template error:", error);
+      res.status(400).json({ error: "Failed to update reminder template" });
+    }
+  });
+
+  app.delete("/api/coach/reminder-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteReminderTemplate(req.params.id);
+      console.log(`[Reminder] Coach deleted template: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete reminder template" });
+    }
+  });
+
+  // Preview template with sample data
+  app.post("/api/coach/reminder-templates/:id/preview", isAuthenticated, async (req, res) => {
+    try {
+      const template = await storage.getReminderTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      // Use sample data for preview
+      const sampleData = {
+        clientName: "Sample Client",
+        clientFirstName: "Sample",
+        coachName: "Coach",
+        lastActiveDate: new Date().toLocaleDateString(),
+        daysSinceLastActive: "3",
+      };
+
+      // Replace variables in subject and body
+      let subject = template.subject;
+      let body = template.body;
+      for (const [key, value] of Object.entries(sampleData)) {
+        const regex = new RegExp(`{{${key}}}`, "g");
+        subject = subject.replace(regex, value);
+        body = body.replace(regex, value);
+      }
+
+      res.json({ subject, body });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to preview template" });
+    }
+  });
+
+  // Get clients assigned to a template
+  app.get("/api/coach/reminder-templates/:id/clients", isAuthenticated, async (req, res) => {
+    try {
+      const assignments = await storage.getClientsWithTemplate(req.params.id);
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch template assignments" });
+    }
+  });
+
+  // Bulk assign template to multiple clients
+  app.post("/api/coach/reminder-templates/:id/assign", isAuthenticated, async (req, res) => {
+    try {
+      const { clientIds, scheduleType, scheduleTime, scheduleDays, customIntervalDays } = req.body;
+
+      if (!Array.isArray(clientIds) || clientIds.length === 0) {
+        return res.status(400).json({ error: "clientIds must be a non-empty array" });
+      }
+
+      const { initializeReminderSchedule } = await import("./reminderScheduler");
+      const results = [];
+      for (const clientId of clientIds) {
+        const client = await storage.getClient(clientId);
+        if (!client) continue;
+
+        const tz = client.timezone || "America/New_York";
+        const sType = scheduleType || "weekly";
+        const sTime = scheduleTime || "09:00";
+        const sDays = scheduleDays || ["monday"];
+
+        const nextScheduledAt = initializeReminderSchedule({
+          scheduleType: sType,
+          scheduleTime: sTime,
+          scheduleDays: sDays,
+          customIntervalDays,
+          timezone: tz,
+        });
+
+        const reminder = await storage.createClientReminder({
+          clientId,
+          templateId: req.params.id,
+          scheduleType: sType,
+          scheduleDays: sDays,
+          scheduleTime: sTime,
+          customIntervalDays,
+          timezone: tz,
+          nextScheduledAt,
+        });
+        results.push(reminder);
+      }
+
+      console.log(`[Reminder] Coach assigned template ${req.params.id} to ${results.length} clients`);
+      res.status(201).json(results);
+    } catch (error) {
+      console.error("Bulk assign template error:", error);
+      res.status(400).json({ error: "Failed to assign template to clients" });
+    }
+  });
+
+  // Client Reminders
+  app.get("/api/coach/clients/:clientId/reminders", isAuthenticated, async (req, res) => {
+    try {
+      const reminders = await storage.getClientReminders(req.params.clientId);
+      res.json(reminders);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch client reminders" });
+    }
+  });
+
+  app.post("/api/coach/clients/:clientId/reminders", isAuthenticated, async (req, res) => {
+    try {
+      const client = await storage.getClient(req.params.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const { initializeReminderSchedule } = await import("./reminderScheduler");
+      const tz = req.body.timezone || client.timezone || "America/New_York";
+
+      const nextScheduledAt = initializeReminderSchedule({
+        scheduleType: req.body.scheduleType,
+        scheduleTime: req.body.scheduleTime,
+        scheduleDays: req.body.scheduleDays,
+        customIntervalDays: req.body.customIntervalDays,
+        timezone: tz,
+      });
+
+      const validated = insertClientReminderSchema.parse({
+        ...req.body,
+        clientId: req.params.clientId,
+        timezone: tz,
+        nextScheduledAt,
+      });
+      const reminder = await storage.createClientReminder(validated);
+      console.log(`[Reminder] Coach assigned reminder to client ${req.params.clientId}`);
+      res.status(201).json(reminder);
+    } catch (error) {
+      console.error("Create client reminder error:", error);
+      res.status(400).json({ error: "Failed to create client reminder" });
+    }
+  });
+
+  app.patch("/api/coach/reminders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const reminder = await storage.updateClientReminder(req.params.id, req.body);
+      console.log(`[Reminder] Coach updated reminder: ${req.params.id}`);
+      res.json(reminder);
+    } catch (error) {
+      console.error("Update reminder error:", error);
+      res.status(400).json({ error: "Failed to update reminder" });
+    }
+  });
+
+  app.delete("/api/coach/reminders/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteClientReminder(req.params.id);
+      console.log(`[Reminder] Coach deleted reminder: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
+  // Pause reminder
+  app.post("/api/coach/reminders/:id/pause", isAuthenticated, async (req, res) => {
+    try {
+      const { pausedUntil } = req.body;
+      const reminder = await storage.updateClientReminder(req.params.id, {
+        isPaused: 1,
+        pausedUntil: pausedUntil ? new Date(pausedUntil) : null,
+      });
+      console.log(`[Reminder] Paused reminder ${req.params.id}${pausedUntil ? ` until ${pausedUntil}` : ''}`);
+      res.json(reminder);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to pause reminder" });
+    }
+  });
+
+  // Resume reminder
+  app.post("/api/coach/reminders/:id/resume", isAuthenticated, async (req, res) => {
+    try {
+      const reminder = await storage.updateClientReminder(req.params.id, {
+        isPaused: 0,
+        pausedUntil: null,
+      });
+      console.log(`[Reminder] Resumed reminder ${req.params.id}`);
+      res.json(reminder);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to resume reminder" });
+    }
+  });
+
+  // Send test email to coach
+  app.post("/api/coach/reminders/:id/send-test", isAuthenticated, async (req: any, res) => {
+    try {
+      const reminder = await storage.getClientReminder(req.params.id);
+      if (!reminder) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+
+      const template = await storage.getReminderTemplate(reminder.templateId);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      const client = await storage.getClient(reminder.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      // Get coach email from session
+      const coachEmail = req.session?.user?.email;
+      if (!coachEmail) {
+        return res.status(401).json({ error: "Coach email not found in session" });
+      }
+
+      // Send test email using the reminder email service
+      const { sendReminderEmail } = await import("./reminderEmail");
+      const result = await sendReminderEmail({
+        to: coachEmail,
+        subject: `[TEST] ${reminder.subjectOverride || template.subject}`,
+        body: reminder.bodyOverride || template.body,
+        clientName: client.name,
+        coachName: "Coach",
+      });
+
+      if (result.success) {
+        console.log(`[Reminder] Sent test email to ${coachEmail}`);
+        res.json({ success: true, message: "Test email sent to coach" });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send test email" });
+      }
+    } catch (error: any) {
+      console.error("Send test reminder error:", error);
+      res.status(500).json({ error: error.message || "Failed to send test email" });
+    }
+  });
+
+  // Reminder History
+  app.get("/api/coach/clients/:clientId/reminder-history", isAuthenticated, async (req, res) => {
+    try {
+      const history = await storage.getClientReminderHistory(req.params.clientId);
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch reminder history" });
+    }
+  });
+
+  // Client Timezone
+  app.patch("/api/coach/clients/:clientId/timezone", isAuthenticated, async (req, res) => {
+    try {
+      const { timezone } = z.object({ timezone: z.string() }).parse(req.body);
+      await storage.updateClientTimezone(req.params.clientId, timezone);
+      console.log(`[Client] Updated timezone for ${req.params.clientId}: ${timezone}`);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update timezone" });
     }
   });
 
