@@ -269,7 +269,8 @@ export const guidedExercises = pgTable("guided_exercises", {
   description: text("description").notNull(), // What clients see when choosing
   category: text("category"), // e.g., "Values", "Emotions", "Beliefs", "Goals", "Habits"
   estimatedMinutes: integer("estimated_minutes"), // Approximate time to complete
-  systemPrompt: text("system_prompt").notNull().default(""), // Overall instructions for AI during this exercise
+  introText: text("intro_text").default(""), // Introduction text shown to clients before starting steps
+  systemPrompt: text("system_prompt").notNull().default(""), // Overall instructions for AI during this exercise (legacy)
   isPublished: integer("is_published").notNull().default(0), // 0 = draft, 1 = visible to clients
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),

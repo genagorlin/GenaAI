@@ -68,7 +68,8 @@ interface GuidedExercise {
   description: string;
   category?: string;
   estimatedMinutes?: number;
-  systemPrompt: string;
+  introText?: string;
+  systemPrompt?: string; // Legacy field
   isPublished: number;
   sortOrder: number;
   steps?: ExerciseStep[];
@@ -86,12 +87,12 @@ export function ExerciseManager() {
   const [expandedExercises, setExpandedExercises] = useState<Set<string>>(new Set());
   const [editingStep, setEditingStep] = useState<ExerciseStep | null>(null);
   const [isAddingStep, setIsAddingStep] = useState<string | null>(null);
-  const [newExercise, setNewExercise] = useState({ 
-    title: "", 
-    description: "", 
+  const [newExercise, setNewExercise] = useState({
+    title: "",
+    description: "",
     category: "",
     estimatedMinutes: 15,
-    systemPrompt: "" 
+    introText: ""
   });
   const [newStep, setNewStep] = useState({
     title: "",
@@ -125,7 +126,7 @@ export function ExerciseManager() {
         queryClient.invalidateQueries({ queryKey: ["/api/coach/exercises"] });
       }
       setIsCreating(false);
-      setNewExercise({ title: "", description: "", category: "", estimatedMinutes: 15, systemPrompt: "" });
+      setNewExercise({ title: "", description: "", category: "", estimatedMinutes: 15, introText: "" });
       toast.success("Exercise created");
     },
     onError: () => {
@@ -309,25 +310,28 @@ export function ExerciseManager() {
 
   const moveStep = async (exerciseId: string, steps: ExerciseStep[], stepId: string, direction: 'up' | 'down') => {
     if (!steps || steps.length === 0) return;
-    
-    const currentIndex = steps.findIndex(s => s.id === stepId);
+
+    // Sort steps by stepOrder first to get correct visual order
+    const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+    const currentIndex = sortedSteps.findIndex(s => s.id === stepId);
     if (currentIndex === -1) return;
-    
+
     if (direction === 'up' && currentIndex === 0) return;
-    if (direction === 'down' && currentIndex === steps.length - 1) return;
-    
+    if (direction === 'down' && currentIndex === sortedSteps.length - 1) return;
+
     const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    const currentStep = steps[currentIndex];
-    const swapStep = steps[swapIndex];
-    
-    const newCurrentOrder = swapStep.stepOrder;
-    const newSwapOrder = currentStep.stepOrder;
-    
+    const currentStep = sortedSteps[currentIndex];
+    const swapStep = sortedSteps[swapIndex];
+
+    // Use index-based orders to ensure they're always different
+    const newCurrentOrder = swapIndex;
+    const newSwapOrder = currentIndex;
+
     // Optimistically update the cache
     const currentData = queryClient.getQueryData<GuidedExercise[]>(["/api/coach/exercises"]);
     if (currentData) {
-      queryClient.setQueryData(["/api/coach/exercises"], 
-        currentData.map(e => e.id === exerciseId 
+      queryClient.setQueryData(["/api/coach/exercises"],
+        currentData.map(e => e.id === exerciseId
           ? {
               ...e,
               steps: e.steps?.map(s => {
@@ -340,7 +344,7 @@ export function ExerciseManager() {
         )
       );
     }
-    
+
     // Persist to server
     try {
       const [res1, res2] = await Promise.all([
@@ -355,7 +359,7 @@ export function ExerciseManager() {
           body: JSON.stringify({ stepOrder: newSwapOrder }),
         }),
       ]);
-      
+
       if (!res1.ok || !res2.ok) {
         throw new Error("Server returned error");
       }
@@ -426,7 +430,7 @@ export function ExerciseManager() {
       description: editingExercise.description,
       category: editingExercise.category,
       estimatedMinutes: editingExercise.estimatedMinutes,
-      systemPrompt: editingExercise.systemPrompt
+      introText: editingExercise.introText
     });
   };
 
@@ -514,13 +518,17 @@ export function ExerciseManager() {
                       />
                     </div>
                   </div>
-                  <Textarea
-                    placeholder="System prompt for AI (overall instructions for guiding this exercise)"
-                    value={newExercise.systemPrompt}
-                    onChange={(e) => setNewExercise({ ...newExercise, systemPrompt: e.target.value })}
-                    rows={3}
-                    data-testid="input-new-exercise-prompt"
-                  />
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Introduction Text (shown to clients before starting)</Label>
+                    <Textarea
+                      placeholder="Welcome text that clients see when they begin this exercise..."
+                      value={newExercise.introText}
+                      onChange={(e) => setNewExercise({ ...newExercise, introText: e.target.value })}
+                      rows={3}
+                      className="mt-1"
+                      data-testid="input-new-exercise-intro"
+                    />
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="sm" onClick={() => setIsCreating(false)}>
                       <X className="h-4 w-4 mr-1" />
@@ -924,14 +932,14 @@ export function ExerciseManager() {
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">System Prompt (AI Instructions)</Label>
+                <Label className="text-xs text-muted-foreground">Introduction Text (shown to clients before starting)</Label>
                 <Textarea
-                  value={editingExercise.systemPrompt}
-                  onChange={(e) => setEditingExercise({ ...editingExercise, systemPrompt: e.target.value })}
-                  placeholder="Overall instructions for how the AI should guide this exercise"
+                  value={editingExercise.introText || ""}
+                  onChange={(e) => setEditingExercise({ ...editingExercise, introText: e.target.value })}
+                  placeholder="Welcome text that clients see when they begin this exercise..."
                   rows={4}
                   className="mt-1"
-                  data-testid="input-edit-exercise-prompt"
+                  data-testid="input-edit-exercise-intro"
                 />
               </div>
               
