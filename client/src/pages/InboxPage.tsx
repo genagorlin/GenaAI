@@ -174,7 +174,7 @@ export default function InboxPage() {
       const stepsRes = await fetch(`/api/exercises/${exercise.id}/steps`);
       const steps = await stepsRes.json();
       const firstStep = steps.length > 0 ? steps[0] : null;
-      
+
       // Pass exerciseId when creating thread so the opening message is exercise-specific
       const threadRes = await fetch(`/api/clients/${clientId}/threads`, {
         method: "POST",
@@ -187,20 +187,22 @@ export default function InboxPage() {
       const sessionRes = await fetch(`/api/clients/${clientId}/exercise-sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          exerciseId: exercise.id, 
+        body: JSON.stringify({
+          exerciseId: exercise.id,
           threadId: thread.id,
           currentStepId: firstStep?.id || null,
           status: "in_progress",
         }),
       });
       if (!sessionRes.ok) throw new Error("Failed to start exercise");
-      
-      return { thread, exercise };
+      const session = await sessionRes.json();
+
+      return { thread, exercise, session };
     },
-    onSuccess: ({ thread }) => {
+    onSuccess: ({ session }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
-      setLocation(`/chat/${clientId}/${thread.id}`);
+      // Navigate to the ExercisePlayer page-by-page format
+      setLocation(`/exercise/${clientId}/${session.id}`);
     },
   });
 

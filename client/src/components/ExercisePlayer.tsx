@@ -450,7 +450,7 @@ export function ExercisePlayer({ sessionId, clientId, onClose }: ExercisePlayerP
                   className="w-full px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  Need help with this step?
+                  Want AI thought partnership on this step?
                   <ChevronRight className={cn("h-4 w-4 ml-auto transition-transform", showGuidance && "rotate-90")} />
                 </button>
 
