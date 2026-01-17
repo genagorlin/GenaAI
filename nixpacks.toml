@@ -1,3 +1,0 @@
-[phases.build]
-# Disable build caching
-cacheDirectories = []
