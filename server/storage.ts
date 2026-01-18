@@ -80,7 +80,7 @@ import {
   reminderHistory
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, gt, lte } from "drizzle-orm";
+import { eq, desc, asc, and, gt, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users (Replit Auth)
@@ -298,7 +298,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientByEmail(email: string): Promise<Client | undefined> {
-    const result = await db.select().from(clients).where(eq(clients.email, email.toLowerCase())).limit(1);
+    // Case-insensitive email lookup
+    const result = await db.select().from(clients).where(sql`lower(${clients.email}) = ${email.toLowerCase()}`).limit(1);
     return result[0];
   }
 
@@ -675,7 +676,8 @@ export class DatabaseStorage implements IStorage {
 
   // Authorized Users (login allowlist)
   async getAuthorizedUserByEmail(email: string): Promise<AuthorizedUser | undefined> {
-    const [user] = await db.select().from(authorizedUsers).where(eq(authorizedUsers.email, email.toLowerCase()));
+    // Case-insensitive email lookup
+    const [user] = await db.select().from(authorizedUsers).where(sql`lower(${authorizedUsers.email}) = ${email.toLowerCase()}`);
     return user;
   }
 
@@ -695,7 +697,7 @@ export class DatabaseStorage implements IStorage {
   async updateAuthorizedUserLastLogin(email: string): Promise<void> {
     await db.update(authorizedUsers)
       .set({ lastLogin: new Date() })
-      .where(eq(authorizedUsers.email, email.toLowerCase()));
+      .where(sql`lower(${authorizedUsers.email}) = ${email.toLowerCase()}`);
   }
 
   // Coach Mentions
