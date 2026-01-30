@@ -1032,7 +1032,8 @@ export async function registerRoutes(
 
   app.get("/api/clients/:clientId/threads/:threadId/exercise-session", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
-      const session = await storage.getActiveExerciseSession(
+      // Use getThreadExerciseSession to return any session (including completed)
+      const session = await storage.getThreadExerciseSession(
         req.params.clientId,
         req.params.threadId
       );
@@ -1040,13 +1041,13 @@ export async function registerRoutes(
         return res.json(null);
       }
       const exercise = await storage.getGuidedExercise(session.exerciseId);
-      const currentStep = session.currentStepId 
-        ? await storage.getExerciseStep(session.currentStepId) 
+      const currentStep = session.currentStepId
+        ? await storage.getExerciseStep(session.currentStepId)
         : null;
       const steps = await storage.getExerciseSteps(session.exerciseId);
       res.json({ session, exercise, currentStep, steps });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch active exercise session" });
+      res.status(500).json({ error: "Failed to fetch exercise session" });
     }
   });
 

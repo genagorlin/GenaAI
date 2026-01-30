@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ExerciseMenu } from "@/components/ExerciseMenu";
 import { ExerciseProgress } from "@/components/ExerciseProgress";
+import { ExerciseSessionView } from "@/components/ExerciseSessionView";
 import { SurveyMenu } from "@/components/SurveyMenu";
 import { SurveyPlayer } from "@/components/SurveyPlayer";
 import { ClipboardList } from "lucide-react";
@@ -816,6 +817,17 @@ export default function ChatPage() {
         )}
 
         <div className="z-10 flex-1 overflow-y-auto p-2 sm:p-4 bg-[#efe7dd]" ref={scrollRef}>
+          {/* Show ExerciseSessionView for exercise threads */}
+          {exerciseSessionData && (
+            <ExerciseSessionView
+              sessionId={exerciseSessionData.session.id}
+              clientId={clientId || ""}
+              editable={true}
+            />
+          )}
+
+          {/* Show regular messages only if no exercise session */}
+          {!exerciseSessionData && (
           <div className="flex flex-col gap-2 pb-2">
             <div className="flex justify-center py-2">
               <span className="bg-[#e1f3fb] text-slate-600 text-[11px] px-2 py-1 rounded-lg shadow-sm font-medium">
@@ -899,6 +911,7 @@ export default function ChatPage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         <div className="z-10 bg-[#f0f2f5] px-2 py-2 flex items-end gap-2">

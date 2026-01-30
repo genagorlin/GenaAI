@@ -9,7 +9,6 @@ import {
   TrendingUp, 
   AlertCircle, 
   Repeat,
-  ArrowRight,
   Sparkles,
   Smartphone,
   Wifi,
@@ -40,9 +39,9 @@ import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
-import { SurveyManager } from "@/components/dashboard/SurveyManager";
 import { ReminderManager } from "@/components/dashboard/ReminderManager";
 import { ClientRemindersPanel } from "@/components/dashboard/ClientRemindersPanel";
+import { ExerciseSessionView } from "@/components/ExerciseSessionView";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +111,15 @@ interface Mention {
   client?: {
     name: string;
   };
+}
+
+interface DocumentSection {
+  id: string;
+  documentId: string;
+  sectionType: string;
+  title: string;
+  content: string;
+  sortOrder: number;
 }
 
 type ViewMode = "document" | "signals" | "messages";
@@ -250,6 +258,22 @@ function DesktopCoachView() {
     enabled: !!selectedClient
   });
 
+  const { data: documentSections = [] } = useQuery<DocumentSection[]>({
+    queryKey: ["/api/clients", selectedClient?.id, "document", "sections"],
+    queryFn: async () => {
+      if (!selectedClient) return [];
+      const res = await fetch(`/api/clients/${selectedClient.id}/document/sections`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedClient
+  });
+
+  // Extract specific sections for the AI Mental Model
+  const valuesSection = documentSections.find(s => s.sectionType === "values");
+  const focusSection = documentSections.find(s => s.sectionType === "focus");
+  const highlightsSection = documentSections.find(s => s.sectionType === "highlight");
+
   const { data: mentionsCount = 0 } = useQuery<number>({
     queryKey: ["/api/coach/mentions/count"],
     queryFn: async () => {
@@ -283,7 +307,7 @@ function DesktopCoachView() {
   });
 
   const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: selectedThreadId 
+    queryKey: selectedThreadId
       ? ["/api/threads", selectedThreadId, "messages"]
       : ["/api/clients", selectedClient?.id, "messages"],
     queryFn: async () => {
@@ -299,6 +323,18 @@ function DesktopCoachView() {
     },
     enabled: !!selectedClient || !!selectedThreadId,
     refetchInterval: selectedThreadId ? 3000 : false
+  });
+
+  // Fetch exercise session for the selected thread (for coach view)
+  const { data: threadExerciseSession } = useQuery<{ session: { id: string; status: string } } | null>({
+    queryKey: ["/api/clients", selectedClient?.id, "threads", selectedThreadId, "exercise-session"],
+    queryFn: async () => {
+      if (!selectedClient || !selectedThreadId) return null;
+      const res = await fetch(`/api/clients/${selectedClient.id}/threads/${selectedThreadId}/exercise-session`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedClient && !!selectedThreadId,
   });
 
   const deleteClientMutation = useMutation({
@@ -604,11 +640,7 @@ function DesktopCoachView() {
              </Popover>
              <ReferenceLibrary />
              <ExerciseManager />
-             <SurveyManager />
              <ReminderManager />
-             <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-               Prepare Session <ArrowRight className="h-4 w-4" />
-             </Button>
           </div>
         </header>
 
@@ -698,76 +730,86 @@ function DesktopCoachView() {
                         </div>
                       </div>
 
-                      {/* Messages */}
-                      <ScrollArea className="flex-1 p-4">
-                        <div className="space-y-3">
-                          {messages.length === 0 ? (
-                            <div className="text-center py-12 text-muted-foreground text-sm">
-                              No messages in this thread
-                            </div>
-                          ) : (
-                            messages
-                              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                              .map((msg, index) => {
-                                const isAI = msg.role === 'ai';
-                                const isClient = msg.role === 'user';
-                                const isCoach = msg.role === 'coach';
-                                const prevMsg = index > 0 ? messages[index - 1] : null;
-                                const showTimestamp = !prevMsg || 
-                                  new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
-                                
-                                return (
-                                  <div key={msg.id} data-testid={`message-feed-${msg.id}`}>
-                                    {showTimestamp && (
-                                      <div className="text-center mb-3">
-                                        <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                                          {new Date(msg.timestamp).toLocaleString([], { 
-                                            month: 'short', 
-                                            day: 'numeric',
-                                            hour: 'numeric', 
-                                            minute: '2-digit'
-                                          })}
-                                        </span>
-                                      </div>
-                                    )}
-                                    <div className={`flex ${isCoach ? 'justify-end' : 'justify-start'}`}>
-                                      <div className={`flex items-start gap-2 max-w-[85%] ${isCoach ? 'flex-row-reverse' : ''}`}>
-                                        <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center mt-0.5 ${
-                                          isClient 
-                                            ? 'bg-sky-100 dark:bg-sky-900/40' 
-                                            : isCoach
-                                            ? 'bg-violet-100 dark:bg-violet-900/40'
-                                            : 'bg-stone-200 dark:bg-stone-700'
-                                        }`}>
-                                          {isClient 
-                                            ? <User className="h-3 w-3 text-sky-600 dark:text-sky-400" />
-                                            : isCoach
-                                            ? <span className="text-[9px] font-semibold text-violet-600 dark:text-violet-400">{(user as any)?.firstName?.[0] || 'C'}</span>
-                                            : <Bot className="h-3 w-3 text-stone-500 dark:text-stone-400" />
-                                          }
+                      {/* Messages or Exercise View */}
+                      {threadExerciseSession?.session ? (
+                        <ScrollArea className="flex-1">
+                          <ExerciseSessionView
+                            sessionId={threadExerciseSession.session.id}
+                            clientId={selectedClient?.id || ""}
+                            editable={true}
+                          />
+                        </ScrollArea>
+                      ) : (
+                        <ScrollArea className="flex-1 p-4">
+                          <div className="space-y-3">
+                            {messages.length === 0 ? (
+                              <div className="text-center py-12 text-muted-foreground text-sm">
+                                No messages in this thread
+                              </div>
+                            ) : (
+                              messages
+                                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                                .map((msg, index) => {
+                                  const isAI = msg.role === 'ai';
+                                  const isClient = msg.role === 'user';
+                                  const isCoach = msg.role === 'coach';
+                                  const prevMsg = index > 0 ? messages[index - 1] : null;
+                                  const showTimestamp = !prevMsg ||
+                                    new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
+
+                                  return (
+                                    <div key={msg.id} data-testid={`message-feed-${msg.id}`}>
+                                      {showTimestamp && (
+                                        <div className="text-center mb-3">
+                                          <span className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                            {new Date(msg.timestamp).toLocaleString([], {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: 'numeric',
+                                              minute: '2-digit'
+                                            })}
+                                          </span>
                                         </div>
-                                        <div className={`rounded-2xl px-4 py-2.5 ${
-                                          isClient 
-                                            ? 'bg-sky-500 text-white rounded-tl-sm' 
-                                            : isCoach
-                                            ? 'bg-violet-500 text-white rounded-tr-sm'
-                                            : 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
-                                        }`}>
-                                          <p className={`text-[10px] font-medium mb-1 ${isCoach ? 'text-violet-100' : 'opacity-70'}`}>
-                                            {isClient ? selectedClient?.name : isCoach ? ((user as any)?.firstName || 'Coach') : 'GenaAI'}
-                                          </p>
-                                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                            {msg.content}
-                                          </p>
+                                      )}
+                                      <div className={`flex ${isCoach ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`flex items-start gap-2 max-w-[85%] ${isCoach ? 'flex-row-reverse' : ''}`}>
+                                          <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center mt-0.5 ${
+                                            isClient
+                                              ? 'bg-sky-100 dark:bg-sky-900/40'
+                                              : isCoach
+                                              ? 'bg-violet-100 dark:bg-violet-900/40'
+                                              : 'bg-stone-200 dark:bg-stone-700'
+                                          }`}>
+                                            {isClient
+                                              ? <User className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                                              : isCoach
+                                              ? <span className="text-[9px] font-semibold text-violet-600 dark:text-violet-400">{(user as any)?.firstName?.[0] || 'C'}</span>
+                                              : <Bot className="h-3 w-3 text-stone-500 dark:text-stone-400" />
+                                            }
+                                          </div>
+                                          <div className={`rounded-2xl px-4 py-2.5 ${
+                                            isClient
+                                              ? 'bg-sky-500 text-white rounded-tl-sm'
+                                              : isCoach
+                                              ? 'bg-violet-500 text-white rounded-tr-sm'
+                                              : 'bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-tl-sm'
+                                          }`}>
+                                            <p className={`text-[10px] font-medium mb-1 ${isCoach ? 'text-violet-100' : 'opacity-70'}`}>
+                                              {isClient ? selectedClient?.name : isCoach ? ((user as any)?.firstName || 'Coach') : 'GenaAI'}
+                                            </p>
+                                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                              {msg.content}
+                                            </p>
+                                          </div>
                                         </div>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })
-                          )}
-                        </div>
-                      </ScrollArea>
+                                  );
+                                })
+                            )}
+                          </div>
+                        </ScrollArea>
+                      )}
 
                       {/* Coach Message Composer */}
                       <div className="p-3 border-t border-border bg-muted/30">
@@ -816,20 +858,29 @@ function DesktopCoachView() {
                     </div>
                     <div className="space-y-4">
                        <div className="space-y-2">
-                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Core Values</label>
-                         <div className="flex flex-wrap gap-2">
-                           <Badge variant="outline" className="bg-background">Autonomy</Badge>
-                           <Badge variant="outline" className="bg-background">Competence</Badge>
-                           <Badge variant="outline" className="bg-background">Team Harmony</Badge>
-                         </div>
+                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Values / Goals / Life Vision</label>
+                         <p className="text-sm text-foreground/80 leading-relaxed">
+                           {valuesSection?.content || <span className="text-muted-foreground italic">No values recorded yet</span>}
+                         </p>
                        </div>
                        <Separator />
                        <div className="space-y-2">
-                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Current blockers</label>
+                         <label className="text-xs text-muted-foreground uppercase tracking-wider">Current Focus Areas</label>
                          <p className="text-sm text-foreground/80 leading-relaxed">
-                           Struggling to delegate due to fear of quality drop. Feeling "imposter" syndrome about new VP title.
+                           {focusSection?.content || <span className="text-muted-foreground italic">No focus areas recorded yet</span>}
                          </p>
                        </div>
+                       {highlightsSection?.content && (
+                         <>
+                           <Separator />
+                           <div className="space-y-2">
+                             <label className="text-xs text-muted-foreground uppercase tracking-wider">Key Highlights</label>
+                             <p className="text-sm text-foreground/80 leading-relaxed">
+                               {highlightsSection.content}
+                             </p>
+                           </div>
+                         </>
+                       )}
                     </div>
                   </div>
 

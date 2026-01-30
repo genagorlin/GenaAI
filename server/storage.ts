@@ -192,6 +192,7 @@ export interface IStorage {
   // Client Exercise Sessions
   getClientExerciseSessions(clientId: string): Promise<ClientExerciseSession[]>;
   getActiveExerciseSession(clientId: string, threadId: string): Promise<ClientExerciseSession | undefined>;
+  getThreadExerciseSession(clientId: string, threadId: string): Promise<ClientExerciseSession | undefined>;
   getExerciseSession(id: string): Promise<ClientExerciseSession | undefined>;
   createExerciseSession(session: InsertClientExerciseSession): Promise<ClientExerciseSession>;
   updateExerciseSession(id: string, updates: Partial<ClientExerciseSession>): Promise<ClientExerciseSession>;
@@ -868,6 +869,18 @@ export class DatabaseStorage implements IStorage {
         eq(clientExerciseSessions.threadId, threadId),
         eq(clientExerciseSessions.status, "in_progress")
       ));
+    return result;
+  }
+
+  async getThreadExerciseSession(clientId: string, threadId: string): Promise<ClientExerciseSession | undefined> {
+    // Returns any exercise session for this thread (regardless of status - includes completed)
+    const [result] = await db.select().from(clientExerciseSessions)
+      .where(and(
+        eq(clientExerciseSessions.clientId, clientId),
+        eq(clientExerciseSessions.threadId, threadId)
+      ))
+      .orderBy(desc(clientExerciseSessions.startedAt))
+      .limit(1);
     return result;
   }
 
