@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, Loader2, ExternalLink, Pencil, Save, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, ExternalLink, Pencil, Save, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,21 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
       queryClient.invalidateQueries({ queryKey: ["/api/exercise-sessions", sessionId, "full"] });
       setEditingStepId(null);
       setEditingText("");
+    },
+  });
+
+  const generateSummaryMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/exercise-sessions/${sessionId}/summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to generate summary");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/exercise-sessions", sessionId, "full"] });
     },
   });
 
@@ -142,8 +157,8 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
         </CardHeader>
       </Card>
 
-      {/* Summary (if completed) */}
-      {isCompleted && session.summary && (
+      {/* Summary Section */}
+      {session.summary ? (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -152,6 +167,38 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
           </CardHeader>
           <CardContent>
             <p className="text-sm whitespace-pre-wrap">{session.summary}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">AI Summary</p>
+                <p className="text-xs text-muted-foreground">
+                  Generate an AI summary of your exercise responses
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => generateSummaryMutation.mutate()}
+                disabled={generateSummaryMutation.isPending || responses.length === 0}
+                className="gap-2"
+              >
+                {generateSummaryMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate Summary
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
