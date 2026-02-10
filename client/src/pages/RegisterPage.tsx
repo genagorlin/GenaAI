@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowRight, Sparkles, Mail, User, Loader2, ArrowLeft, CheckCircle } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ArrowRight, Sparkles, Mail, User, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
@@ -7,11 +7,20 @@ import { Link } from "wouter";
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [step, setStep] = useState<"register" | "code">("register");
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Focus first code input when step changes to code
+  useEffect(() => {
+    if (step === "code" && codeInputRefs.current[0]) {
+      codeInputRefs.current[0].focus();
+    }
+  }, [step]);
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
@@ -29,9 +38,99 @@ export default function RegisterPage() {
         throw new Error(data.error || "Registration failed");
       }
 
-      setSuccess(true);
+      setStep("code");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCodeChange = (index: number, value: string) => {
+    // Only allow digits
+    if (value && !/^\d$/.test(value)) return;
+
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      codeInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (value && index === 5 && newCode.every(d => d)) {
+      handleCodeSubmit(newCode.join(""));
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !code[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length === 6) {
+      const newCode = pasted.split("");
+      setCode(newCode);
+      handleCodeSubmit(pasted);
+    }
+  };
+
+  const handleCodeSubmit = async (fullCode?: string) => {
+    const codeToSubmit = fullCode || code.join("");
+    if (codeToSubmit.length !== 6) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), code: codeToSubmit }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Invalid code");
+      }
+
+      // Redirect to the appropriate page
+      window.location.href = data.redirectUrl || "/";
+    } catch (err: any) {
+      setError(err.message || "Invalid code");
+      setCode(["", "", "", "", "", ""]);
+      codeInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/clients/register-web", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to resend code");
+      }
+
+      setCode(["", "", "", "", "", ""]);
+      codeInputRefs.current[0]?.focus();
+    } catch (err: any) {
+      setError(err.message || "Failed to resend code");
     } finally {
       setIsLoading(false);
     }
@@ -49,44 +148,86 @@ export default function RegisterPage() {
         <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
           {/* Header */}
           <div className="mb-8">
-            <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
-              <ArrowLeft className="h-4 w-4" />
-              Back to sign in
-            </Link>
+            {step === "register" ? (
+              <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
+                <ArrowLeft className="h-4 w-4" />
+                Back to sign in
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setStep("register"); setCode(["", "", "", "", "", ""]); setError(""); }}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </button>
+            )}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <Sparkles className="h-5 w-5" />
               </div>
               <span className="font-serif text-2xl font-medium tracking-tight">GenaAI</span>
             </div>
-            <h2 className="font-serif text-2xl font-medium">Create your account</h2>
-            <p className="text-sm text-muted-foreground mt-1">Start your AI-powered coaching journey</p>
+            {step === "register" ? (
+              <>
+                <h2 className="font-serif text-2xl font-medium">Create your account</h2>
+                <p className="text-sm text-muted-foreground mt-1">Start your AI-powered coaching journey</p>
+              </>
+            ) : (
+              <>
+                <h2 className="font-serif text-2xl font-medium">Enter your code</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  We sent a 6-digit code to <strong>{email}</strong>
+                </p>
+              </>
+            )}
           </div>
 
-          {success ? (
-            <div className="space-y-6 text-center">
-              <div className="flex justify-center">
-                <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <CheckCircle className="h-8 w-8 text-emerald-600" />
+          {step === "code" ? (
+            <div className="space-y-6">
+              <div className="flex justify-center gap-2">
+                {code.map((digit, index) => (
+                  <Input
+                    key={index}
+                    ref={(el) => { codeInputRefs.current[index] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleCodeChange(index, e.target.value)}
+                    onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                    onPaste={handleCodePaste}
+                    className="w-12 h-14 text-center text-2xl font-mono"
+                    disabled={isLoading}
+                  />
+                ))}
+              </div>
+
+              {error && (
+                <p className="text-sm text-red-500 text-center">{error}</p>
+              )}
+
+              {isLoading && (
+                <div className="flex justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              </div>
-              <div>
-                <h3 className="font-medium text-lg">Check your email</h3>
-                <p className="text-sm text-muted-foreground mt-2">
-                  We've sent a sign-in link to <strong>{email}</strong>
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Click the link in the email to complete your registration and sign in.
-                </p>
-              </div>
-              <Link href="/">
-                <Button variant="outline" className="w-full">
-                  Return to sign in
-                </Button>
-              </Link>
+              )}
+
+              <p className="text-xs text-center text-muted-foreground">
+                Didn't receive a code?{" "}
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  className="text-primary hover:underline"
+                  disabled={isLoading}
+                >
+                  Resend code
+                </button>
+              </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium">
                   Your name
@@ -145,7 +286,7 @@ export default function RegisterPage() {
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
-                We'll email you a link to sign in
+                We'll email you a code to sign in
               </p>
             </form>
           )}
