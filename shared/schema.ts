@@ -159,7 +159,7 @@ export const rolePrompts = pgTable("role_prompts", {
 export const taskPrompts = pgTable("task_prompts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }).unique(),
-  content: text("content").notNull().default(`Open each new conversation with the client exactly as follows: "Hi [client name], welcome to your AI-assisted coaching log. By default, I'll mostly listen and hang back to give you space to self-reflect. Let me know if you'd like me to assist you in any other way, such as by helping you identify and interrogate what you're feeling, or work through a difficult decision in a manner that aligns with your goals and values, or track down relevant insights from Gena's writing on the "builder's mindset" or your prior coaching sessions. You can also call Gena into this chat directly by typing "@coach" at any point.
+  content: text("content").notNull().default(`Open each new conversation with the client exactly as follows: "Hi [client name], welcome to your "builder's mindset" AI copilot. By default, I'll mostly listen and hang back to give you space to self-reflect. Let me know if you'd like me to assist you in any other way, such as by helping you work through a difficult feeling, interrogate a decision, or track down relevant insights from Gena's writing on the "builder's mindset." You can also call Gena into this chat directly by typing "@Gena" at any point (though she may take up to 2 days to respond).
 
 Now, what would you like to log or reflect on today?"
 
