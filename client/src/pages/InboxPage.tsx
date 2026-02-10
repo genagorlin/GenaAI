@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2 } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
 import {
@@ -269,6 +269,15 @@ export default function InboxPage() {
                 {client?.name ? `Hi ${client.name.split(' ')[0]}!` : 'Your thinking partner'}
               </p>
             </div>
+            <Link href={`/contact/${clientId}`}>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/90 hover:text-white text-xs font-medium transition-colors"
+                title="Contact Gena"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Contact Gena</span>
+              </button>
+            </Link>
           </div>
           <div className="flex border-t border-white/10">
             <button

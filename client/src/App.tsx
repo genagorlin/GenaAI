@@ -13,6 +13,7 @@ import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
 import InboxPage from "@/pages/InboxPage";
 import ExercisePage from "@/pages/ExercisePage";
+import ContactGenaPage from "@/pages/ContactGenaPage";
 import ClientAccessDenied from "@/pages/ClientAccessDenied";
 
 // Component to handle client redirect at root
@@ -42,6 +43,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/register" component={RegisterPage} />
+      <Route path="/contact/:clientId" component={ContactGenaPage} />
       <Route path="/exercise/:clientId/:sessionId" component={ExercisePage} />
       <Route path="/chat/:clientId/:threadId" component={ChatPage} />
       <Route path="/chat/:clientId" component={InboxPage} />

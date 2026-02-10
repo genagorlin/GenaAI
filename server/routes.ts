@@ -2176,6 +2176,62 @@ Do NOT:
     res.json(manifest);
   });
 
+  // Contact Gena - sends feedback email
+  app.post("/api/contact-gena", async (req, res) => {
+    try {
+      const { message, clientId } = z.object({
+        message: z.string().min(1, "Message is required"),
+        clientId: z.string().optional(),
+      }).parse(req.body);
+
+      // Get client info if clientId provided
+      let clientInfo = "";
+      if (clientId) {
+        const client = await storage.getClient(clientId);
+        if (client) {
+          clientInfo = `\n\nFrom: ${client.name} (${client.email || "no email"})`;
+        }
+      }
+
+      // Get sender email from session if available
+      const session = req.session as any;
+      const senderEmail = session?.user?.email;
+      if (senderEmail && !clientInfo) {
+        clientInfo = `\n\nFrom: ${senderEmail}`;
+      }
+
+      // Send email using Resend
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const emailFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
+
+      await resend.emails.send({
+        from: emailFrom,
+        to: "gena.gorlin@gmail.com",
+        subject: "GenaAI Feedback",
+        text: `${message}${clientInfo}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #333; margin-bottom: 16px;">New feedback from GenaAI</h2>
+            <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+              <p style="color: #374151; white-space: pre-wrap; margin: 0;">${message}</p>
+            </div>
+            ${clientInfo ? `<p style="color: #6b7280; font-size: 14px;">${clientInfo.trim()}</p>` : ""}
+          </div>
+        `,
+      });
+
+      console.log(`[Contact] Feedback sent from ${senderEmail || clientId || "anonymous"}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Contact Gena error:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Message is required" });
+      }
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
   // Text-to-Speech Route (public for client chat)
   app.post("/api/tts", async (req, res) => {
     try {
