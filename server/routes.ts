@@ -170,24 +170,45 @@ export async function registerRoutes(
   // Public endpoint for web client self-registration
   app.post("/api/clients/register-web", async (req, res) => {
     try {
-      const { name, email } = z.object({
+      const { name, email, about } = z.object({
         name: z.string().min(1, "Name is required"),
         email: z.string().email("Valid email is required"),
+        about: z.string().optional(),
       }).parse(req.body);
 
       const normalizedEmail = email.toLowerCase().trim();
       const trimmedName = name.trim();
+      const trimmedAbout = about?.trim();
 
       // Check if client already exists
       const existingClient = await storage.getClientByEmail(normalizedEmail);
 
       if (!existingClient) {
         // Create new client
-        await storage.createClient({
+        const newClient = await storage.createClient({
           name: trimmedName,
           email: normalizedEmail,
         });
         console.log(`[Registration] New web client created: ${trimmedName} (${normalizedEmail})`);
+
+        // If they provided an "about" response, create their document with an About Me section
+        if (trimmedAbout) {
+          try {
+            const document = await storage.getOrCreateClientDocument(newClient.id);
+            await storage.createSection({
+              documentId: document.id,
+              sectionType: "context",
+              title: "About Me",
+              content: trimmedAbout,
+              sortOrder: -1, // Put it at the top
+              lastUpdatedBy: "client",
+            });
+            console.log(`[Registration] Created About Me section for client ${newClient.id}`);
+          } catch (docError) {
+            console.error(`[Registration] Failed to create About Me section:`, docError);
+            // Don't fail registration if document creation fails
+          }
+        }
       } else {
         console.log(`[Registration] Existing client requested magic link: ${normalizedEmail}`);
       }

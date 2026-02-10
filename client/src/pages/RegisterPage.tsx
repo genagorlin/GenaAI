@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowRight, Sparkles, Mail, User, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [about, setAbout] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +31,11 @@ export default function RegisterPage() {
       const response = await fetch("/api/clients/register-web", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          about: about.trim() || undefined,
+        }),
       });
 
       const data = await response.json();
@@ -262,6 +268,22 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="about" className="text-sm font-medium">
+                  Tell me a bit about yourself and what brings you to GenaAI
+                </label>
+                <Textarea
+                  id="about"
+                  placeholder="I'm looking to work on..."
+                  value={about}
+                  onChange={(e) => setAbout(e.target.value)}
+                  className="min-h-[100px] resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional, but helps your AI coach understand you better
+                </p>
               </div>
 
               {error && (
