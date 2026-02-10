@@ -54,7 +54,7 @@ export function getSession() {
   });
 }
 
-async function sendMagicLinkEmail(email: string, token: string, code: string): Promise<{ success: boolean; error?: string }> {
+export async function sendMagicLinkEmail(email: string, token: string, code: string): Promise<{ success: boolean; error?: string }> {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const magicLink = `${appUrl}/api/auth/verify?token=${token}`;
   const emailFrom = process.env.EMAIL_FROM || "onboarding@resend.dev";
@@ -107,7 +107,7 @@ async function sendMagicLinkEmail(email: string, token: string, code: string): P
   }
 }
 
-async function createMagicLinkToken(email: string): Promise<{ token: string; code: string }> {
+export async function createMagicLinkToken(email: string): Promise<{ token: string; code: string }> {
   const token = generateToken();
   const code = generateCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowRight, Sparkles, Activity, ShieldCheck, Smartphone, Mail, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Link } from "wouter";
 
 export default function LandingPage() {
   const [email, setEmail] = useState("");
@@ -267,7 +268,16 @@ export default function LandingPage() {
                </form>
              )}
 
-             <div className="mt-6 pt-6 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+             <div className="mt-6 pt-6 border-t border-border">
+                <p className="text-sm text-center text-muted-foreground">
+                  Don't have an account?{" "}
+                  <Link href="/register" className="text-primary hover:underline">
+                    Register here
+                  </Link>
+                </p>
+             </div>
+
+             <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                 <span>v2.4.0 (Stable)</span>
                 <span className="flex items-center gap-1.5">
                   <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />

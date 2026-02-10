@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/LandingPage";
+import RegisterPage from "@/pages/RegisterPage";
 import CoachPage from "@/pages/CoachPage";
 import AdminPage from "@/pages/AdminPage";
 import UnauthorizedPage from "@/pages/UnauthorizedPage";
@@ -40,6 +41,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/register" component={RegisterPage} />
       <Route path="/exercise/:clientId/:sessionId" component={ExercisePage} />
       <Route path="/chat/:clientId/:threadId" component={ChatPage} />
       <Route path="/chat/:clientId" component={InboxPage} />

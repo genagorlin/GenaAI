@@ -167,6 +167,52 @@ export async function registerRoutes(
     }
   });
 
+  // Public endpoint for web client self-registration
+  app.post("/api/clients/register-web", async (req, res) => {
+    try {
+      const { name, email } = z.object({
+        name: z.string().min(1, "Name is required"),
+        email: z.string().email("Valid email is required"),
+      }).parse(req.body);
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const trimmedName = name.trim();
+
+      // Check if client already exists
+      const existingClient = await storage.getClientByEmail(normalizedEmail);
+
+      if (!existingClient) {
+        // Create new client
+        await storage.createClient({
+          name: trimmedName,
+          email: normalizedEmail,
+        });
+        console.log(`[Registration] New web client created: ${trimmedName} (${normalizedEmail})`);
+      } else {
+        console.log(`[Registration] Existing client requested magic link: ${normalizedEmail}`);
+      }
+
+      // Send magic link regardless of whether client existed (prevents email enumeration)
+      const { createMagicLinkToken, sendMagicLinkEmail } = await import("./magicLinkAuth");
+      const { token, code } = await createMagicLinkToken(normalizedEmail);
+      const emailResult = await sendMagicLinkEmail(normalizedEmail, token, code);
+
+      if (!emailResult.success) {
+        console.error(`[Registration] Failed to send magic link to ${normalizedEmail}:`, emailResult.error);
+        // Still return success to prevent email enumeration
+      }
+
+      // Always return success for security
+      res.json({ success: true, message: "If this email is valid, you will receive a sign-in link." });
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      console.error("Web registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
   app.patch("/api/clients/:id/activity", async (req, res) => {
     try {
       const { mobileAppConnected } = req.body;
