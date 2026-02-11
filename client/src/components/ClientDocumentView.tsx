@@ -222,7 +222,7 @@ export function ClientDocumentView({ clientId }: ClientDocumentViewProps) {
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <p className="text-slate-600">No sections yet.</p>
               <p className="text-sm text-slate-400 mt-1">
-                Your coach will add sections as you work together.
+                Sections will appear here as you use the app.
               </p>
             </div>
           ) : (

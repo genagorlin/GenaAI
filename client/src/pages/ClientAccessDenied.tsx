@@ -11,18 +11,18 @@ export default function ClientAccessDenied() {
     switch (reason) {
       case 'not-found':
         return {
-          title: "Client Not Found",
-          description: "This client account doesn't exist. Please contact your coach to get the correct link."
+          title: "Account Not Found",
+          description: "This account doesn't exist. Please check the link or register for a new account."
         };
       case 'email-mismatch':
         return {
           title: "Email Doesn't Match",
-          description: "The email you logged in with doesn't match the email associated with this client account. Please log in with the correct email address."
+          description: "The email you logged in with doesn't match the email associated with this account. Please log in with the correct email address."
         };
       default:
         return {
           title: "Access Denied",
-          description: "You don't have permission to access this page. Please contact your coach if you believe this is an error."
+          description: "You don't have permission to access this page. If you believe this is an error, please contact Gena."
         };
     }
   };

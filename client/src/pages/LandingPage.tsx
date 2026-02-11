@@ -131,26 +131,26 @@ export default function LandingPage() {
            </div>
 
            <h1 className="font-serif text-5xl font-medium leading-[1.1] text-foreground">
-             Command center for <br/>
-             <span className="text-primary italic">AI-Augmented</span> Coaching.
+             Your <span className="text-primary italic">builder's mindset</span><br/>
+             AI copilot.
            </h1>
 
            <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
-             Monitor client signals, track emotional velocity, and intervene when it matters most.
+             A thinking partner to help you reflect, build self-knowledge, and stay aligned with your goals and values.
            </p>
 
            <div className="flex flex-col gap-4 mt-4">
               <div className="flex items-center gap-3 text-sm text-foreground/80">
                 <Activity className="h-5 w-5 text-emerald-500" />
-                Real-time sentiment analysis
+                Guided self-reflection exercises
               </div>
               <div className="flex items-center gap-3 text-sm text-foreground/80">
                 <Smartphone className="h-5 w-5 text-blue-500" />
-                Live Mobile App Integration
+                Works on any device
               </div>
               <div className="flex items-center gap-3 text-sm text-foreground/80">
                 <ShieldCheck className="h-5 w-5 text-primary" />
-                Enterprise-grade security
+                Private and secure
               </div>
            </div>
         </div>
@@ -160,7 +160,7 @@ export default function LandingPage() {
           <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
              <div className="mb-8 text-center lg:text-left">
                 <h2 className="font-serif text-2xl font-medium">Welcome to GenaAI</h2>
-                <p className="text-sm text-muted-foreground mt-1">Your AI-powered coaching platform</p>
+                <p className="text-sm text-muted-foreground mt-1">Your builder's mindset AI copilot</p>
              </div>
 
              {step === "code" ? (

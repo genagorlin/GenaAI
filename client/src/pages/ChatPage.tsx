@@ -876,7 +876,7 @@ export default function ChatPage() {
                 >
                   {message.role === "coach" && (
                     <div className="text-[10px] font-medium text-violet-100 px-1 mb-0.5">
-                      Coach Gena
+                      Gena
                     </div>
                   )}
                   <div className="text-[15px] leading-relaxed break-words px-1 prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
@@ -1007,7 +1007,7 @@ export default function ChatPage() {
                   Gena's Writings
                 </SheetTitle>
                 <p className="text-sm text-muted-foreground">
-                  Explore the ideas and frameworks that inform your coaching sessions
+                  Explore the ideas and frameworks behind the builder's mindset
                 </p>
               </SheetHeader>
               <ScrollArea className="flex-1">

@@ -454,7 +454,7 @@ export default function InboxPage() {
                 </div>
                 <h3 className="text-lg font-medium text-slate-900 mb-2">No exercises yet</h3>
                 <p className="text-sm text-slate-500">
-                  Guided exercises from your coach will appear here
+                  Guided exercises will appear here
                 </p>
               </div>
             ) : (
@@ -546,7 +546,7 @@ export default function InboxPage() {
                 </div>
                 <h3 className="text-lg font-medium text-slate-900 mb-2">No writings yet</h3>
                 <p className="text-sm text-slate-500">
-                  Your coach's writings and materials will appear here
+                  Gena's writings and materials will appear here
                 </p>
               </div>
             ) : (
@@ -557,7 +557,7 @@ export default function InboxPage() {
                     Gena's Writings
                   </h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    Explore the ideas and frameworks that inform your coaching sessions
+                    Explore the ideas and frameworks behind the builder's mindset
                   </p>
                 </div>
                 {referenceDocuments.map((doc) => (

@@ -178,7 +178,7 @@ export default function RegisterPage() {
             {step === "register" ? (
               <>
                 <h2 className="font-serif text-2xl font-medium">Create your account</h2>
-                <p className="text-sm text-muted-foreground mt-1">Start your AI-powered coaching journey</p>
+                <p className="text-sm text-muted-foreground mt-1">Get started with your builder's mindset AI copilot</p>
               </>
             ) : (
               <>
@@ -282,7 +282,7 @@ export default function RegisterPage() {
                   className="min-h-[100px] resize-none"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional, but helps your AI coach understand you better
+                  Optional, but helps your AI copilot understand you better
                 </p>
               </div>
 
