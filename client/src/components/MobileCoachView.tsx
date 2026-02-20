@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  ArrowLeft, 
-  Users, 
-  MessageCircle, 
-  FileText, 
-  ChevronRight, 
-  Send, 
+import {
+  ArrowLeft,
+  Users,
+  MessageCircle,
+  FileText,
+  ChevronRight,
+  Send,
   Loader2,
   LogOut,
   Plus,
   Link2,
   Check,
   Bot,
-  User as UserIcon
+  User as UserIcon,
+  Dumbbell
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog"
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
 import { SurveyManager } from "@/components/dashboard/SurveyManager";
+import { ExerciseSessionView } from "@/components/ExerciseSessionView";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
@@ -117,6 +119,17 @@ export function MobileCoachView() {
       return res.json();
     },
     enabled: !!selectedThreadId,
+  });
+
+  // Fetch exercise session for selected thread
+  const { data: threadExerciseSession } = useQuery({
+    queryKey: ["/api/clients", selectedClientId, "threads", selectedThreadId, "exercise-session"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${selectedClientId}/threads/${selectedThreadId}/exercise-session`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedClientId && !!selectedThreadId,
   });
 
   const selectedThread = threads.find(t => t.id === selectedThreadId);
@@ -334,6 +347,9 @@ export function MobileCoachView() {
   }
 
   if (view === "thread" && selectedThread) {
+    // Check if this thread has an exercise session
+    const hasExerciseSession = threadExerciseSession?.session;
+
     return (
       <div className="h-screen flex flex-col bg-background">
         <header className="flex items-center gap-3 p-4 border-b bg-card">
@@ -341,84 +357,108 @@ export function MobileCoachView() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="font-semibold truncate">{selectedThread.title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-semibold truncate">{selectedThread.title}</h1>
+              {hasExerciseSession && (
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                  <Dumbbell className="h-3 w-3" />
+                  Exercise
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">{selectedClient?.name}</p>
           </div>
         </header>
 
-        <ScrollArea className="flex-1 bg-slate-50 dark:bg-slate-900/50">
-          <div className="p-4 space-y-3">
-            {messages.map((message) => {
-              const isUser = message.role === "user";
-              const isCoach = message.role === "coach";
-              const isAI = message.role === "ai";
-
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                      isUser
-                        ? 'bg-emerald-500 text-white rounded-br-sm'
-                        : isCoach
-                        ? 'bg-violet-600 text-white rounded-bl-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm shadow-sm'
-                    }`}
-                  >
-                    {(isAI || isCoach) && (
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[10px] h-4 px-1 gap-0.5 ${
-                            isCoach 
-                              ? 'text-violet-100 border-violet-400/50' 
-                              : 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-900/30'
-                          }`}
-                        >
-                          {isCoach ? <UserIcon className="h-2.5 w-2.5" /> : <Bot className="h-2.5 w-2.5" />}
-                          {isCoach ? 'Coach' : 'AI'}
-                        </Badge>
-                      </div>
-                    )}
-                    <div className="text-sm prose prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
-                    <div className={`text-[10px] mt-1 ${
-                      isUser || isCoach ? 'text-white/70' : 'text-slate-400'
-                    }`}>
-                      {formatTime(message.timestamp)}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-
-        <div className="p-3 border-t bg-card">
-          <div className="flex gap-2">
-            <Textarea
-              value={coachMessage}
-              onChange={(e) => setCoachMessage(e.target.value)}
-              placeholder="Send a coach message..."
-              className="min-h-[44px] max-h-[120px] resize-none"
-              rows={1}
+        {hasExerciseSession ? (
+          // Show exercise session view
+          <div className="flex-1 overflow-hidden">
+            <ExerciseSessionView
+              session={threadExerciseSession.session}
+              exercise={threadExerciseSession.exercise}
+              steps={threadExerciseSession.steps}
+              responses={threadExerciseSession.responses}
+              editable={true}
             />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!coachMessage.trim() || sendCoachMessage.isPending}
-              className="shrink-0"
-            >
-              {sendCoachMessage.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
           </div>
-        </div>
+        ) : (
+          // Show regular messages
+          <>
+            <ScrollArea className="flex-1 bg-slate-50 dark:bg-slate-900/50">
+              <div className="p-4 space-y-3">
+                {messages.map((message) => {
+                  const isUser = message.role === "user";
+                  const isCoach = message.role === "coach";
+                  const isAI = message.role === "ai";
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                          isUser
+                            ? 'bg-emerald-500 text-white rounded-br-sm'
+                            : isCoach
+                            ? 'bg-violet-600 text-white rounded-bl-sm'
+                            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm shadow-sm'
+                        }`}
+                      >
+                        {(isAI || isCoach) && (
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] h-4 px-1 gap-0.5 ${
+                                isCoach
+                                  ? 'text-violet-100 border-violet-400/50'
+                                  : 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-900/30'
+                              }`}
+                            >
+                              {isCoach ? <UserIcon className="h-2.5 w-2.5" /> : <Bot className="h-2.5 w-2.5" />}
+                              {isCoach ? 'Coach' : 'AI'}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="text-sm prose prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                        <div className={`text-[10px] mt-1 ${
+                          isUser || isCoach ? 'text-white/70' : 'text-slate-400'
+                        }`}>
+                          {formatTime(message.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <div className="p-3 border-t bg-card">
+              <div className="flex gap-2">
+                <Textarea
+                  value={coachMessage}
+                  onChange={(e) => setCoachMessage(e.target.value)}
+                  placeholder="Send a coach message..."
+                  className="min-h-[44px] max-h-[120px] resize-none"
+                  rows={1}
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!coachMessage.trim() || sendCoachMessage.isPending}
+                  className="shrink-0"
+                >
+                  {sendCoachMessage.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     );
   }
