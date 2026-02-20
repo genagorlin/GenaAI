@@ -1208,10 +1208,26 @@ export async function registerRoutes(
         { role: "user", content: message, timestamp: new Date().toISOString() }
       ];
 
-      // Generate AI response
+      // Generate AI response with full context
       const { generateAIResponse } = await import("./modelRouter");
 
-      const systemPrompt = `You are a supportive coaching assistant helping a client through an exercise called "${exercise?.title || 'this exercise'}".
+      // Get full context using prompt assembler (same as regular chat)
+      const documentSections = await storage.getDocumentSections(
+        (await storage.getOrCreateClientDocument(session.clientId)).id
+      );
+
+      const { assembledPrompt } = await promptAssembler.assemblePrompt({
+        clientId: session.clientId,
+        currentMessage: message,
+        recentMessages: [],
+        documentSections,
+      });
+
+      // Add exercise step-specific context to the full prompt
+      const exerciseStepContext = `
+
+# CURRENT EXERCISE STEP GUIDANCE
+You are helping the client work through a specific step in the "${exercise?.title || 'this exercise'}" exercise.
 
 Current step: ${step.title}
 Instructions: ${step.instructions}
@@ -1221,12 +1237,15 @@ ${step.supportingMaterial ? `Supporting material: ${step.supportingMaterial}` : 
 The client's current response to this step:
 "${stepResponse?.response || '(no response yet)'}"
 
-Your role:
+Your role for this step guidance:
 - Stay focused on THIS specific step
 - Defer to the step instructions - don't add your own requirements
 - Gently prompt if the client seems stuck or has missed key parts of the instructions
 - Keep responses brief and supportive (2-4 sentences typically)
-- Don't repeat what the client has already written unless clarifying`;
+- Don't repeat what the client has already written unless clarifying
+- Use the same warm, supportive voice as in regular conversations`;
+
+      const fullSystemPrompt = assembledPrompt + exerciseStepContext;
 
       const conversationHistory = existingGuidance.map((g: any) => ({
         role: g.role === "user" ? "user" as const : "assistant" as const,
@@ -1235,7 +1254,7 @@ Your role:
       conversationHistory.push({ role: "user" as const, content: message });
 
       const aiResponse = await generateAIResponse({
-        systemPrompt,
+        systemPrompt: fullSystemPrompt,
         conversationHistory,
         model: "claude-sonnet-4-5",
         provider: "anthropic",
@@ -1326,6 +1345,40 @@ Do NOT:
         status: "completed",
         completedAt: new Date()
       });
+
+      // Add summary to client's Document
+      try {
+        const document = await storage.getOrCreateClientDocument(session.clientId);
+        const sections = await storage.getDocumentSections(document.id);
+
+        // Look for existing "Exercise Reflections" section
+        const exerciseSection = sections.find(s => s.title === "Exercise Reflections");
+
+        const exerciseEntry = `### ${exercise?.title || 'Exercise'} (${new Date().toLocaleDateString()})\n${summary}`;
+
+        if (exerciseSection) {
+          // Append to existing section
+          const updatedContent = exerciseSection.content
+            ? `${exerciseSection.content}\n\n${exerciseEntry}`
+            : exerciseEntry;
+          await storage.updateSection(exerciseSection.id, { content: updatedContent });
+          console.log(`[Exercise] Appended summary to existing Exercise Reflections section`);
+        } else {
+          // Create new section
+          await storage.createSection({
+            documentId: document.id,
+            sectionType: "context",
+            title: "Exercise Reflections",
+            content: exerciseEntry,
+            sortOrder: 10, // Put it after default sections
+            lastUpdatedBy: "ai",
+          });
+          console.log(`[Exercise] Created new Exercise Reflections section with summary`);
+        }
+      } catch (docError) {
+        console.error(`[Exercise] Failed to add summary to document:`, docError);
+        // Don't fail the request - the summary is still saved to the session
+      }
 
       console.log(`[Exercise] Generated summary for session ${req.params.sessionId}`);
       res.json({ summary });
