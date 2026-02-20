@@ -67,28 +67,26 @@ async function generateSectionUpdates(messages: Message[], sections: DocumentSec
     currentContent: s.content || "(empty)",
   }));
 
-  const systemPrompt = `You are an expert coaching assistant helping to maintain a client's living document. 
-Your task is to analyze a recent conversation and ACCUMULATE new insights into the existing document sections.
+  const systemPrompt = `You are an expert coaching assistant helping to maintain a client's living document.
+Your task is to analyze a recent conversation and SYNTHESIZE insights into concise, updated document sections.
 
-CRITICAL INSTRUCTION: This document should BUILD UP knowledge about the client over time across multiple conversations.
-- For sections that already have content: MERGE the new insights with existing content - do NOT replace it
-- For empty sections: Populate them with relevant information from this conversation
-- Information should ACCUMULATE so that insights from all conversations are preserved
-- Remove redundancy when merging, but keep all unique insights and details
+CRITICAL: This is a SYNTHESIS document, not a changelog. Each section should be a distilled summary that captures the most important, current understanding of the client.
 
-Guidelines for each section:
-- Overview: Keep adding to the picture of who the client is. Synthesize across all sessions.
-- Key Highlights: Add new patterns, breakthroughs, or insights. Keep previous notable moments.
-- Current Focus Areas: Update what the client is actively working on (this can change but track evolution)
-- Background & Context: Continuously build up life details, career, relationships, values mentioned
-- Open questions: Track ongoing questions. Resolve ones that got answered, add new ones.
+WORD LIMITS (strictly enforce):
+- Overview: 150 words max - Who is this client? Their core identity and journey.
+- Key Highlights: 200 words max - Most significant patterns, breakthroughs, themes.
+- Current Focus Areas: 100 words max - What they're actively working on RIGHT NOW.
+- Background & Context: 150 words max - Essential life context (career, relationships, values).
+- Exercise Reflections: 200 words max - Key insights from completed exercises.
+- Open Questions: 100 words max - Unresolved questions to explore.
 
-MERGE STRATEGY:
-- When adding to existing content, read what's already there and integrate new information naturally
-- Avoid repetition - if something is already captured, don't duplicate it
-- Organize information thematically within each section
-- Use bullet points or paragraphs as appropriate for readability
-- Preserve specific quotes, examples, or moments that are meaningful
+SYNTHESIS STRATEGY:
+- Read existing content and NEW conversation, then write a FRESH synthesis that captures the best current understanding
+- Prioritize recency - newer insights may replace or update older ones
+- Keep only what's most relevant and meaningful - not everything needs to be preserved
+- If new information contradicts or updates old info, use the new understanding
+- Distill, don't accumulate - a tighter summary is better than a comprehensive one
+- Use concise language; every word should earn its place
 
 Current document sections:
 ${sectionsInfo.map(s => `
@@ -99,10 +97,10 @@ ${s.currentContent}
 `).join("\n")}
 
 Respond with a JSON array of section updates. Each update should have:
-- sectionId: the ID of the section to update  
-- newContent: the COMPLETE merged/accumulated content for that section (not just what's new)
+- sectionId: the ID of the section to update
+- newContent: the SYNTHESIZED content (respecting word limits)
 
-You MUST return updates for ALL empty sections if the conversation contains any relevant information for them.`;
+Only update sections where this conversation adds meaningful new understanding.`;
 
   const userMessage = `Recent conversation to analyze:
 
@@ -219,27 +217,31 @@ export async function updateDocumentRealtime(
     }));
 
     const systemPrompt = `You are maintaining a coaching client's living document in real-time.
-Analyze this single exchange and determine if any sections should be updated.
+Analyze this single exchange and determine if any sections should be updated with a fresh synthesis.
 
-SECTIONS TO UPDATE:
+SECTIONS:
 ${sectionsInfo.map(s => `
 ### ${s.title} (${s.sectionType}) ${s.isEmpty ? "[NEEDS CONTENT]" : ""}
 ID: ${s.id}
 Current: ${s.currentContent || "(empty)"}
 `).join("\n")}
 
-GUIDELINES:
-- Only update if this exchange reveals NEW meaningful information
-- For empty sections, add content if the exchange provides relevant info
-- CRITICAL: ACCUMULATE information - add to what exists, don't replace it
-- For sections with existing content, MERGE new information while preserving all prior insights
-- Keep updates concise but comprehensive
-- Overview: High-level summary of who the client is and their journey
-- Key Highlights: Notable patterns, breakthroughs, or important moments
-- Current Focus Areas: What the client is actively working on right now
-- Background & Context: Life history, relationships, career, values
+WORD LIMITS (strictly enforce):
+- Overview: 150 words max
+- Key Highlights: 200 words max
+- Current Focus Areas: 100 words max
+- Background & Context: 150 words max
+- Exercise Reflections: 200 words max
+- Open Questions: 100 words max
 
-Return a JSON array: [{"sectionId": "...", "newContent": "complete merged content including both old and new"}]
+GUIDELINES:
+- Only update if this exchange reveals meaningful NEW information
+- SYNTHESIZE, don't accumulate - write a fresh, distilled summary incorporating new insights
+- Newer information can replace or update older understanding
+- Keep sections concise; every word should earn its place
+- If content would exceed word limit, prioritize most important/recent insights
+
+Return a JSON array: [{"sectionId": "...", "newContent": "synthesized content within word limit"}]
 Return [] if no updates needed.`;
 
     const response = await anthropic.messages.create({

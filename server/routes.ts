@@ -1346,7 +1346,7 @@ Do NOT:
         completedAt: new Date()
       });
 
-      // Add summary to client's Document
+      // Add summary to client's Document (synthesized, not appended)
       try {
         const document = await storage.getOrCreateClientDocument(session.clientId);
         const sections = await storage.getDocumentSections(document.id);
@@ -1354,26 +1354,51 @@ Do NOT:
         // Look for existing "Exercise Reflections" section
         const exerciseSection = sections.find(s => s.title === "Exercise Reflections");
 
-        const exerciseEntry = `### ${exercise?.title || 'Exercise'} (${new Date().toLocaleDateString()})\n${summary}`;
+        if (exerciseSection && exerciseSection.content) {
+          // Synthesize existing reflections with new summary
+          const synthesisPrompt = `You are updating a client's "Exercise Reflections" document section.
 
-        if (exerciseSection) {
-          // Append to existing section
-          const updatedContent = exerciseSection.content
-            ? `${exerciseSection.content}\n\n${exerciseEntry}`
-            : exerciseEntry;
-          await storage.updateSection(exerciseSection.id, { content: updatedContent });
-          console.log(`[Exercise] Appended summary to existing Exercise Reflections section`);
+CURRENT CONTENT:
+${exerciseSection.content}
+
+NEW EXERCISE COMPLETED:
+Exercise: ${exercise?.title || 'Exercise'}
+Date: ${new Date().toLocaleDateString()}
+Summary: ${summary}
+
+Write a SYNTHESIZED version that incorporates the new exercise insights with existing reflections.
+- Maximum 200 words total
+- Prioritize themes and patterns across exercises
+- Keep the most meaningful insights; let go of less important details
+- Write as a cohesive narrative, not a list of separate exercises
+- Focus on growth, patterns, and key realizations
+
+Return ONLY the synthesized content, no explanations.`;
+
+          const synthesizedContent = await generateAIResponse({
+            systemPrompt: synthesisPrompt,
+            conversationHistory: [{ role: "user", content: "Please synthesize my exercise reflections." }],
+            model: "claude-sonnet-4-5",
+            provider: "anthropic",
+          });
+
+          await storage.updateSection(exerciseSection.id, { content: synthesizedContent });
+          console.log(`[Exercise] Synthesized exercise reflections with new summary`);
+        } else if (exerciseSection) {
+          // Section exists but empty - just add the summary
+          await storage.updateSection(exerciseSection.id, { content: summary });
+          console.log(`[Exercise] Added first summary to Exercise Reflections section`);
         } else {
-          // Create new section
+          // Create new section with initial summary
           await storage.createSection({
             documentId: document.id,
             sectionType: "context",
             title: "Exercise Reflections",
-            content: exerciseEntry,
-            sortOrder: 10, // Put it after default sections
+            content: summary,
+            sortOrder: 10,
             lastUpdatedBy: "ai",
           });
-          console.log(`[Exercise] Created new Exercise Reflections section with summary`);
+          console.log(`[Exercise] Created Exercise Reflections section with summary`);
         }
       } catch (docError) {
         console.error(`[Exercise] Failed to add summary to document:`, docError);
