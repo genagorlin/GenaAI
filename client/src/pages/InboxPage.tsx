@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
+import { WelcomeModal } from "@/components/WelcomeModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +53,20 @@ export default function InboxPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"chat" | "exercises" | "document" | "library">("chat");
   const [selectedDocument, setSelectedDocument] = useState<{ id: number; title: string; content: string; description: string | null } | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  // Show welcome modal on first visit
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem("genaai-welcome-seen");
+    if (!hasSeenWelcome) {
+      setShowWelcome(true);
+    }
+  }, []);
+
+  const handleWelcomeClose = () => {
+    localStorage.setItem("genaai-welcome-seen", "true");
+    setShowWelcome(false);
+  };
 
   // Check if user is authenticated for client access
   const { data: authStatus, isLoading: authLoading } = useQuery({
@@ -591,6 +606,8 @@ export default function InboxPage() {
           </div>
         )}
       </div>
+
+      <WelcomeModal open={showWelcome} onClose={handleWelcomeClose} />
     </div>
   );
 }
