@@ -20,7 +20,7 @@ const steps = [
     content: (
       <div className="space-y-4">
         <p className="text-slate-600 leading-relaxed">
-          While not a substitute for live coaching, this app is trained on my (Gena's) "builder's mindset" framework and provides support and thought partnership through that lens.
+          This app is trained on my (Gena's) "builder's mindset" framework and provides support and thought partnership through that lens.
         </p>
         <p className="text-slate-600 leading-relaxed">
           Start a new conversation anytime, or try a structured <strong>Exercise</strong> to jumpstart your self-reflection. The Exercises loosely build on each other—if you're unsure where to begin, I suggest working through them in order.
