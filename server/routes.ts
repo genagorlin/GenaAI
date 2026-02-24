@@ -1217,7 +1217,7 @@ export async function registerRoutes(
         (await storage.getOrCreateClientDocument(session.clientId)).id
       );
 
-      const { assembledPrompt } = await promptAssembler.assemblePrompt({
+      const { systemPrompt: baseSystemPrompt } = await promptAssembler.assemblePrompt({
         clientId: session.clientId,
         currentMessage: message,
         recentMessages: [],
@@ -1246,7 +1246,7 @@ Your role for this step guidance:
 - Don't repeat what the client has already written unless clarifying
 - Use the same warm, supportive voice as in regular conversations`;
 
-      const fullSystemPrompt = assembledPrompt + exerciseStepContext;
+      const fullSystemPrompt = baseSystemPrompt + exerciseStepContext;
 
       const conversationHistory = existingGuidance.map((g: any) => ({
         role: g.role === "user" ? "user" as const : "assistant" as const,
