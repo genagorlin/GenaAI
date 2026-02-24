@@ -1210,6 +1210,7 @@ export async function registerRoutes(
 
       // Generate AI response with full context
       const { generateAIResponse } = await import("./modelRouter");
+      const { promptAssembler } = await import("./promptAssembler");
 
       // Get full context using prompt assembler (same as regular chat)
       const documentSections = await storage.getDocumentSections(
