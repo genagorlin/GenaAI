@@ -374,11 +374,9 @@ export function MobileCoachView() {
           // Show exercise session view
           <div className="flex-1 overflow-hidden">
             <ExerciseSessionView
-              session={threadExerciseSession.session}
-              exercise={threadExerciseSession.exercise}
-              steps={threadExerciseSession.steps}
-              responses={threadExerciseSession.responses}
-              editable={true}
+              sessionId={threadExerciseSession.session.id}
+              clientId={selectedClientId!}
+              editable={false}
             />
           </div>
         ) : (
