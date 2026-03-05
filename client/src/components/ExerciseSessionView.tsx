@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, Loader2, ExternalLink, Pencil, Save, X, Sparkles } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, ExternalLink, Pencil, Save, X, Sparkles, Maximize2, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 interface ExerciseStep {
@@ -37,6 +39,8 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [expandedResponse, setExpandedResponse] = useState<{ stepTitle: string; response: string } | null>(null);
+  const [showAllResponses, setShowAllResponses] = useState(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -145,6 +149,12 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
                 </Badge>
               ) : (
                 <Badge variant="outline">In Progress</Badge>
+              )}
+              {responses.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setShowAllResponses(true)} className="gap-1">
+                  <List className="h-3 w-3" />
+                  All Responses
+                </Button>
               )}
               {onOpenFullView && (
                 <Button variant="outline" size="sm" onClick={onOpenFullView} className="gap-1">
@@ -283,17 +293,33 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Response
                 </label>
-                {editable && editingStepId !== currentStep.id && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => startEditing(currentStep.id, currentResponse?.response || "")}
-                    className="h-6 px-2 text-xs gap-1"
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Edit
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {currentResponse?.response && currentResponse.response.length > 200 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setExpandedResponse({
+                        stepTitle: currentStep.title,
+                        response: currentResponse.response
+                      })}
+                      className="h-6 px-2 text-xs gap-1"
+                    >
+                      <Maximize2 className="h-3 w-3" />
+                      Expand
+                    </Button>
+                  )}
+                  {editable && editingStepId !== currentStep.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => startEditing(currentStep.id, currentResponse?.response || "")}
+                      className="h-6 px-2 text-xs gap-1"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
               </div>
               {editingStepId === currentStep.id ? (
                 <div className="space-y-2">
@@ -331,9 +357,16 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
                   </div>
                 </div>
               ) : (
-                <div className="p-3 rounded-lg bg-muted/50 border min-h-[100px]">
+                <div
+                  className={cn(
+                    "p-4 rounded-lg bg-muted/50 border",
+                    currentResponse?.response && currentResponse.response.length > 500
+                      ? "max-h-[300px] overflow-y-auto"
+                      : "min-h-[100px]"
+                  )}
+                >
                   {currentResponse?.response ? (
-                    <p className="text-sm whitespace-pre-wrap">{currentResponse.response}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{currentResponse.response}</p>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">
                       {editable ? "Click 'Edit' to add a response" : "No response yet"}
@@ -369,6 +402,55 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
           </CardContent>
         </Card>
       )}
+
+      {/* Expanded Response Modal */}
+      <Dialog open={!!expandedResponse} onOpenChange={() => setExpandedResponse(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{expandedResponse?.stepTitle}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <p className="text-base leading-relaxed whitespace-pre-wrap">
+              {expandedResponse?.response}
+            </p>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* All Responses Modal */}
+      <Dialog open={showAllResponses} onOpenChange={setShowAllResponses}>
+        <DialogContent className="max-w-3xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>{exercise.title} - All Responses</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh] pr-4">
+            <div className="space-y-6">
+              {steps.map((step, idx) => {
+                const stepResponse = responses.find(r => r.stepId === step.id);
+                return (
+                  <div key={step.id} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        Step {idx + 1}
+                      </Badge>
+                      <h3 className="font-medium">{step.title}</h3>
+                    </div>
+                    <div className="pl-4 border-l-2 border-muted">
+                      {stepResponse?.response ? (
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                          {stepResponse.response}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">No response</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
