@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, FileText, Smartphone, Shield, ArrowRight, Check } from "lucide-react";
+import { Sparkles, MessageCircle, Dumbbell, FileText, ArrowRight, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +11,8 @@ import {
 interface WelcomeModalProps {
   open: boolean;
   onClose: () => void;
+  onStartChat?: () => void;
+  onStartExercise?: () => void;
 }
 
 const steps = [
@@ -20,71 +22,58 @@ const steps = [
     content: (
       <div className="space-y-4">
         <p className="text-slate-600 leading-relaxed">
-          This app is trained on my (Gena's) "builder's mindset" framework and provides support and thought partnership through that lens.
+          GenaAI is your personal AI thinking partner, trained on Gena Gorlin's <strong>builder's mindset</strong> framework.
         </p>
         <p className="text-slate-600 leading-relaxed">
-          Start a new conversation anytime, or try a structured <strong>Exercise</strong> to jumpstart your self-reflection. The Exercises loosely build on each other—if you're unsure where to begin, I suggest working through them in order.
+          It's here to help you reflect on your goals, work through challenges, and build deeper self-knowledge — anytime you need it.
         </p>
       </div>
     ),
   },
   {
-    title: "How it works",
-    icon: FileText,
+    title: "Two ways to get started",
+    icon: Rocket,
     content: (
       <div className="space-y-5">
+        <div className="flex gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+            <MessageCircle className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div>
+            <h4 className="font-medium text-slate-900 mb-1">Chat</h4>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Start a free-form conversation about anything on your mind — a challenge you're facing, a decision to think through, or a goal to clarify.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <Dumbbell className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h4 className="font-medium text-slate-900 mb-1">Exercises</h4>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Try a structured exercise for guided self-reflection. Great if you're not sure where to begin — they loosely build on each other, so start with the first one.
+            </p>
+          </div>
+        </div>
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
             <FileText className="h-5 w-5 text-violet-600" />
           </div>
           <div>
-            <h4 className="font-medium text-slate-900 mb-1">Your Document builds automatically</h4>
+            <h4 className="font-medium text-slate-900 mb-1">Your Document</h4>
             <p className="text-sm text-slate-600 leading-relaxed">
-              As you chat, the AI will populate your Document with insights and patterns. You can add to it yourself, but you don't have to.
+              As you chat, a personal document builds automatically with insights and patterns — no extra effort needed.
             </p>
           </div>
-        </div>
-        <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-            <Smartphone className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <h4 className="font-medium text-slate-900 mb-1">Install as an app</h4>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              On iPhone: open in Safari → tap Share → "Add to Home Screen"
-            </p>
-          </div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    title: "One more thing",
-    icon: Shield,
-    content: (
-      <div className="space-y-5">
-        <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-            <Shield className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <h4 className="font-medium text-slate-900 mb-1">Privacy note</h4>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              I (Gena) may occasionally read chats to improve the AI's responses. Let me know if there are threads you'd prefer to keep private.
-            </p>
-          </div>
-        </div>
-        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-          <p className="text-sm text-slate-600">
-            Questions or feedback anytime? Use the <strong>"Contact Gena"</strong> button in the app header.
-          </p>
         </div>
       </div>
     ),
   },
 ];
 
-export function WelcomeModal({ open, onClose }: WelcomeModalProps) {
+export function WelcomeModal({ open, onClose, onStartChat, onStartExercise }: WelcomeModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
 
   const handleNext = () => {
@@ -137,26 +126,48 @@ export function WelcomeModal({ open, onClose }: WelcomeModalProps) {
           ))}
         </div>
 
-        <div className="flex gap-2 pt-2">
-          {currentStep > 0 && (
-            <Button variant="outline" onClick={handleBack} className="flex-1">
-              Back
-            </Button>
-          )}
-          <Button onClick={handleNext} className={currentStep === 0 ? "w-full" : "flex-1"}>
-            {isLastStep ? (
-              <>
-                <Check className="h-4 w-4 mr-2" />
-                Get Started
-              </>
-            ) : (
-              <>
-                Next
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </>
+        {isLastStep ? (
+          <div className="space-y-3 pt-2">
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  onClose();
+                  onStartExercise?.();
+                }}
+                className="flex-1"
+              >
+                <Dumbbell className="h-4 w-4 mr-2" />
+                Start an Exercise
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onClose();
+                  onStartChat?.();
+                }}
+                className="flex-1"
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Start a Chat
+              </Button>
+            </div>
+            <p className="text-xs text-center text-slate-500">
+              Gena may occasionally read chats to improve the AI. Questions anytime? Use <strong>Contact Gena</strong> in the header.
+            </p>
+          </div>
+        ) : (
+          <div className="flex gap-2 pt-2">
+            {currentStep > 0 && (
+              <Button variant="outline" onClick={handleBack} className="flex-1">
+                Back
+              </Button>
             )}
-          </Button>
-        </div>
+            <Button onClick={handleNext} className={currentStep === 0 ? "w-full" : "flex-1"}>
+              Next
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

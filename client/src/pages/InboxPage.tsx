@@ -358,9 +358,9 @@ export default function InboxPage() {
                   <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
                     <MessageCircle className="h-8 w-8 text-emerald-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-slate-900 mb-2">No conversations yet</h3>
-                  <p className="text-sm text-slate-500 mb-6">
-                    Start a new conversation with your AI thinking partner
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">What's on your mind?</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-xs">
+                    Start a conversation about a challenge you're facing, a decision to think through, or a goal you want to clarify.
                   </p>
                   <Button
                     onClick={handleNewThread}
@@ -375,6 +375,13 @@ export default function InboxPage() {
                     )}
                     Start conversation
                   </Button>
+                  <button
+                    onClick={() => setActiveTab("exercises")}
+                    className="mt-4 text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    Or try a guided Exercise
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -607,7 +614,12 @@ export default function InboxPage() {
         )}
       </div>
 
-      <WelcomeModal open={showWelcome} onClose={handleWelcomeClose} />
+      <WelcomeModal
+        open={showWelcome}
+        onClose={handleWelcomeClose}
+        onStartChat={handleNewThread}
+        onStartExercise={() => setActiveTab("exercises")}
+      />
     </div>
   );
 }
