@@ -432,6 +432,21 @@ export type SurveySession = typeof surveySessions.$inferSelect;
 export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
 export type SurveyResponse = typeof surveyResponses.$inferSelect;
 
+// Journal Entries - client scratchpad/journaling with optional AI thought partnership
+export const journalEntries = pgTable("journal_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Untitled"),
+  content: text("content").notNull().default(""),
+  aiGuidance: jsonb("ai_guidance"), // Array of {role, content, timestamp} for optional AI chat
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+export type JournalEntry = typeof journalEntries.$inferSelect;
+
 // Email Reminder Templates - global templates that can be assigned to clients
 export const reminderTemplates = pgTable("reminder_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

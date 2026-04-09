@@ -50,6 +50,8 @@ import {
   type InsertClientReminder,
   type ReminderHistory,
   type InsertReminderHistory,
+  type JournalEntry,
+  type InsertJournalEntry,
   clients,
   threads,
   messages,
@@ -77,7 +79,8 @@ import {
   surveyResponses,
   reminderTemplates,
   clientReminders,
-  reminderHistory
+  reminderHistory,
+  journalEntries
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt, lte, sql } from "drizzle-orm";
@@ -261,6 +264,14 @@ export interface IStorage {
   createReminderHistory(history: InsertReminderHistory): Promise<ReminderHistory>;
   getClientReminderHistory(clientId: string): Promise<ReminderHistory[]>;
   getReminderHistory(clientReminderId: string): Promise<ReminderHistory[]>;
+
+  // Journal Entries
+  getClientJournalEntries(clientId: string): Promise<JournalEntry[]>;
+  getJournalEntry(id: string): Promise<JournalEntry | undefined>;
+  createJournalEntry(entry: InsertJournalEntry): Promise<JournalEntry>;
+  updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry>;
+  updateJournalEntryGuidance(id: string, guidance: any[]): Promise<JournalEntry>;
+  deleteJournalEntry(id: string): Promise<void>;
 
   // Client Timezone
   updateClientTimezone(clientId: string, timezone: string): Promise<void>;
@@ -1222,6 +1233,43 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(reminderHistory)
       .where(eq(reminderHistory.clientReminderId, clientReminderId))
       .orderBy(desc(reminderHistory.sentAt));
+  }
+
+  // Journal Entries
+  async getClientJournalEntries(clientId: string): Promise<JournalEntry[]> {
+    return await db.select().from(journalEntries)
+      .where(eq(journalEntries.clientId, clientId))
+      .orderBy(desc(journalEntries.updatedAt));
+  }
+
+  async getJournalEntry(id: string): Promise<JournalEntry | undefined> {
+    const [result] = await db.select().from(journalEntries).where(eq(journalEntries.id, id));
+    return result;
+  }
+
+  async createJournalEntry(entry: InsertJournalEntry): Promise<JournalEntry> {
+    const [result] = await db.insert(journalEntries).values(entry).returning();
+    return result;
+  }
+
+  async updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry> {
+    const [result] = await db.update(journalEntries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(journalEntries.id, id))
+      .returning();
+    return result;
+  }
+
+  async updateJournalEntryGuidance(id: string, guidance: any[]): Promise<JournalEntry> {
+    const [result] = await db.update(journalEntries)
+      .set({ aiGuidance: guidance, updatedAt: new Date() })
+      .where(eq(journalEntries.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteJournalEntry(id: string): Promise<void> {
+    await db.delete(journalEntries).where(eq(journalEntries.id, id));
   }
 
   // Client Timezone

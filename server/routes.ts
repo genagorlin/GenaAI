@@ -2418,5 +2418,170 @@ Return ONLY the synthesized content, no explanations.`;
     }
   });
 
+  // ==========================================
+  // JOURNAL ENTRIES
+  // ==========================================
+
+  // List journal entries for a client (client access)
+  app.get("/api/clients/:clientId/journal", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
+    try {
+      const entries = await storage.getClientJournalEntries(req.params.clientId);
+      res.json(entries);
+    } catch (error) {
+      console.error("Get journal entries error:", error);
+      res.status(500).json({ error: "Failed to fetch journal entries" });
+    }
+  });
+
+  // Coach view: list journal entries for a client
+  app.get("/api/coach/clients/:clientId/journal", isAuthenticated, async (req, res) => {
+    try {
+      const entries = await storage.getClientJournalEntries(req.params.clientId);
+      res.json(entries);
+    } catch (error) {
+      console.error("Get journal entries error:", error);
+      res.status(500).json({ error: "Failed to fetch journal entries" });
+    }
+  });
+
+  // Create a new journal entry
+  app.post("/api/clients/:clientId/journal", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
+    try {
+      const entry = await storage.createJournalEntry({
+        clientId: req.params.clientId,
+        title: req.body.title || "Untitled",
+        content: req.body.content || "",
+      });
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error("Create journal entry error:", error);
+      res.status(500).json({ error: "Failed to create journal entry" });
+    }
+  });
+
+  // Get a single journal entry
+  app.get("/api/journal/:entryId", async (req, res) => {
+    try {
+      const entry = await storage.getJournalEntry(req.params.entryId);
+      if (!entry) {
+        return res.status(404).json({ error: "Journal entry not found" });
+      }
+      res.json(entry);
+    } catch (error) {
+      console.error("Get journal entry error:", error);
+      res.status(500).json({ error: "Failed to fetch journal entry" });
+    }
+  });
+
+  // Update a journal entry (auto-save content/title)
+  app.put("/api/journal/:entryId", async (req, res) => {
+    try {
+      const entry = await storage.getJournalEntry(req.params.entryId);
+      if (!entry) {
+        return res.status(404).json({ error: "Journal entry not found" });
+      }
+      const updated = await storage.updateJournalEntry(req.params.entryId, {
+        title: req.body.title ?? entry.title,
+        content: req.body.content ?? entry.content,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Update journal entry error:", error);
+      res.status(500).json({ error: "Failed to update journal entry" });
+    }
+  });
+
+  // Delete a journal entry
+  app.delete("/api/journal/:entryId", async (req, res) => {
+    try {
+      await storage.deleteJournalEntry(req.params.entryId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete journal entry error:", error);
+      res.status(500).json({ error: "Failed to delete journal entry" });
+    }
+  });
+
+  // AI Guidance for journal entry (same pattern as exercise step guidance)
+  app.post("/api/journal/:entryId/guidance", async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const entry = await storage.getJournalEntry(req.params.entryId);
+      if (!entry) {
+        return res.status(404).json({ error: "Journal entry not found" });
+      }
+
+      // Build guidance conversation history
+      const existingGuidance = (entry.aiGuidance as any[]) || [];
+      const newGuidance = [
+        ...existingGuidance,
+        { role: "user", content: message, timestamp: new Date().toISOString() }
+      ];
+
+      // Generate AI response with full context
+      const { generateAIResponse } = await import("./modelRouter");
+      const { promptAssembler } = await import("./promptAssembler");
+
+      const documentSections = await storage.getDocumentSections(
+        (await storage.getOrCreateClientDocument(entry.clientId)).id
+      );
+
+      const { systemPrompt: baseSystemPrompt } = await promptAssembler.assemblePrompt({
+        clientId: entry.clientId,
+        currentMessage: message,
+        recentMessages: [],
+        documentSections,
+      });
+
+      // Add journal-specific context
+      const journalContext = `
+
+# JOURNAL THOUGHT PARTNERSHIP
+The client is doing free-form journaling in their private scratchpad. They have opted in to AI thought partnership on this entry.
+
+The client's current journal entry:
+"${entry.content || '(empty entry)'}"
+
+Your role for this thought partnership:
+- You are a thought partner helping the client reflect more deeply on what they've written
+- Ask clarifying questions to help them think more deeply
+- Reflect back patterns or tensions you notice in their writing
+- Keep responses brief and supportive (2-4 sentences typically)
+- Do NOT prescribe advice unless specifically asked
+- Use the same warm, supportive voice as in regular conversations`;
+
+      const fullSystemPrompt = baseSystemPrompt + journalContext;
+
+      const conversationHistory = existingGuidance.map((g: any) => ({
+        role: g.role === "user" ? "user" as const : "assistant" as const,
+        content: g.content
+      }));
+      conversationHistory.push({ role: "user" as const, content: message });
+
+      const aiResponse = await generateAIResponse({
+        systemPrompt: fullSystemPrompt,
+        conversationHistory,
+        model: "claude-sonnet-4-5",
+        provider: "anthropic",
+      });
+
+      // Add AI response to guidance history
+      newGuidance.push({ role: "ai", content: aiResponse, timestamp: new Date().toISOString() });
+
+      // Save updated guidance
+      await storage.updateJournalEntryGuidance(entry.id, newGuidance);
+
+      console.log(`[Journal] AI guidance for entry ${req.params.entryId}`);
+      res.json({ guidance: newGuidance, latestResponse: aiResponse });
+    } catch (error) {
+      console.error("Journal guidance error:", error);
+      res.status(500).json({ error: "Failed to get AI guidance" });
+    }
+  });
+
   return httpServer;
 }

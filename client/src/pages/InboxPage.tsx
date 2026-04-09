@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2, Mail } from "lucide-react";
+import { Plus, MessageCircle, Loader2, ChevronRight, FileText, BookOpen, ArrowLeft, Dumbbell, Clock, Trash2, Mail, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClientDocumentView } from "@/components/ClientDocumentView";
 import { WelcomeModal } from "@/components/WelcomeModal";
@@ -51,7 +51,7 @@ export default function InboxPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"chat" | "exercises" | "document" | "library">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "exercises" | "journal" | "document" | "library">("chat");
   const [selectedDocument, setSelectedDocument] = useState<{ id: number; title: string; content: string; description: string | null } | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
 
@@ -149,6 +149,52 @@ export default function InboxPage() {
     },
     enabled: activeTab === "exercises",
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: journalEntries = [], isLoading: journalLoading } = useQuery<{ id: string; title: string; content: string; updatedAt: string; createdAt: string }[]>({
+    queryKey: ["/api/clients", clientId, "journal"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/journal`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activeTab === "journal",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const createJournalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/journal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title: "Untitled", content: "" }),
+      });
+      if (!res.ok) throw new Error("Failed to create journal entry");
+      return res.json();
+    },
+    onSuccess: (entry) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "journal"] });
+      setLocation(`/journal/${clientId}/${entry.id}`);
+    },
+  });
+
+  const deleteJournalMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      const res = await fetch(`/api/journal/${entryId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete journal entry");
+      return entryId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "journal"] });
+      toast.success("Journal entry deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete journal entry");
+    },
   });
 
   // Exercises come pre-sorted by sortOrder from the server
@@ -320,10 +366,22 @@ export default function InboxPage() {
               Exercises
             </button>
             <button
+              onClick={() => setActiveTab("journal")}
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
+                activeTab === "journal"
+                  ? "bg-white/10 text-white border-b-2 border-white"
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+              data-testid="tab-journal"
+            >
+              <PenLine className="h-4 w-4" />
+              Journal
+            </button>
+            <button
               onClick={() => setActiveTab("document")}
               className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-                activeTab === "document" 
-                  ? "bg-white/10 text-white border-b-2 border-white" 
+                activeTab === "document"
+                  ? "bg-white/10 text-white border-b-2 border-white"
                   : "text-white/70 hover:text-white hover:bg-white/5"
               }`}
               data-testid="tab-document"
@@ -530,6 +588,123 @@ export default function InboxPage() {
               </div>
             )}
           </div>
+        ) : activeTab === "journal" ? (
+          <>
+            <div className="flex-1 overflow-y-auto bg-white">
+              {journalLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+              ) : journalEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                    <PenLine className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">Your private journal</h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-xs">
+                    Write freely without any AI responses. You can optionally request AI thought partnership within any entry.
+                  </p>
+                  <Button
+                    onClick={() => createJournalMutation.mutate()}
+                    disabled={createJournalMutation.isPending}
+                    className="bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90"
+                  >
+                    {createJournalMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Plus className="h-4 w-4 mr-2" />
+                    )}
+                    New journal entry
+                  </Button>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  <div className="p-4 bg-slate-50 border-b">
+                    <h3 className="font-medium text-slate-900 flex items-center gap-2">
+                      <PenLine className="h-5 w-5 text-blue-600" />
+                      Journal
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Your private space for free-form writing and reflection
+                    </p>
+                  </div>
+                  {journalEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                    >
+                      <button
+                        onClick={() => setLocation(`/journal/${clientId}/${entry.id}`)}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                          <PenLine className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-medium text-slate-900 truncate text-[15px]">
+                              {entry.title}
+                            </h3>
+                            <span className="text-xs text-slate-500 shrink-0">
+                              {formatWhatsAppTimestamp(entry.updatedAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-500 truncate mt-0.5">
+                            {entry.content
+                              ? entry.content.slice(0, 80) + (entry.content.length > 80 ? "..." : "")
+                              : "Empty entry"}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-400 hover:text-red-500 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Journal Entry</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{entry.title}"? This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteJournalMutation.mutate(entry.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => createJournalMutation.mutate()}
+              disabled={createJournalMutation.isPending}
+              className="fixed bottom-20 right-4 sm:absolute sm:bottom-6 sm:right-6 w-14 h-14 rounded-full bg-[hsl(var(--wa-accent))] hover:bg-[hsl(var(--wa-accent))]/90 text-white shadow-lg flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 z-50"
+              aria-label="New journal entry"
+            >
+              {createJournalMutation.isPending ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <Plus className="h-6 w-6" />
+              )}
+            </button>
+          </>
         ) : activeTab === "document" ? (
           <div className="flex-1 overflow-hidden bg-slate-50">
             <ClientDocumentView clientId={clientId!} />

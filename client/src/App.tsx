@@ -13,6 +13,7 @@ import UnauthorizedPage from "@/pages/UnauthorizedPage";
 import ChatPage from "@/pages/ChatPage";
 import InboxPage from "@/pages/InboxPage";
 import ExercisePage from "@/pages/ExercisePage";
+import JournalPage from "@/pages/JournalPage";
 import ContactGenaPage from "@/pages/ContactGenaPage";
 import ClientAccessDenied from "@/pages/ClientAccessDenied";
 
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/register" component={RegisterPage} />
       <Route path="/contact/:clientId" component={ContactGenaPage} />
       <Route path="/exercise/:clientId/:sessionId" component={ExercisePage} />
+      <Route path="/journal/:clientId/:entryId" component={JournalPage} />
       <Route path="/chat/:clientId/:threadId" component={ChatPage} />
       <Route path="/chat/:clientId" component={InboxPage} />
       <Route path="/inbox/:clientId" component={InboxPage} />
