@@ -380,6 +380,18 @@ export async function registerRoutes(
           threadId: validated.threadId,
         });
         console.log(`[Mention] Coach mentioned in thread ${validated.threadId}`);
+
+        // Send email notification to coach (fire and forget)
+        const client = await storage.getClient(req.params.clientId);
+        if (client) {
+          const { sendMentionNotification } = await import("./mentionNotifier");
+          sendMentionNotification({
+            clientName: client.name,
+            clientId: req.params.clientId,
+            threadId: validated.threadId,
+            messagePreview: validated.content,
+          }).catch(() => {}); // Don't block the response if email fails
+        }
       }
       
       if (validated.role === "user") {
