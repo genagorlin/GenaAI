@@ -461,7 +461,7 @@ export function ExercisePlayer({ sessionId, clientId, onClose }: ExercisePlayerP
                         Ask a question about this step and I'll help guide you.
                       </p>
                     ) : (
-                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                      <div className="space-y-3">
                         {guidance.map((msg, idx) => (
                           <div
                             key={idx}

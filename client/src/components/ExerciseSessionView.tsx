@@ -358,12 +358,7 @@ export function ExerciseSessionView({ sessionId, clientId, editable = true, onOp
                 </div>
               ) : (
                 <div
-                  className={cn(
-                    "p-4 rounded-lg bg-muted/50 border",
-                    currentResponse?.response && currentResponse.response.length > 500
-                      ? "max-h-[300px] overflow-y-auto"
-                      : "min-h-[100px]"
-                  )}
+                  className="p-4 rounded-lg bg-muted/50 border min-h-[100px]"
                 >
                   {currentResponse?.response ? (
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{currentResponse.response}</p>
