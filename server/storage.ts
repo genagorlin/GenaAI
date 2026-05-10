@@ -149,6 +149,7 @@ export interface IStorage {
   getAllMethodologyFrames(): Promise<MethodologyFrame[]>;
   getActiveMethodologyFrames(): Promise<MethodologyFrame[]>;
   getClientMethodologies(clientId: string): Promise<(ClientMethodology & { methodology: MethodologyFrame })[]>;
+  ensureClientHasDefaultMethodology(clientId: string): Promise<void>;
 
   // Authorized Users (login allowlist)
   getAuthorizedUserByEmail(email: string): Promise<AuthorizedUser | undefined>;
@@ -629,7 +630,23 @@ export class DatabaseStorage implements IStorage {
   // Prompt Layers
   async getOrCreateRolePrompt(clientId: string): Promise<RolePrompt> {
     const [existing] = await db.select().from(rolePrompts).where(eq(rolePrompts.clientId, clientId));
-    if (existing) return existing;
+
+    // The previous default role prompt text. If a client still has exactly this
+    // (i.e. it was never customized), upgrade them to the new default that
+    // bakes in the builder's mindset commitment. Customized prompts are left alone.
+    const OLD_DEFAULT = `You are an assistant to Dr. Gena Gorlin, who provides coaching to ambitious founders and builders. You are familiar with Gena's online writing on the "psychology of ambition," including her "builder's mindset" framework. You do not prescribe advice. You ask clarifying questions when needed.`;
+
+    if (existing) {
+      if (existing.content.trim() === OLD_DEFAULT.trim()) {
+        // Re-create with the new default by passing no content (schema default applies)
+        const [refreshed] = await db.update(rolePrompts)
+          .set({ content: sql`DEFAULT`, updatedAt: new Date() })
+          .where(eq(rolePrompts.clientId, clientId))
+          .returning();
+        return refreshed;
+      }
+      return existing;
+    }
     const [created] = await db.insert(rolePrompts).values({ clientId }).returning();
     return created;
   }
@@ -680,10 +697,66 @@ export class DatabaseStorage implements IStorage {
       .from(clientMethodologies)
       .innerJoin(methodologyFrames, eq(clientMethodologies.methodologyId, methodologyFrames.id))
       .where(eq(clientMethodologies.clientId, clientId));
-    return results.map((r: { client_methodologies: ClientMethodology; methodology_frames: MethodologyFrame }) => ({ 
-      ...r.client_methodologies, 
-      methodology: r.methodology_frames 
+    return results.map((r: { client_methodologies: ClientMethodology; methodology_frames: MethodologyFrame }) => ({
+      ...r.client_methodologies,
+      methodology: r.methodology_frames
     }));
+  }
+
+  async ensureClientHasDefaultMethodology(clientId: string): Promise<void> {
+    // Step 1: ensure the global Builder's Mindset methodology exists
+    const DEFAULT_NAME = "Builder's Mindset";
+    let [defaultFrame] = await db.select().from(methodologyFrames)
+      .where(eq(methodologyFrames.name, DEFAULT_NAME));
+
+    if (!defaultFrame) {
+      const [created] = await db.insert(methodologyFrames).values({
+        name: DEFAULT_NAME,
+        description: "Gena Gorlin's foundational coaching framework on the psychology of ambition.",
+        content: `# The Builder's Mindset Framework
+
+The builder's mindset is a way of relating to one's life as an active project of construction — building values, capacities, relationships, and projects through deliberate, honest engagement with reality.
+
+## The Three Mindsets (Core Distinction)
+
+1. **Drill Sergeant**: Treats motivation as discipline imposed against an unwilling self. Values are dictated; failures are character flaws to be punished. Productive in the short term, brittle and self-alienating over time.
+
+2. **Zen**: Treats motivation as something to be released by accepting whatever arises. Values are discovered through "letting go." Reduces internal conflict but tends toward passivity and avoidance of agency.
+
+3. **Builder**: Treats motivation as something built through honest engagement — not imposed, not released, but constructed. Values arise from understanding how an activity causally connects to the rest of one's life and what one cares about. Failures are diagnostic information, not verdicts. The builder is both the artist and the work-in-progress.
+
+## Core Concepts
+
+- **Rational ambition**: Wanting things based on a clear understanding of what they are and why they matter, rather than on social signaling or fear-driven striving.
+- **Building vs. protecting**: Acting from the orientation of constructing what you want, rather than defending what you fear losing.
+- **Self-honesty vs. self-deception**: The willingness to see your actual motivations, fears, and limits rather than the flattering version.
+- **Creative agency**: Recognizing yourself as the author of your life, not a passenger.
+- **"Death is the default"**: The recognition that meaningful outcomes don't happen automatically; they require active construction against the pull of entropy.
+- **Felt understanding**: Values and motivation get built through thoughtful engagement, not "found" inside oneself as intrinsic facts.
+
+## How to Apply This
+
+When the client raises a struggle, ask: Is this a drill sergeant frame? A Zen frame? What would the builder ask here? Help them surface the construction project hidden inside the complaint.`,
+        isActive: 1,
+        sortOrder: 0,
+      }).returning();
+      defaultFrame = created;
+    }
+
+    // Step 2: ensure this client has the methodology assigned
+    const [existing] = await db.select().from(clientMethodologies)
+      .where(and(
+        eq(clientMethodologies.clientId, clientId),
+        eq(clientMethodologies.methodologyId, defaultFrame.id)
+      ));
+
+    if (!existing) {
+      await db.insert(clientMethodologies).values({
+        clientId,
+        methodologyId: defaultFrame.id,
+        isActive: 1,
+      });
+    }
   }
 
   // Authorized Users (login allowlist)
