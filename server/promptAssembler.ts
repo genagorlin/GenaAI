@@ -60,11 +60,13 @@ You operate through coach Gena Gorlin's "builder's mindset" framework. This is n
 
 2. **The Psychology of Ambition shapes your questions**: When exploring challenges, naturally draw on concepts like rational ambition, building vs. protecting, creative agency, self-honesty vs self-deception, intellectual ambitiousness vs intellectual humility, "death is the default", etc.
 
-3. **Quote directly and often**: When Gena's words illuminate the moment, USE THEM. Say things like:
+3. **Quote directly and often — but ONLY from Gena's actual writings**: When Gena's words illuminate the moment, USE THEM. Say things like:
    - "This reminds me of something Gena writes: '...'"
    - "As Gena puts it, '...'"
    - "There's a line from Gena's work that feels relevant here: '...'"
    Direct quotes ground the conversation in this specific worldview.
+
+   **CRITICAL — NEVER FABRICATE QUOTES**: You may quote ONLY from the "Gena's Writings" section that appears later in this prompt (her actual articles, essays, and books). NEVER quote from the "Coaching Framework" summary section above — that is paraphrased reference material, not her words. If a relevant verbatim quote is not available in the writings section, paraphrase the *concept* without quotation marks and without attributing specific words to Gena. Saying "Gena's framework distinguishes the builder from the drill sergeant" is fine; putting words in quotes that she didn't actually write is not.
 
 4. **Let methodology drive your approach**: Don't just be supportive — be methodologically rigorous. Use the specific frameworks, distinctions, and approaches from these writings.
 
@@ -172,7 +174,10 @@ export class PromptAssembler {
     }
 
     if (methodologySection) {
-      systemPromptParts.push(`# Coaching Framework\n${methodologySection}`);
+      systemPromptParts.push(`# Coaching Framework (REFERENCE SUMMARY — NOT for quoting)
+The following is a SUMMARY of the coaching framework for your orientation. **The wording in this section is NOT Gena's verbatim writing** — it is paraphrased reference material. NEVER quote from this section as if it were Gena's words. Use it only to understand the framework's structure and concepts. For direct quotes, use ONLY the "Gena's Writings" section below.
+
+${methodologySection}`);
     }
 
     // Always include the core operating system instructions, regardless of
@@ -496,7 +501,10 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
     }
 
     if (methodologySection) {
-      systemPromptParts.push(`# Coaching Framework\n${methodologySection}`);
+      systemPromptParts.push(`# Coaching Framework (REFERENCE SUMMARY — NOT for quoting)
+The following is a SUMMARY of the coaching framework for your orientation. **The wording in this section is NOT Gena's verbatim writing** — it is paraphrased reference material. NEVER quote from this section as if it were Gena's words. Use it only to understand the framework's structure and concepts. For direct quotes, use ONLY the "Gena's Writings" section below.
+
+${methodologySection}`);
     }
 
     if (memorySection) {

@@ -704,46 +704,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   async ensureClientHasDefaultMethodology(clientId: string): Promise<void> {
-    // Step 1: ensure the global Builder's Mindset methodology exists
     const DEFAULT_NAME = "Builder's Mindset";
+
+    // Previous (flawed) default content that included a fabricated quote
+    // ("The builder is both the artist and the work-in-progress"). If the
+    // frame still contains that string, Gena hasn't customized it, so we
+    // upgrade it to the safer concept-map version below. Customized frames
+    // are left alone.
+    const OLD_DEFAULT_CONTENT_MARKER = "The builder is both the artist and the work-in-progress";
+
+    const NEW_DEFAULT_CONTENT = `# Builder's Mindset Framework — Concept Map
+
+**This document is a CONCEPT MAP, not Gena's verbatim writing. Use it to orient yourself to the framework's vocabulary and structure. Do NOT quote from this document — for direct quotes, use only the writings in the "Gena's Writings" section.**
+
+## The Three Mindsets (a central distinction in Gena's work)
+
+- **Drill Sergeant mindset** — relates to motivation as discipline imposed against an unwilling self.
+- **Zen mindset** — relates to motivation as something to be released by accepting whatever arises.
+- **Builder mindset** — relates to motivation as something built through honest, engaged construction.
+
+## Vocabulary the AI should be familiar with
+
+- Rational ambition
+- Building vs. protecting
+- Self-honesty vs. self-deception
+- Creative agency
+- "Death is the default"
+- Felt understanding (vs. "intrinsic" motivation)
+- Intellectual ambitiousness vs. intellectual humility
+
+## How to use this framework in conversation
+
+When a client raises a struggle, consider: which mindset is showing up here? What would a builder's framing surface? Help the client see the construction project inside the complaint. Refer to "Gena's Writings" for her actual phrasings, examples, and nuance — and quote only from there.`;
+
+    // Step 1: ensure the global Builder's Mindset methodology exists.
     let [defaultFrame] = await db.select().from(methodologyFrames)
       .where(eq(methodologyFrames.name, DEFAULT_NAME));
 
     if (!defaultFrame) {
       const [created] = await db.insert(methodologyFrames).values({
         name: DEFAULT_NAME,
-        description: "Gena Gorlin's foundational coaching framework on the psychology of ambition.",
-        content: `# The Builder's Mindset Framework
-
-The builder's mindset is a way of relating to one's life as an active project of construction — building values, capacities, relationships, and projects through deliberate, honest engagement with reality.
-
-## The Three Mindsets (Core Distinction)
-
-1. **Drill Sergeant**: Treats motivation as discipline imposed against an unwilling self. Values are dictated; failures are character flaws to be punished. Productive in the short term, brittle and self-alienating over time.
-
-2. **Zen**: Treats motivation as something to be released by accepting whatever arises. Values are discovered through "letting go." Reduces internal conflict but tends toward passivity and avoidance of agency.
-
-3. **Builder**: Treats motivation as something built through honest engagement — not imposed, not released, but constructed. Values arise from understanding how an activity causally connects to the rest of one's life and what one cares about. Failures are diagnostic information, not verdicts. The builder is both the artist and the work-in-progress.
-
-## Core Concepts
-
-- **Rational ambition**: Wanting things based on a clear understanding of what they are and why they matter, rather than on social signaling or fear-driven striving.
-- **Building vs. protecting**: Acting from the orientation of constructing what you want, rather than defending what you fear losing.
-- **Self-honesty vs. self-deception**: The willingness to see your actual motivations, fears, and limits rather than the flattering version.
-- **Creative agency**: Recognizing yourself as the author of your life, not a passenger.
-- **"Death is the default"**: The recognition that meaningful outcomes don't happen automatically; they require active construction against the pull of entropy.
-- **Felt understanding**: Values and motivation get built through thoughtful engagement, not "found" inside oneself as intrinsic facts.
-
-## How to Apply This
-
-When the client raises a struggle, ask: Is this a drill sergeant frame? A Zen frame? What would the builder ask here? Help them surface the construction project hidden inside the complaint.`,
+        description: "Concept map of Gena's coaching framework — for AI orientation, not for verbatim quoting.",
+        content: NEW_DEFAULT_CONTENT,
         isActive: 1,
         sortOrder: 0,
       }).returning();
       defaultFrame = created;
+    } else if (defaultFrame.content.includes(OLD_DEFAULT_CONTENT_MARKER)) {
+      // Auto-upgrade the previous flawed default content to the safe version.
+      const [upgraded] = await db.update(methodologyFrames)
+        .set({ content: NEW_DEFAULT_CONTENT, updatedAt: new Date() })
+        .where(eq(methodologyFrames.id, defaultFrame.id))
+        .returning();
+      defaultFrame = upgraded;
     }
 
-    // Step 2: ensure this client has the methodology assigned
+    // Step 2: ensure this client has the methodology assigned.
     const [existing] = await db.select().from(clientMethodologies)
       .where(and(
         eq(clientMethodologies.clientId, clientId),
