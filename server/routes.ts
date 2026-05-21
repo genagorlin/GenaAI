@@ -301,7 +301,7 @@ export async function registerRoutes(
         const aiResponseContent = await generateAIResponse({
           systemPrompt,
           conversationHistory: [{ role: "user", content: "." }],
-          model: "claude-sonnet-4-5",
+          model: "claude-opus-4-7",
           provider: "anthropic",
         });
         
@@ -969,7 +969,7 @@ export async function registerRoutes(
       const aiResponseContent = await generateAIResponse({
         systemPrompt,
         conversationHistory,
-        model: "claude-sonnet-4-5",
+        model: "claude-opus-4-7",
         provider: "anthropic",
       });
 
@@ -1269,7 +1269,7 @@ Your role for this step guidance:
       const aiResponse = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
-        model: "claude-sonnet-4-5",
+        model: "claude-opus-4-7",
         provider: "anthropic",
       });
 
@@ -1348,7 +1348,7 @@ Do NOT:
       const summary = await generateAIResponse({
         systemPrompt,
         conversationHistory: [{ role: "user", content: "Please summarize my exercise responses." }],
-        model: "claude-sonnet-4-5",
+        model: "claude-opus-4-7",
         provider: "anthropic",
       });
 
@@ -1391,7 +1391,7 @@ Return ONLY the synthesized content, no explanations.`;
           const synthesizedContent = await generateAIResponse({
             systemPrompt: synthesisPrompt,
             conversationHistory: [{ role: "user", content: "Please synthesize my exercise reflections." }],
-            model: "claude-sonnet-4-5",
+            model: "claude-opus-4-7",
             provider: "anthropic",
           });
 
@@ -2565,7 +2565,7 @@ Your role for this thought partnership:
       const aiResponse = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
-        model: "claude-sonnet-4-5",
+        model: "claude-opus-4-7",
         provider: "anthropic",
       });
 

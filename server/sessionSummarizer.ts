@@ -111,7 +111,7 @@ Based on this conversation, generate updates for the relevant document sections.
   try {
     console.log(`[SessionSummarizer] Calling AI to generate section updates for ${messages.length} messages...`);
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-opus-4-7",
       max_tokens: 4000,
       messages: [{ role: "user", content: userMessage }],
       system: systemPrompt,
@@ -165,7 +165,7 @@ export async function generateConversationTitle(threadId: string, messages: Mess
       .join("\n\n");
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-opus-4-7",
       max_tokens: 100,
       messages: [{ 
         role: "user", 
@@ -245,7 +245,7 @@ Return a JSON array: [{"sectionId": "...", "newContent": "synthesized content wi
 Return [] if no updates needed.`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-opus-4-7",
       max_tokens: 2000,
       messages: [{ 
         role: "user", 

@@ -80,7 +80,7 @@ export function routeMessage(content: string): RoutingResult {
   if (characteristics.hasDeepQuestions) {
     return {
       tier: "deep",
-      model: "claude-sonnet-4-5",
+      model: "claude-opus-4-7",
       provider: "anthropic",
       reasoning: "Deep existential/complex question detected - using Anthropic for thoughtful response",
     };
@@ -89,7 +89,7 @@ export function routeMessage(content: string): RoutingResult {
   if (characteristics.hasEmotionalKeywords || characteristics.length > 200) {
     return {
       tier: "balanced",
-      model: "claude-sonnet-4-5",
+      model: "claude-opus-4-7",
       provider: "anthropic",
       reasoning: "Emotional content detected - using Anthropic for empathetic response",
     };
@@ -111,7 +111,7 @@ interface GenerateResponseParams {
 }
 
 export async function generateAIResponse(params: GenerateResponseParams): Promise<string> {
-  const { systemPrompt, conversationHistory, model = "claude-sonnet-4-5", provider = "anthropic" } = params;
+  const { systemPrompt, conversationHistory, model = "claude-opus-4-7", provider = "anthropic" } = params;
   
   if (provider === "openai") {
     return generateOpenAIResponse({ systemPrompt, conversationHistory, model });
@@ -121,19 +121,34 @@ export async function generateAIResponse(params: GenerateResponseParams): Promis
 }
 
 async function generateAnthropicResponse(params: Omit<GenerateResponseParams, "provider">): Promise<string> {
-  const { systemPrompt, conversationHistory, model = "claude-sonnet-4-5" } = params;
-  
+  const { systemPrompt, conversationHistory, model = "claude-opus-4-7" } = params;
+
   const anthropic = new Anthropic({
     baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
     apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
   });
-  
+
+  // Pass system prompt as a content block array with ephemeral cache_control.
+  // This caches the ~30k token system prompt so that back-to-back turns
+  // within ~5 minutes only pay ~10% of the input cost on the cached portion.
   const response = await anthropic.messages.create({
     model,
     max_tokens: 4096,
-    system: systemPrompt,
+    system: [
+      {
+        type: "text",
+        text: systemPrompt,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: conversationHistory,
   });
+
+  // Log cache usage for monitoring (helps verify caching is working)
+  const usage = response.usage as any;
+  if (usage?.cache_read_input_tokens || usage?.cache_creation_input_tokens) {
+    console.log(`[Cache] read=${usage.cache_read_input_tokens || 0} write=${usage.cache_creation_input_tokens || 0} uncached=${usage.input_tokens}`);
+  }
   
   const textContent = response.content.find(block => block.type === "text");
   if (!textContent || textContent.type !== "text") {
