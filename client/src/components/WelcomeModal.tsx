@@ -152,7 +152,7 @@ export function WelcomeModal({ open, onClose, onStartChat, onStartExercise }: We
               </Button>
             </div>
             <p className="text-xs text-center text-slate-500">
-              Gena may occasionally read chats to improve the AI. Questions anytime? Use <strong>Contact Gena</strong> in the header.
+              Gena (the creator) may occasionally read chats to improve the AI. Questions anytime? Use <strong>Contact Gena</strong> in the header.
             </p>
           </div>
         ) : (

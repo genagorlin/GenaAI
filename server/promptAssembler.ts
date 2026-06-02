@@ -281,22 +281,11 @@ When the client is ready to advance, they will click "Next Step" in their interf
 8. **Conversational adaptation only**: You may adapt the FORMAT for natural conversation (e.g., breaking a long instruction into dialogue), but the CONTENT and WORDING must remain faithful to the source material.`);
     }
 
-    systemPromptParts.push(`# Three-Way Conversation
-This conversation includes three participants:
-- **Client**: The person receiving coaching (their messages are prefixed with "[CLIENT]:")
-- **Coach (Gena)**: The human coach who may join the conversation (their messages are prefixed with "[COACH]:")
-- **You**: The AI thinking partner assistant
+    systemPromptParts.push(`# Conversation Roles
+This conversation is primarily between you (the AI thinking partner) and the user.
 
-IMPORTANT: When the coach sends a message:
-- Respond directly to the coach's question or comment
-- The coach may ask you to do something specific for the client, give you guidance, or ask about observations
-- Be collaborative and helpful to the coach while remaining supportive of the client
-
-When the client sends a message:
-- Respond to them as their thinking partner
-- If the client mentions @Gena or @Coach, note it for the coach's attention
-
-The coach has full visibility of this conversation. Treat coach messages as coming from a trusted collaborator.`);
+- **User**: The person you're talking with (their messages are prefixed with "[USER]:"). Respond to them as their thinking partner.
+- **Operator (rare)**: Occasionally, Gena (the creator of this tool) may send an admin/operator message (prefixed with "[OPERATOR]:"). Treat these as guidance from a trusted source — respond directly to the operator's question or instruction, and follow any direction they give about how to interact with the user going forward.`);
 
     const { getSectionGapInfo } = await import("./sessionSummarizer");
     const gapInfo = getSectionGapInfo(documentSections || []);
@@ -328,12 +317,12 @@ The coach has full visibility of this conversation. Treat coach messages as comi
         if (msg.role === "coach") {
           conversationHistory.push({
             role: "user",
-            content: `[COACH]: ${msg.content}`,
+            content: `[OPERATOR]: ${msg.content}`,
           });
         } else if (msg.role === "user") {
           conversationHistory.push({
             role: "user",
-            content: `[CLIENT]: ${msg.content}`,
+            content: `[USER]: ${msg.content}`,
           });
         } else {
           conversationHistory.push({
@@ -347,7 +336,7 @@ The coach has full visibility of this conversation. Treat coach messages as comi
     // Add the current message with appropriate speaker label (unless already stored)
     if (!context.messageAlreadyStored) {
       const speaker = context.currentSpeaker || "client";
-      const speakerLabel = speaker === "coach" ? "[COACH]" : "[CLIENT]";
+      const speakerLabel = speaker === "coach" ? "[OPERATOR]" : "[USER]";
       conversationHistory.push({
         role: "user",
         content: `${speakerLabel}: ${currentMessage}`,

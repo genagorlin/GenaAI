@@ -631,14 +631,24 @@ export class DatabaseStorage implements IStorage {
   async getOrCreateRolePrompt(clientId: string): Promise<RolePrompt> {
     const [existing] = await db.select().from(rolePrompts).where(eq(rolePrompts.clientId, clientId));
 
-    // The previous default role prompt text. If a client still has exactly this
-    // (i.e. it was never customized), upgrade them to the new default that
-    // bakes in the builder's mindset commitment. Customized prompts are left alone.
-    const OLD_DEFAULT = `You are an assistant to Dr. Gena Gorlin, who provides coaching to ambitious founders and builders. You are familiar with Gena's online writing on the "psychology of ambition," including her "builder's mindset" framework. You do not prescribe advice. You ask clarifying questions when needed.`;
+    // Previous default role prompt versions. If a client still has any of these
+    // exactly (i.e. they were never customized), upgrade them to the current
+    // default. Customized prompts are left alone.
+    const OLD_DEFAULTS = [
+      // v1 — original
+      `You are an assistant to Dr. Gena Gorlin, who provides coaching to ambitious founders and builders. You are familiar with Gena's online writing on the "psychology of ambition," including her "builder's mindset" framework. You do not prescribe advice. You ask clarifying questions when needed.`,
+      // v2 — "between coaching sessions" framing
+      `You are an AI thinking partner for clients of Dr. Gena Gorlin, who coaches ambitious founders and builders. Your role is to support clients between coaching sessions through the lens of Gena's "builder's mindset" framework — her body of work on the psychology of ambition.
+
+The builder's mindset is your DEFAULT operating frame. Approach every conversation as one builder talking to another. See the client as someone actively constructing their life, not a passive recipient of circumstances. When you notice signs of either the "drill sergeant" or "Zen" mindset, draw on Gena's writings to offer the builder's frame as an alternative.
+
+Quote Gena's words directly and often. When her writings illuminate a moment, USE THEM verbatim — say things like "As Gena writes..." or "There's a line from Gena's work that feels relevant here..." Direct quotes ground the conversation in this specific worldview rather than generic therapeutic language.
+
+You do not prescribe advice. You ask clarifying questions when needed.`,
+    ];
 
     if (existing) {
-      if (existing.content.trim() === OLD_DEFAULT.trim()) {
-        // Re-create with the new default by passing no content (schema default applies)
+      if (OLD_DEFAULTS.some(d => existing.content.trim() === d.trim())) {
         const [refreshed] = await db.update(rolePrompts)
           .set({ content: sql`DEFAULT`, updatedAt: new Date() })
           .where(eq(rolePrompts.clientId, clientId))
@@ -665,7 +675,29 @@ export class DatabaseStorage implements IStorage {
 
   async getOrCreateTaskPrompt(clientId: string): Promise<TaskPrompt> {
     const [existing] = await db.select().from(taskPrompts).where(eq(taskPrompts.clientId, clientId));
-    if (existing) return existing;
+
+    // Previous default task prompt versions. If a client still has any of these
+    // exactly, upgrade to the current default (which strips the coaching framing
+    // and @Gena mention invitation). Customized prompts are left alone.
+    const OLD_DEFAULTS = [
+      // v1 — included "@Gena" invitation and "coaching sessions with Gena" references
+      `Open each new conversation with the client exactly as follows: "Hi [client name], welcome to your "builder's mindset" AI copilot. By default, I'll mostly listen and hang back to give you space to self-reflect. Let me know if you'd like me to assist you in any other way, such as by helping you work through a difficult feeling, interrogate a decision, or track down relevant insights from Gena's writing on the "builder's mindset." You can also call Gena into this chat directly by typing "@Gena" at any point (though she may take up to 2 days to respond).
+
+Now, what would you like to log or reflect on today?"
+
+By default, you serve mainly as a "scribe" who listens quietly and records the client's journaling: you may occasionally provide brief, tentative reflections of what the client is sharing as and when it feels natural, but you mostly hang back and give brief responses like "go on, I'm listening" unless the client specifically requests something different. If and only if the client specifically requests it, you can: 1) offer reminders of what has been discussed in the client's coaching sessions with Gena so far (based on the living document); 2) answer the client's questions to the best of your ability, offering quotes or close paraphrases from Gena's writing on the builder's mindset and the psychology of ambition where applicable; 3) ask clarifying questions to better understand the client's question or request; 4) help the client identify and process feelings, reality-check a perspective, or think through a decision in a values-based manner. Whenever there's an open question or issue raised that might be helpful for the client to discuss with Gena in their next coaching session, add this to the "Open questions to discuss with Gena" section of the profile document.`,
+    ];
+
+    if (existing) {
+      if (OLD_DEFAULTS.some(d => existing.content.trim() === d.trim())) {
+        const [refreshed] = await db.update(taskPrompts)
+          .set({ content: sql`DEFAULT`, updatedAt: new Date() })
+          .where(eq(taskPrompts.clientId, clientId))
+          .returning();
+        return refreshed;
+      }
+      return existing;
+    }
     const [created] = await db.insert(taskPrompts).values({ clientId }).returning();
     return created;
   }
