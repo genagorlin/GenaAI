@@ -2583,5 +2583,98 @@ Your role for this thought partnership:
     }
   });
 
+  // ==========================================
+  // WIKI PAGES (framework wiki — global scope)
+  // ==========================================
+
+  // List wiki pages (coach view — includes drafts)
+  app.get("/api/coach/wiki", isAuthenticated, async (req, res) => {
+    try {
+      const scope = (req.query.scope as string) || "global";
+      const status = req.query.status as string | undefined;
+      const pages = await storage.getWikiPages(scope, status);
+      res.json(pages);
+    } catch (error) {
+      console.error("Get wiki pages error:", error);
+      res.status(500).json({ error: "Failed to fetch wiki pages" });
+    }
+  });
+
+  // Get a single wiki page by id
+  app.get("/api/coach/wiki/:id", isAuthenticated, async (req, res) => {
+    try {
+      const page = await storage.getWikiPage(req.params.id);
+      if (!page) {
+        return res.status(404).json({ error: "Wiki page not found" });
+      }
+      res.json(page);
+    } catch (error) {
+      console.error("Get wiki page error:", error);
+      res.status(500).json({ error: "Failed to fetch wiki page" });
+    }
+  });
+
+  // Create a new wiki page
+  app.post("/api/coach/wiki", isAuthenticated, async (req, res) => {
+    try {
+      const { scope = "global", slug, title, summary, content, tags, status, createdBy = "coach" } = req.body;
+      if (!slug || !title) {
+        return res.status(400).json({ error: "slug and title are required" });
+      }
+      // Ensure slug uniqueness within scope
+      const existing = await storage.getWikiPageBySlug(scope, slug);
+      if (existing) {
+        return res.status(409).json({ error: `A page with slug "${slug}" already exists in this scope` });
+      }
+      const page = await storage.createWikiPage({
+        scope,
+        slug,
+        title,
+        summary: summary || "",
+        content: content || "",
+        tags: tags || null,
+        status: status || "approved",
+        createdBy,
+      });
+      res.status(201).json(page);
+    } catch (error) {
+      console.error("Create wiki page error:", error);
+      res.status(500).json({ error: "Failed to create wiki page" });
+    }
+  });
+
+  // Update a wiki page
+  app.patch("/api/coach/wiki/:id", isAuthenticated, async (req, res) => {
+    try {
+      const existing = await storage.getWikiPage(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "Wiki page not found" });
+      }
+      // If slug is being changed, verify uniqueness within scope
+      if (req.body.slug && req.body.slug !== existing.slug) {
+        const conflict = await storage.getWikiPageBySlug(existing.scope, req.body.slug);
+        if (conflict) {
+          return res.status(409).json({ error: `A page with slug "${req.body.slug}" already exists in this scope` });
+        }
+      }
+      const updated = await storage.updateWikiPage(req.params.id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update wiki page error:", error);
+      res.status(500).json({ error: "Failed to update wiki page" });
+    }
+  });
+
+  // Delete a wiki page
+  app.delete("/api/coach/wiki/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteWikiPage(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete wiki page error:", error);
+      res.status(500).json({ error: "Failed to delete wiki page" });
+    }
+  });
+
   return httpServer;
 }

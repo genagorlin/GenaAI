@@ -52,6 +52,8 @@ import {
   type InsertReminderHistory,
   type JournalEntry,
   type InsertJournalEntry,
+  type WikiPage,
+  type InsertWikiPage,
   clients,
   threads,
   messages,
@@ -80,7 +82,8 @@ import {
   reminderTemplates,
   clientReminders,
   reminderHistory,
-  journalEntries
+  journalEntries,
+  wikiPages
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt, lte, sql } from "drizzle-orm";
@@ -273,6 +276,14 @@ export interface IStorage {
   updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry>;
   updateJournalEntryGuidance(id: string, guidance: any[]): Promise<JournalEntry>;
   deleteJournalEntry(id: string): Promise<void>;
+
+  // Wiki Pages
+  getWikiPages(scope: string, status?: string): Promise<WikiPage[]>;
+  getWikiPage(id: string): Promise<WikiPage | undefined>;
+  getWikiPageBySlug(scope: string, slug: string): Promise<WikiPage | undefined>;
+  createWikiPage(page: InsertWikiPage): Promise<WikiPage>;
+  updateWikiPage(id: string, updates: Partial<InsertWikiPage>): Promise<WikiPage>;
+  deleteWikiPage(id: string): Promise<void>;
 
   // Client Timezone
   updateClientTimezone(clientId: string, timezone: string): Promise<void>;
@@ -1399,6 +1410,46 @@ When a client raises a struggle, consider: which mindset is showing up here? Wha
 
   async deleteJournalEntry(id: string): Promise<void> {
     await db.delete(journalEntries).where(eq(journalEntries.id, id));
+  }
+
+  // Wiki Pages
+  async getWikiPages(scope: string, status?: string): Promise<WikiPage[]> {
+    if (status) {
+      return await db.select().from(wikiPages)
+        .where(and(eq(wikiPages.scope, scope), eq(wikiPages.status, status)))
+        .orderBy(asc(wikiPages.title));
+    }
+    return await db.select().from(wikiPages)
+      .where(eq(wikiPages.scope, scope))
+      .orderBy(asc(wikiPages.title));
+  }
+
+  async getWikiPage(id: string): Promise<WikiPage | undefined> {
+    const [result] = await db.select().from(wikiPages).where(eq(wikiPages.id, id));
+    return result;
+  }
+
+  async getWikiPageBySlug(scope: string, slug: string): Promise<WikiPage | undefined> {
+    const [result] = await db.select().from(wikiPages)
+      .where(and(eq(wikiPages.scope, scope), eq(wikiPages.slug, slug)));
+    return result;
+  }
+
+  async createWikiPage(page: InsertWikiPage): Promise<WikiPage> {
+    const [result] = await db.insert(wikiPages).values(page).returning();
+    return result;
+  }
+
+  async updateWikiPage(id: string, updates: Partial<InsertWikiPage>): Promise<WikiPage> {
+    const [result] = await db.update(wikiPages)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(wikiPages.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteWikiPage(id: string): Promise<void> {
+    await db.delete(wikiPages).where(eq(wikiPages.id, id));
   }
 
   // Client Timezone

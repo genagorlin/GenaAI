@@ -453,6 +453,31 @@ export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit(
 export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
 export type JournalEntry = typeof journalEntries.$inferSelect;
 
+// Wiki Pages - synthesized knowledge pages for the AI to navigate at query time.
+// Scope: "global" for framework wiki (Gena's body of work), "client:<uuid>" for per-client wiki.
+// Phase 1 implements global only; per-client comes in a later phase.
+export const wikiPages = pgTable("wiki_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scope: text("scope").notNull().default("global"), // "global" or "client:<uuid>"
+  slug: text("slug").notNull(), // URL-safe identifier, unique within scope (e.g. "builder-mindset")
+  title: text("title").notNull(), // Display name (e.g. "The Builder's Mindset")
+  summary: text("summary").notNull().default(""), // 1-2 line description used in index for AI navigation
+  content: text("content").notNull().default(""), // Markdown body
+  tags: text("tags").array(), // Optional tags for categorization
+  sourceRefs: jsonb("source_refs"), // Array of {documentId, excerpt} linking to reference docs this page draws from
+  status: text("status").notNull().default("approved"), // "draft" (AI-proposed, pending review) | "approved" (live) | "archived"
+  createdBy: text("created_by").notNull().default("coach"), // "coach" | "ai"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_wiki_scope_status").on(table.scope, table.status),
+  index("idx_wiki_scope_slug").on(table.scope, table.slug),
+]);
+
+export const insertWikiPageSchema = createInsertSchema(wikiPages).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertWikiPage = z.infer<typeof insertWikiPageSchema>;
+export type WikiPage = typeof wikiPages.$inferSelect;
+
 // Email Reminder Templates - global templates that can be assigned to clients
 export const reminderTemplates = pgTable("reminder_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

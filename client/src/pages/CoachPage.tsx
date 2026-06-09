@@ -38,6 +38,7 @@ import { SentimentChart } from "@/components/dashboard/SentimentChart";
 import { LivingDocument } from "@/components/dashboard/LivingDocument";
 import { ManageClientsDialog } from "@/components/dashboard/ManageClientsDialog";
 import { ReferenceLibrary } from "@/components/dashboard/ReferenceLibrary";
+import { WikiManager } from "@/components/dashboard/WikiManager";
 import { ExerciseManager } from "@/components/dashboard/ExerciseManager";
 import { ReminderManager } from "@/components/dashboard/ReminderManager";
 import { ClientRemindersPanel } from "@/components/dashboard/ClientRemindersPanel";
@@ -639,6 +640,7 @@ function DesktopCoachView() {
                </PopoverContent>
              </Popover>
              <ReferenceLibrary />
+             <WikiManager />
              <ExerciseManager />
              <ReminderManager />
           </div>
