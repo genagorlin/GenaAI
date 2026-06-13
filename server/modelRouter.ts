@@ -108,54 +108,105 @@ interface GenerateResponseParams {
   conversationHistory: { role: "user" | "assistant"; content: string }[];
   model?: string;
   provider?: Provider;
+  // Optional tool support (e.g. wiki navigation). Only the Anthropic path uses
+  // these; the OpenAI path is reserved for trivial messages that don't need tools.
+  tools?: any[];
+  executeTool?: (name: string, input: any) => Promise<string>;
 }
 
 export async function generateAIResponse(params: GenerateResponseParams): Promise<string> {
-  const { systemPrompt, conversationHistory, model = "claude-opus-4-7", provider = "anthropic" } = params;
-  
+  const { systemPrompt, conversationHistory, model = "claude-opus-4-7", provider = "anthropic", tools, executeTool } = params;
+
   if (provider === "openai") {
     return generateOpenAIResponse({ systemPrompt, conversationHistory, model });
   }
-  
-  return generateAnthropicResponse({ systemPrompt, conversationHistory, model });
+
+  return generateAnthropicResponse({ systemPrompt, conversationHistory, model, tools, executeTool });
 }
 
 async function generateAnthropicResponse(params: Omit<GenerateResponseParams, "provider">): Promise<string> {
-  const { systemPrompt, conversationHistory, model = "claude-opus-4-7" } = params;
+  const { systemPrompt, conversationHistory, model = "claude-opus-4-7", tools, executeTool } = params;
 
   const anthropic = new Anthropic({
     baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
     apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
   });
 
-  // Pass system prompt as a content block array with ephemeral cache_control.
-  // This caches the ~30k token system prompt so that back-to-back turns
-  // within ~5 minutes only pay ~10% of the input cost on the cached portion.
-  const response = await anthropic.messages.create({
+  // System prompt as a content block array with ephemeral cache_control. This
+  // caches the ~30k token system prompt (and the tool definitions, which render
+  // before it) so back-to-back turns within ~5 minutes only pay ~10% of the
+  // input cost on the cached prefix.
+  const systemBlocks = [
+    {
+      type: "text" as const,
+      text: systemPrompt,
+      cache_control: { type: "ephemeral" as const },
+    },
+  ];
+
+  const logUsage = (usage: any) => {
+    if (usage?.cache_read_input_tokens || usage?.cache_creation_input_tokens) {
+      console.log(`[Cache] read=${usage.cache_read_input_tokens || 0} write=${usage.cache_creation_input_tokens || 0} uncached=${usage.input_tokens}`);
+    }
+  };
+
+  // Mutable message list we can extend as the model calls tools.
+  const messages: any[] = conversationHistory.map(m => ({ role: m.role, content: m.content }));
+  const hasTools = !!(tools && tools.length && executeTool);
+  const MAX_TOOL_ITERATIONS = 5;
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const response = await anthropic.messages.create({
+      model,
+      max_tokens: 4096,
+      system: systemBlocks,
+      messages,
+      ...(hasTools ? { tools } : {}),
+    });
+    logUsage(response.usage as any);
+
+    if (hasTools && response.stop_reason === "tool_use") {
+      // Record the assistant's tool-use turn verbatim, then resolve each tool call.
+      messages.push({ role: "assistant", content: response.content });
+
+      const toolResults: any[] = [];
+      for (const block of response.content as any[]) {
+        if (block.type === "tool_use") {
+          console.log(`[Wiki] tool call: ${block.name}(${JSON.stringify(block.input)})`);
+          let resultText: string;
+          try {
+            resultText = await executeTool!(block.name, block.input);
+          } catch (err: any) {
+            resultText = `Error executing ${block.name}: ${err?.message || "unknown error"}`;
+          }
+          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultText });
+        }
+      }
+      messages.push({ role: "user", content: toolResults });
+      continue; // loop so the model can use the tool results
+    }
+
+    const textContent = (response.content as any[]).find(b => b.type === "text");
+    if (textContent && textContent.type === "text") {
+      return textContent.text;
+    }
+    break; // ended without text — fall through to the safety call
+  }
+
+  // Safety net: if we exhausted the tool loop or got no text, make one final
+  // call WITHOUT tools to force a plain text answer.
+  const finalResponse = await anthropic.messages.create({
     model,
     max_tokens: 4096,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: conversationHistory,
+    system: systemBlocks,
+    messages,
   });
-
-  // Log cache usage for monitoring (helps verify caching is working)
-  const usage = response.usage as any;
-  if (usage?.cache_read_input_tokens || usage?.cache_creation_input_tokens) {
-    console.log(`[Cache] read=${usage.cache_read_input_tokens || 0} write=${usage.cache_creation_input_tokens || 0} uncached=${usage.input_tokens}`);
-  }
-  
-  const textContent = response.content.find(block => block.type === "text");
-  if (!textContent || textContent.type !== "text") {
+  logUsage(finalResponse.usage as any);
+  const finalText = (finalResponse.content as any[]).find(b => b.type === "text");
+  if (!finalText || finalText.type !== "text") {
     throw new Error("No text response from AI");
   }
-  
-  return textContent.text;
+  return finalText.text;
 }
 
 async function generateOpenAIResponse(params: Omit<GenerateResponseParams, "provider">): Promise<string> {

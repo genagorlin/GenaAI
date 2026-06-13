@@ -34,6 +34,7 @@ interface PromptContext {
   recentMessages?: { role: string; content: string }[];
   documentSections?: { title: string; content: string }[];
   exerciseContext?: ExerciseContext; // Active exercise session context
+  includeWikiIndex?: boolean; // Inject the framework wiki index + enable read_wiki_page navigation
 }
 
 const TOKEN_BUDGET = 30000;
@@ -205,6 +206,17 @@ ${methodologySection}`);
 The following writings by coach Gena Gorlin are the canonical source of your worldview. Stay within their bounds. Quote them verbatim when relevant.
 
 ${referenceContent}`);
+    }
+
+    // Inject the framework wiki index (a catalog of readable pages) when the
+    // caller has enabled wiki navigation. The model reads full pages on demand
+    // via the read_wiki_page tool.
+    if (context.includeWikiIndex) {
+      const { buildWikiIndexSection } = await import("./wikiTools");
+      const wikiIndex = await buildWikiIndexSection("global");
+      if (wikiIndex) {
+        systemPromptParts.push(wikiIndex);
+      }
     }
 
     if (memorySection) {

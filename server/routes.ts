@@ -417,6 +417,14 @@ export async function registerRoutes(
           
           console.log(`[AI] Exercise context for thread ${validated.threadId}:`, exerciseContext ? `exercise="${exerciseContext.exerciseTitle}", step=${exerciseContext.currentStepOrder}` : 'none');
           
+          const routing = routeMessage(validated.content);
+          console.log(`[AI] Routing: ${routing.reasoning} -> ${routing.model}`);
+
+          // Wiki navigation is only enabled on the Anthropic path (substantive
+          // responses). Trivial messages routed to the fast OpenAI model don't
+          // need it, and tool-calling is Anthropic-only here.
+          const useWiki = routing.provider === "anthropic";
+
           const assembled = await promptAssembler.assemblePrompt({
             clientId: req.params.clientId,
             currentMessage: validated.content,
@@ -425,16 +433,20 @@ export async function registerRoutes(
             recentMessages,
             documentSections: clientContext.documentSections,
             exerciseContext,
+            includeWikiIndex: useWiki,
           });
-          
-          const routing = routeMessage(validated.content);
-          console.log(`[AI] Routing: ${routing.reasoning} -> ${routing.model}`);
-          
+
+          const wikiTools = useWiki ? await import("./wikiTools") : null;
+
           const aiResponseContent = await generateAIResponse({
             systemPrompt: assembled.systemPrompt,
             conversationHistory: assembled.conversationHistory,
             model: routing.model,
             provider: routing.provider,
+            ...(wikiTools ? {
+              tools: wikiTools.WIKI_TOOLS,
+              executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
+            } : {}),
           });
           
           const aiMessage = await storage.createMessage({
