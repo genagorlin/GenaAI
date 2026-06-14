@@ -1246,6 +1246,7 @@ export async function registerRoutes(
         currentMessage: message,
         recentMessages: [],
         documentSections,
+        includeWikiIndex: true,
       });
 
       // Add exercise step-specific context to the full prompt
@@ -1278,11 +1279,14 @@ Your role for this step guidance:
       }));
       conversationHistory.push({ role: "user" as const, content: message });
 
+      const wikiTools = await import("./wikiTools");
       const aiResponse = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
         model: "claude-opus-4-7",
         provider: "anthropic",
+        tools: wikiTools.WIKI_TOOLS,
+        executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
       });
 
       // Add AI response to guidance history
@@ -2547,6 +2551,7 @@ Return ONLY the synthesized content, no explanations.`;
         currentMessage: message,
         recentMessages: [],
         documentSections,
+        includeWikiIndex: true,
       });
 
       // Add journal-specific context
@@ -2574,11 +2579,14 @@ Your role for this thought partnership:
       }));
       conversationHistory.push({ role: "user" as const, content: message });
 
+      const wikiTools = await import("./wikiTools");
       const aiResponse = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
         model: "claude-opus-4-7",
         provider: "anthropic",
+        tools: wikiTools.WIKI_TOOLS,
+        executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
       });
 
       // Add AI response to guidance history
