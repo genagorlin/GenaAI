@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Network,
@@ -10,6 +10,8 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Upload,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +51,15 @@ interface WikiPage {
   updatedAt: string;
 }
 
+interface WikiSource {
+  id: string;
+  title: string;
+  description?: string;
+  charCount: number;
+  wordCount: number;
+  updatedAt: string;
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -64,8 +75,45 @@ export function WikiManager() {
   const [isCreating, setIsCreating] = useState(false);
   const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
   const [newPage, setNewPage] = useState({ slug: "", title: "", summary: "", content: "" });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
+
+  const { data: sources = [] } = useQuery<WikiSource[]>({
+    queryKey: ["/api/coach/wiki-sources"],
+    queryFn: async () => {
+      const res = await fetch("/api/coach/wiki-sources", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch wiki sources");
+      return res.json();
+    },
+    enabled: isOpen,
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/coach/wiki-sources/import", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to import document");
+      }
+      return res.json() as Promise<{ title: string; wordCount: number; replaced: boolean }>;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/wiki-sources"] });
+      toast.success(
+        `${result.replaced ? "Replaced" : "Imported"} "${result.title}" — ${result.wordCount.toLocaleString()} words`
+      );
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
 
   const { data: pages = [], isLoading } = useQuery<WikiPage[]>({
     queryKey: ["/api/coach/wiki"],
@@ -171,6 +219,57 @@ export function WikiManager() {
             Synthesized pages the AI navigates at query time. Each page should be a concept, distinction, or framework component drawn from your writings.
           </p>
         </DialogHeader>
+
+        {/* Sources — raw documents (e.g. the book draft) the wiki is generated from */}
+        <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              Source documents
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx,.pdf,.txt,.md"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) importMutation.mutate(file);
+                e.target.value = ""; // allow re-selecting the same file
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importMutation.isPending}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              Import .docx
+            </Button>
+          </div>
+          {sources.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No sources yet. Import a book draft or essay to generate wiki pages from it (page generation coming next).
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {sources.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium">{s.title}</span>
+                  <span className="text-muted-foreground shrink-0">
+                    {s.wordCount.toLocaleString()} words
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-between gap-2 pb-2 border-b">
           <div className="text-sm text-muted-foreground">

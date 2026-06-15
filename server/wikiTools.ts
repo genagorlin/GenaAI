@@ -1,5 +1,12 @@
 import { storage } from "./storage";
 
+// Reserved tag marking a referenceDocuments row as a raw wiki SOURCE (e.g. an
+// uploaded book draft) rather than a normal essay. Source docs back the wiki
+// pages but are deliberately excluded from the AI prompt (they're huge) and from
+// user-facing / coach essay lists. The wiki pages generated from them are what
+// the AI actually reads.
+export const WIKI_SOURCE_TAG = "__wiki_source__";
+
 // Tool definitions exposed to Claude so it can navigate the framework wiki
 // at query time (Karpathy-style "read pages on demand" pattern).
 // The index of available pages is injected into the system prompt separately

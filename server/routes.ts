@@ -1017,8 +1017,10 @@ export async function registerRoutes(
   // Reference Documents Routes - Public endpoint for clients to read
   app.get("/api/reference-documents", async (_req, res) => {
     try {
+      const { WIKI_SOURCE_TAG } = await import("./wikiTools");
       const docs = await storage.getAllReferenceDocuments();
-      res.json(docs);
+      // Hide raw wiki source docs (e.g. the book draft) from the user-facing library.
+      res.json(docs.filter(d => !(d.tags || []).includes(WIKI_SOURCE_TAG)));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch reference documents" });
     }
@@ -1027,8 +1029,11 @@ export async function registerRoutes(
   // Reference Documents Routes (coach's writings for AI to reference)
   app.get("/api/coach/reference-documents", isAuthenticated, async (_req, res) => {
     try {
+      const { WIKI_SOURCE_TAG } = await import("./wikiTools");
       const docs = await storage.getAllReferenceDocuments();
-      res.json(docs);
+      // Wiki source docs have their own management UI (Sources in the Wiki dialog),
+      // so keep them out of the essay library list.
+      res.json(docs.filter(d => !(d.tags || []).includes(WIKI_SOURCE_TAG)));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch reference documents" });
     }
@@ -2693,6 +2698,94 @@ Your role for this thought partnership:
     } catch (error) {
       console.error("Delete wiki page error:", error);
       res.status(500).json({ error: "Failed to delete wiki page" });
+    }
+  });
+
+  // ==========================================
+  // WIKI SOURCES (raw documents the wiki is generated from, e.g. the book draft)
+  // ==========================================
+
+  // List imported wiki sources (metadata only — not the full text)
+  app.get("/api/coach/wiki-sources", isAuthenticated, async (_req, res) => {
+    try {
+      const { WIKI_SOURCE_TAG } = await import("./wikiTools");
+      const all = await storage.getAllReferenceDocuments();
+      const sources = all
+        .filter(d => (d.tags || []).includes(WIKI_SOURCE_TAG))
+        .map(d => ({
+          id: d.id,
+          title: d.title,
+          description: d.description,
+          charCount: d.content.length,
+          wordCount: d.content.split(/\s+/).filter(Boolean).length,
+          updatedAt: d.updatedAt,
+        }));
+      res.json(sources);
+    } catch (error) {
+      console.error("List wiki sources error:", error);
+      res.status(500).json({ error: "Failed to list wiki sources" });
+    }
+  });
+
+  // Import a source document (.docx / .pdf / .txt). Parses the file in-process,
+  // stores the extracted text as a tagged referenceDocuments row. Re-uploading a
+  // file with the same title replaces the prior source's content.
+  app.post("/api/coach/wiki-sources/import", isAuthenticated, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const { originalname, mimetype, buffer } = req.file;
+      const title = (req.body.title?.trim?.() || originalname.replace(/\.[^.]+$/, "")).trim();
+
+      const { parseFileBuffer } = await import("./fileParser");
+      const parsed = await parseFileBuffer(buffer, mimetype, originalname);
+      const text = (parsed.text || "").trim();
+
+      // parseFileBuffer returns a "[...]" placeholder when it can't extract real
+      // text (unsupported type, parse error). Treat that as a failure.
+      if (!text || /^\[.*\]$/.test(text)) {
+        return res.status(422).json({
+          error: `Could not extract text from "${originalname}". ${text || ""}`.trim(),
+        });
+      }
+
+      const wordCount = text.split(/\s+/).filter(Boolean).length;
+      const { WIKI_SOURCE_TAG } = await import("./wikiTools");
+
+      // Replace an existing same-title source (re-upload), else create a new one.
+      const all = await storage.getAllReferenceDocuments();
+      const existing = all.find(
+        d => (d.tags || []).includes(WIKI_SOURCE_TAG) && d.title === title
+      );
+
+      let doc;
+      if (existing) {
+        doc = await storage.updateReferenceDocument(existing.id, {
+          content: text,
+          description: `Wiki source (${wordCount.toLocaleString()} words)`,
+        });
+        console.log(`[WikiSource] Replaced source "${title}" (${wordCount} words)`);
+      } else {
+        doc = await storage.createReferenceDocument({
+          title,
+          content: text,
+          description: `Wiki source (${wordCount.toLocaleString()} words)`,
+          tags: [WIKI_SOURCE_TAG],
+        });
+        console.log(`[WikiSource] Imported source "${title}" (${wordCount} words)`);
+      }
+
+      res.status(201).json({
+        documentId: doc.id,
+        title,
+        wordCount,
+        charCount: text.length,
+        replaced: !!existing,
+      });
+    } catch (error) {
+      console.error("Import wiki source error:", error);
+      res.status(500).json({ error: "Failed to import source document" });
     }
   });
 

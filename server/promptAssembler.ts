@@ -142,7 +142,14 @@ export class PromptAssembler {
     // Fetch reference documents (coach's writings for AI to reference)
     let referenceSection = "";
     let fileAttachmentSection = "";
-    const referenceDocuments = await storage.getAllReferenceDocuments();
+    const { WIKI_SOURCE_TAG } = await import("./wikiTools");
+    const allReferenceDocuments = await storage.getAllReferenceDocuments();
+    // Exclude raw wiki source docs (e.g. the full book draft) — they're huge and
+    // would crowd out the actual essays after truncation. The wiki pages derived
+    // from them are surfaced to the AI separately, on demand.
+    const referenceDocuments = allReferenceDocuments.filter(
+      doc => !(doc.tags || []).includes(WIKI_SOURCE_TAG)
+    );
     console.log(`[PromptAssembler] Found ${referenceDocuments.length} reference documents`);
     if (referenceDocuments.length > 0) {
       const refContent = referenceDocuments
