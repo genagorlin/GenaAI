@@ -1120,7 +1120,23 @@ export async function registerRoutes(
   app.get("/api/clients/:clientId/exercise-sessions", verifyClientAccess((req) => req.params.clientId), async (req, res) => {
     try {
       const sessions = await storage.getClientExerciseSessions(req.params.clientId);
-      res.json(sessions);
+      // Enrich each session with how much real work it contains and when it was
+      // last touched, so the client can resume the session that actually has the
+      // client's writing (not an empty duplicate).
+      const enriched = await Promise.all(sessions.map(async (s) => {
+        const responses = await storage.getSessionStepResponses(s.id);
+        const withContent = responses.filter(r => (r.response || "").trim().length > 0);
+        const lastActivityMs = withContent.reduce((max, r) => {
+          const t = new Date(r.updatedAt || r.createdAt || 0).getTime();
+          return t > max ? t : max;
+        }, new Date(s.startedAt || 0).getTime());
+        return {
+          ...s,
+          responseCount: withContent.length,
+          lastActivityAt: new Date(lastActivityMs).toISOString(),
+        };
+      }));
+      res.json(enriched);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch exercise sessions" });
     }

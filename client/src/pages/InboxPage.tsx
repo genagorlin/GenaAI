@@ -151,6 +151,33 @@ export default function InboxPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // The client's own exercise sessions, used to resume an existing session
+  // (with their work) instead of creating a blank duplicate every time.
+  const { data: clientSessions = [] } = useQuery<any[]>({
+    queryKey: ["/api/clients", clientId, "exercise-sessions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/exercise-sessions`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activeTab === "exercises",
+    staleTime: 60 * 1000,
+  });
+
+  // Pick the best session to resume for an exercise: prefer one that contains
+  // the client's actual writing, then the most recently active.
+  const bestResumeSession = (exerciseId: string): any | null => {
+    const sessions = clientSessions.filter((s) => s.exerciseId === exerciseId);
+    if (sessions.length === 0) return null;
+    return [...sessions].sort((a, b) => {
+      const aWork = (a.responseCount || 0) > 0 ? 1 : 0;
+      const bWork = (b.responseCount || 0) > 0 ? 1 : 0;
+      if (aWork !== bWork) return bWork - aWork;
+      return new Date(b.lastActivityAt || b.startedAt || 0).getTime() -
+             new Date(a.lastActivityAt || a.startedAt || 0).getTime();
+    })[0];
+  };
+
   const { data: journalEntries = [], isLoading: journalLoading } = useQuery<{ id: string; title: string; content: string; updatedAt: string; createdAt: string }[]>({
     queryKey: ["/api/clients", clientId, "journal"],
     queryFn: async () => {
@@ -262,10 +289,30 @@ export default function InboxPage() {
     },
     onSuccess: ({ session }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "threads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "exercise-sessions"] });
       // Navigate to the ExercisePlayer page-by-page format
       setLocation(`/exercise/${clientId}/${session.id}`);
     },
   });
+
+  // Tapping an exercise resumes the client's existing session (with their work)
+  // if there is one; otherwise it starts a fresh session.
+  const handleExerciseTap = (exercise: GuidedExercise) => {
+    if (startExerciseMutation.isPending) return;
+    const resume = bestResumeSession(exercise.id);
+    if (resume) {
+      setLocation(`/exercise/${clientId}/${resume.id}`);
+    } else {
+      startExerciseMutation.mutate(exercise);
+    }
+  };
+
+  // Explicit "start over" — always creates a fresh session.
+  const handleStartFresh = (e: React.MouseEvent, exercise: GuidedExercise) => {
+    e.stopPropagation();
+    if (startExerciseMutation.isPending) return;
+    startExerciseMutation.mutate(exercise);
+  };
 
   const deleteThreadMutation = useMutation({
     mutationFn: async (threadId: string) => {
@@ -553,36 +600,61 @@ export default function InboxPage() {
                     <div className="px-4 py-2 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
                       {category}
                     </div>
-                    {groupedExercises[category].map((exercise) => (
-                      <button
+                    {groupedExercises[category].map((exercise) => {
+                      const resumeSession = bestResumeSession(exercise.id);
+                      const hasWork = resumeSession && (resumeSession.responseCount || 0) > 0;
+                      return (
+                      <div
                         key={exercise.id}
-                        onClick={() => startExerciseMutation.mutate(exercise)}
-                        disabled={startExerciseMutation.isPending}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 disabled:opacity-50"
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100"
                         data-testid={`exercise-item-${exercise.id}`}
                       >
-                        <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                          <Dumbbell className="h-5 w-5 text-amber-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <h3 className="font-medium text-slate-900 truncate text-[15px]">
-                              {exercise.title}
-                            </h3>
-                            {exercise.estimatedMinutes && (
-                              <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
-                                <Clock className="h-3 w-3" />
-                                {exercise.estimatedMinutes}m
-                              </span>
+                        <button
+                          onClick={() => handleExerciseTap(exercise)}
+                          disabled={startExerciseMutation.isPending}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:opacity-50"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                            <Dumbbell className="h-5 w-5 text-amber-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <h3 className="font-medium text-slate-900 truncate text-[15px]">
+                                {exercise.title}
+                              </h3>
+                              {exercise.estimatedMinutes && (
+                                <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                                  <Clock className="h-3 w-3" />
+                                  {exercise.estimatedMinutes}m
+                                </span>
+                              )}
+                            </div>
+                            {resumeSession ? (
+                              <p className="text-sm text-emerald-600 font-medium mt-0.5">
+                                {hasWork ? "Tap to resume your work" : "In progress — tap to continue"}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-slate-500 line-clamp-2 mt-0.5">
+                                {exercise.description}
+                              </p>
                             )}
                           </div>
-                          <p className="text-sm text-slate-500 line-clamp-2 mt-0.5">
-                            {exercise.description}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
-                      </button>
-                    ))}
+                        </button>
+                        {resumeSession ? (
+                          <button
+                            onClick={(e) => handleStartFresh(e, exercise)}
+                            disabled={startExerciseMutation.isPending}
+                            className="text-xs text-slate-400 hover:text-slate-700 underline shrink-0 disabled:opacity-50"
+                            title="Start a fresh attempt (keeps your existing work)"
+                          >
+                            Start over
+                          </button>
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                        )}
+                      </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
