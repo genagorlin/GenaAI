@@ -205,9 +205,15 @@ export async function setupAuth(app: Express) {
       const authorizedUser = await storage.getAuthorizedUserByEmail(normalizedEmail);
       const clientUser = await storage.getClientByEmail(normalizedEmail);
       if (!authorizedUser && !clientUser) {
-        // Still send success to prevent email enumeration
-        console.log("[MagicLink] Unauthorized email attempted login:", normalizedEmail);
-        return res.json({ success: true, message: "If this email is registered, you will receive a sign-in link." });
+        // This is a self-serve standalone tool: rather than silently pretending
+        // we sent a code (which left new users stuck on the code screen forever),
+        // tell the UI the account doesn't exist so it can route them to sign-up.
+        console.log("[MagicLink] Sign-in attempted for unregistered email:", normalizedEmail);
+        return res.json({
+          success: false,
+          notRegistered: true,
+          message: "We couldn't find an account for that email. Let's get you signed up.",
+        });
       }
     }
 

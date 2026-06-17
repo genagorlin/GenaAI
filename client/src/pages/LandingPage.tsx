@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowRight, Sparkles, Activity, ShieldCheck, Smartphone, Mail, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function LandingPage() {
+  const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +36,14 @@ export default function LandingPage() {
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to send code");
+      }
+
+      // New (unregistered) email: route to sign-up with the email carried over,
+      // instead of stranding them on the code screen waiting for an email that
+      // was never sent.
+      if (data.notRegistered) {
+        setLocation(`/register?email=${encodeURIComponent(email.trim())}`);
+        return;
       }
 
       setStep("code");

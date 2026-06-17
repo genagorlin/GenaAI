@@ -15,6 +15,14 @@ export default function RegisterPage() {
   const [step, setStep] = useState<"register" | "code">("register");
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Prefill the email when arriving from the sign-in screen with an
+  // unregistered address (e.g. /register?email=foo@bar.com).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get("email");
+    if (prefill) setEmail(prefill);
+  }, []);
+
   // Focus first code input when step changes to code
   useEffect(() => {
     if (step === "code" && codeInputRefs.current[0]) {
