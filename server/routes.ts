@@ -2805,5 +2805,46 @@ Your role for this thought partnership:
     }
   });
 
+  // Preview AI page-generation for a single chunk of a source (no DB writes).
+  // Used to validate extraction quality + verbatim fidelity before running the
+  // full ingestion job.
+  app.post("/api/coach/wiki/ingest-preview", isAuthenticated, async (req, res) => {
+    try {
+      const { sourceId, chunkIndex = 0 } = req.body;
+      if (!sourceId) return res.status(400).json({ error: "sourceId is required" });
+
+      const source = await storage.getReferenceDocument(sourceId);
+      if (!source) return res.status(404).json({ error: "Source document not found" });
+
+      const { chunkText, extractCandidatePages, validateExcerpts } = await import("./wikiIngestion");
+      const chunks = chunkText(source.content);
+      if (chunkIndex < 0 || chunkIndex >= chunks.length) {
+        return res.status(400).json({ error: `chunkIndex out of range (0..${chunks.length - 1})` });
+      }
+
+      const chunk = chunks[chunkIndex];
+      console.log(`[WikiIngest] Preview: source="${source.title}" chunk ${chunkIndex}/${chunks.length} (~${chunk.tokenEstimate} tokens)`);
+      const candidates = await extractCandidatePages(chunk.text);
+      const validated = validateExcerpts(candidates, chunk.text);
+
+      const totalExcerpts = validated.reduce((a, p) => a + p.excerpts.length, 0);
+      const missingExcerpts = validated.reduce((a, p) => a + p.excerptCounts.missing, 0);
+
+      res.json({
+        sourceTitle: source.title,
+        totalChunks: chunks.length,
+        chunkIndex,
+        chunkTokens: chunk.tokenEstimate,
+        pageCount: validated.length,
+        totalExcerpts,
+        missingExcerpts,
+        pages: validated,
+      });
+    } catch (error: any) {
+      console.error("Wiki ingest preview error:", error?.message || error);
+      res.status(500).json({ error: "Failed to preview page generation", details: error?.message });
+    }
+  });
+
   return httpServer;
 }

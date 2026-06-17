@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Upload,
   FileText,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface WikiPage {
   id: string;
@@ -76,6 +78,9 @@ export function WikiManager() {
   const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
   const [newPage, setNewPage] = useState({ slug: "", title: "", summary: "", content: "" });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<any | null>(null);
+  const [previewChunk, setPreviewChunk] = useState(0);
+  const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -114,6 +119,34 @@ export function WikiManager() {
       toast.error(err.message);
     },
   });
+
+  const previewMutation = useMutation({
+    mutationFn: async ({ sourceId, chunkIndex }: { sourceId: string; chunkIndex: number }) => {
+      const res = await fetch("/api/coach/wiki/ingest-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ sourceId, chunkIndex }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to generate preview");
+      }
+      return res.json();
+    },
+    onSuccess: (result) => {
+      setPreview(result);
+      setPreviewChunk(result.chunkIndex);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
+  const runPreview = (sourceId: string, chunkIndex: number) => {
+    setPreviewSourceId(sourceId);
+    previewMutation.mutate({ sourceId, chunkIndex });
+  };
 
   const { data: pages = [], isLoading } = useQuery<WikiPage[]>({
     queryKey: ["/api/coach/wiki"],
@@ -261,10 +294,24 @@ export function WikiManager() {
             <div className="space-y-1">
               {sources.map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-medium">{s.title}</span>
+                  <span className="truncate font-medium flex-1 min-w-0">{s.title}</span>
                   <span className="text-muted-foreground shrink-0">
                     {s.wordCount.toLocaleString()} words
                   </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs gap-1 shrink-0"
+                    onClick={() => runPreview(s.id, 0)}
+                    disabled={previewMutation.isPending}
+                  >
+                    {previewMutation.isPending && previewSourceId === s.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    Preview pages
+                  </Button>
                 </div>
               ))}
             </div>
@@ -545,6 +592,92 @@ export function WikiManager() {
           )}
         </ScrollArea>
       </DialogContent>
+
+      {/* Preview of AI-generated pages for one chunk (no DB writes) */}
+      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>
+        <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Preview: proposed pages
+            </DialogTitle>
+            {preview && (
+              <p className="text-sm text-muted-foreground">
+                {preview.sourceTitle} — chunk {preview.chunkIndex + 1} of {preview.totalChunks} (~{preview.chunkTokens} tokens) ·
+                {" "}{preview.pageCount} page(s), {preview.totalExcerpts} excerpt(s)
+                {preview.missingExcerpts > 0 ? (
+                  <span className="text-red-600 font-medium"> · ⚠ {preview.missingExcerpts} excerpt(s) not found verbatim</span>
+                ) : (
+                  <span className="text-emerald-600 font-medium"> · all excerpts verbatim ✓</span>
+                )}
+              </p>
+            )}
+          </DialogHeader>
+
+          {preview && (
+            <div className="flex items-center gap-2 pb-2 border-b text-sm">
+              <span className="text-muted-foreground">Try another chunk:</span>
+              <Button
+                size="sm" variant="outline" className="h-7"
+                disabled={previewMutation.isPending || previewChunk <= 0}
+                onClick={() => previewSourceId && runPreview(previewSourceId, previewChunk - 1)}
+              >
+                ← Prev
+              </Button>
+              <span className="text-xs text-muted-foreground">chunk {previewChunk + 1}/{preview.totalChunks}</span>
+              <Button
+                size="sm" variant="outline" className="h-7"
+                disabled={previewMutation.isPending || previewChunk >= preview.totalChunks - 1}
+                onClick={() => previewSourceId && runPreview(previewSourceId, previewChunk + 1)}
+              >
+                Next →
+              </Button>
+              {previewMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            </div>
+          )}
+
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-4 py-2">
+              {preview?.pages?.length === 0 && (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No pages proposed for this chunk (likely front-matter or transitional text).
+                </p>
+              )}
+              {preview?.pages?.map((p: any, idx: number) => (
+                <div key={idx} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-sm">{p.title}</h4>
+                    <code className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">{p.slug}</code>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic">{p.summary}</p>
+                  <div className="space-y-1.5">
+                    {p.excerpts.map((ex: any, j: number) => (
+                      <div
+                        key={j}
+                        className={cn(
+                          "text-xs p-2 rounded border-l-2",
+                          ex.status === "exact" ? "border-emerald-400 bg-emerald-50" :
+                          ex.status === "near" ? "border-amber-400 bg-amber-50" :
+                          "border-red-400 bg-red-50"
+                        )}
+                      >
+                        <span className={cn(
+                          "font-medium uppercase text-[9px] mr-1.5",
+                          ex.status === "exact" ? "text-emerald-700" :
+                          ex.status === "near" ? "text-amber-700" : "text-red-700"
+                        )}>
+                          {ex.status === "exact" ? "verbatim ✓" : ex.status === "near" ? "near (whitespace differs)" : "NOT IN SOURCE ✗"}
+                        </span>
+                        <span className="whitespace-pre-wrap">"{ex.text}"</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
