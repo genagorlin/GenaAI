@@ -235,6 +235,7 @@ export function WikiManager() {
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
@@ -592,6 +593,7 @@ export function WikiManager() {
           )}
         </ScrollArea>
       </DialogContent>
+    </Dialog>
 
       {/* Preview of AI-generated pages for one chunk (no DB writes) */}
       <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>
@@ -632,7 +634,11 @@ export function WikiManager() {
               >
                 Next →
               </Button>
-              {previewMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {previewMutation.isPending && (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Generating… (this takes a few seconds)
+                </span>
+              )}
             </div>
           )}
 
@@ -678,6 +684,6 @@ export function WikiManager() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </>
   );
 }

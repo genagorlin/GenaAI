@@ -172,7 +172,19 @@ export interface ValidatedPage {
   excerptCounts: { exact: number; near: number; missing: number };
 }
 
-const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
+// Normalize typographic variants so an excerpt that differs from the source only
+// in smart-quote rendering, dash style, ellipsis, or whitespace still counts as
+// a faithful quote (the words are identical). Only genuinely altered/fabricated
+// text falls through to "missing".
+const normalize = (s: string) =>
+  s
+    .replace(/[‘’‚‛′`´]/g, "'") // curly/grave/acute → '
+    .replace(/[“”„‟″]/g, '"')             // curly double quotes → "
+    .replace(/[–—―]/g, "-")                          // en/em/horizontal dash → -
+    .replace(/…/g, "...")                                      // ellipsis → ...
+    .replace(/[   ]/g, " ")                          // non-breaking spaces → space
+    .replace(/\s+/g, " ")
+    .trim();
 
 export function validateExcerpts(pages: CandidatePage[], sourceText: string): ValidatedPage[] {
   const normSource = normalize(sourceText);
@@ -180,8 +192,8 @@ export function validateExcerpts(pages: CandidatePage[], sourceText: string): Va
     const excerpts = (p.excerpts || []).map((ex) => {
       let status: ExcerptStatus;
       if (sourceText.includes(ex)) status = "exact";
-      else if (normSource.includes(normalize(ex))) status = "near"; // only whitespace differs
-      else status = "missing"; // not found -> fabricated/altered
+      else if (normSource.includes(normalize(ex))) status = "near"; // same words; quotes/dashes/spacing differ
+      else status = "missing"; // not found even after normalization -> fabricated/altered
       return { text: ex, status };
     });
     const excerptCounts = {
