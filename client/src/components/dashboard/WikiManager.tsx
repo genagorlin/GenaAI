@@ -334,7 +334,7 @@ export function WikiManager() {
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
           {isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -642,7 +642,7 @@ export function WikiManager() {
             </div>
           )}
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
             <div className="space-y-4 py-2">
               {preview?.pages?.length === 0 && (
                 <p className="text-sm text-muted-foreground py-6 text-center">
