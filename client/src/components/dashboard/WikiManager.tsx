@@ -81,6 +81,7 @@ export function WikiManager() {
   const [preview, setPreview] = useState<any | null>(null);
   const [previewChunk, setPreviewChunk] = useState(0);
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -145,6 +146,7 @@ export function WikiManager() {
 
   const runPreview = (sourceId: string, chunkIndex: number) => {
     setPreviewSourceId(sourceId);
+    setPreviewOpen(true); // open the dialog immediately so the wait has visible feedback
     previewMutation.mutate({ sourceId, chunkIndex });
   };
 
@@ -596,7 +598,7 @@ export function WikiManager() {
     </Dialog>
 
       {/* Preview of AI-generated pages for one chunk (no DB writes) */}
-      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>
+      <Dialog open={previewOpen} onOpenChange={(o) => { if (!o) { setPreviewOpen(false); setPreview(null); } }}>
         <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -644,6 +646,15 @@ export function WikiManager() {
 
           <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
             <div className="space-y-4 py-2">
+              {!preview && previewMutation.isPending && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm font-medium">Generating proposed pages…</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    The AI is reading this section of the book and drafting concept pages with verbatim quotes. This usually takes 30–60 seconds.
+                  </p>
+                </div>
+              )}
               {preview?.pages?.length === 0 && (
                 <p className="text-sm text-muted-foreground py-6 text-center">
                   No pages proposed for this chunk (likely front-matter or transitional text).
