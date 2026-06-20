@@ -123,7 +123,7 @@ For each page:
 - slug: short, URL-safe (lowercase, hyphens), e.g. "rational-ambition".
 - title: a clear title.
 - summary: 1-2 sentences in YOUR OWN words describing the concept (this is a summary, not a quote).
-- excerpts: one or more passages copied VERBATIM from the provided text — character for character, exact punctuation and wording — that define or best illustrate the concept. These are Gena's actual words and will be quoted to users, so they MUST appear EXACTLY in the source text. Do NOT paraphrase, fix typos, or alter excerpts in any way. If you cannot find a verbatim passage for a concept, OMIT that concept rather than inventing a quote.
+- excerpts: one or more passages copied VERBATIM from the provided text — character for character, exact punctuation and wording — that define or best illustrate the concept. These are Gena's actual words and will be quoted to users, so they MUST appear EXACTLY in the source text. Copy them straight from the provided text; do NOT retype from memory, paraphrase, fix typos, "clean up" punctuation, or change curly quotes to straight quotes. If you cannot find a verbatim passage for a concept, OMIT that concept rather than inventing a quote.
 
 Rules:
 - One page per concept/distinction. Embed illustrative examples as excerpts inside their parent concept's page; do not make separate pages for examples.
@@ -157,44 +157,82 @@ export async function extractCandidatePages(
 // ============================================================================
 // VERBATIM VALIDATION (hard check)
 // ----------------------------------------------------------------------------
-// Decision: every excerpt must be an exact substring of the source. We report
-// per-excerpt status so flagged (non-verbatim) excerpts can be reviewed/dropped
-// rather than silently quoted as Gena's words.
+// Every excerpt must match the source. We report per-excerpt status so flagged
+// (non-verbatim) excerpts can be reviewed/dropped rather than silently quoted as
+// Gena's words.
 // ============================================================================
 
 export type ExcerptStatus = "exact" | "near" | "missing";
+
+export interface ValidatedExcerpt {
+  text: string;
+  status: ExcerptStatus;
+  // Diagnostics for non-exact excerpts: how many normalized characters matched
+  // before diverging, the total normalized length, and the excerpt text around
+  // the divergence point. Lets us distinguish "real quote, one odd character"
+  // from "genuinely fabricated".
+  matchedChars?: number;
+  normLength?: number;
+  divergence?: string;
+}
 
 export interface ValidatedPage {
   slug: string;
   title: string;
   summary: string;
-  excerpts: { text: string; status: ExcerptStatus }[];
+  excerpts: ValidatedExcerpt[];
   excerptCounts: { exact: number; near: number; missing: number };
 }
 
-// Normalize typographic variants so an excerpt that differs from the source only
-// in smart-quote rendering, dash style, ellipsis, or whitespace still counts as
-// a faithful quote (the words are identical). Only genuinely altered/fabricated
-// text falls through to "missing".
+// Normalize away differences that don't change the words: Unicode compatibility
+// forms (NFKC handles ligatures, full-width chars, some spaces), invisible
+// characters (soft hyphen U+00AD, zero-width U+200B-200D/2060/FEFF), every
+// smart-quote / apostrophe / dash / ellipsis variant, and whitespace. Explicit
+// \u escapes keep the codepoints unambiguous. Only genuinely altered/fabricated
+// text survives this.
 const normalize = (s: string) =>
   s
-    .replace(/[‘’‚‛′`´]/g, "'") // curly/grave/acute → '
-    .replace(/[“”„‟″]/g, '"')             // curly double quotes → "
-    .replace(/[–—―]/g, "-")                          // en/em/horizontal dash → -
-    .replace(/…/g, "...")                                      // ellipsis → ...
-    .replace(/[   ]/g, " ")                          // non-breaking spaces → space
+    .normalize("NFKC")
+    .replace(/[­​‌‍⁠﻿]/g, "")
+    .replace(/[‘’‚‛′`´]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/…/g, "...")
     .replace(/\s+/g, " ")
     .trim();
+
+// Largest k such that normSource contains needle.slice(0, k). Prefix-substring
+// is monotone (a substring's prefix is also a substring), so binary search works.
+function longestPrefixMatch(needle: string, normSource: string): number {
+  if (!needle) return 0;
+  let lo = 1, hi = needle.length, best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (normSource.includes(needle.slice(0, mid))) { best = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  return best;
+}
 
 export function validateExcerpts(pages: CandidatePage[], sourceText: string): ValidatedPage[] {
   const normSource = normalize(sourceText);
   return pages.map((p) => {
-    const excerpts = (p.excerpts || []).map((ex) => {
+    const excerpts: ValidatedExcerpt[] = (p.excerpts || []).map((ex) => {
+      const nEx = normalize(ex);
       let status: ExcerptStatus;
       if (sourceText.includes(ex)) status = "exact";
-      else if (normSource.includes(normalize(ex))) status = "near"; // same words; quotes/dashes/spacing differ
+      else if (normSource.includes(nEx)) status = "near"; // same words; quotes/dashes/spacing differ
       else status = "missing"; // not found even after normalization -> fabricated/altered
-      return { text: ex, status };
+
+      if (status === "exact") return { text: ex, status };
+      const matchedChars = longestPrefixMatch(nEx, normSource);
+      return {
+        text: ex,
+        status,
+        matchedChars,
+        normLength: nEx.length,
+        divergence: nEx.slice(Math.max(0, matchedChars - 15), matchedChars + 20),
+      };
     });
     const excerptCounts = {
       exact: excerpts.filter((e) => e.status === "exact").length,
