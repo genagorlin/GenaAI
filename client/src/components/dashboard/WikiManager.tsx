@@ -82,6 +82,7 @@ export function WikiManager() {
   const [previewChunk, setPreviewChunk] = useState(0);
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewCache, setPreviewCache] = useState<Record<string, any>>({});
 
   const queryClient = useQueryClient();
 
@@ -135,9 +136,11 @@ export function WikiManager() {
       }
       return res.json();
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       setPreview(result);
       setPreviewChunk(result.chunkIndex);
+      // Cache by source+chunk so revisiting a chunk is instant (no repeat AI call).
+      setPreviewCache((prev) => ({ ...prev, [`${variables.sourceId}:${result.chunkIndex}`]: result }));
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -147,6 +150,15 @@ export function WikiManager() {
   const runPreview = (sourceId: string, chunkIndex: number) => {
     setPreviewSourceId(sourceId);
     setPreviewOpen(true); // open the dialog immediately so the wait has visible feedback
+    // Serve from cache instantly if we've already generated this chunk this session.
+    const cached = previewCache[`${sourceId}:${chunkIndex}`];
+    if (cached) {
+      setPreview(cached);
+      setPreviewChunk(chunkIndex);
+      return;
+    }
+    // Keep the previous chunk (and the nav bar) visible while the new one loads,
+    // so a slow/failed generation never strands you with no way back to a cached chunk.
     previewMutation.mutate({ sourceId, chunkIndex });
   };
 
