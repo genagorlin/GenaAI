@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { storage } from "./storage";
 
 // ============================================================================
 // CHUNKING
@@ -245,4 +246,102 @@ export function validateExcerpts(pages: CandidatePage[], sourceText: string): Va
     };
     return { slug: p.slug, title: p.title, summary: p.summary, excerpts, excerptCounts };
   });
+}
+
+// ============================================================================
+// BACKGROUND INGESTION JOB
+// ----------------------------------------------------------------------------
+// Processes every chunk of a source into draft wiki pages, updating a job row
+// for progress. Runs fire-and-forget (not on the HTTP request thread), so it is
+// not subject to gateway timeouts and the model can take its time per chunk.
+// ============================================================================
+
+function renderExcerptBlocks(excerpts: ValidatedExcerpt[]): string {
+  // Only quote faithful excerpts (exact/near); never put fabricated text in a page.
+  return excerpts
+    .filter((e) => e.status !== "missing")
+    .map((e) => "> " + e.text.replace(/\n/g, "\n> "))
+    .join("\n\n");
+}
+
+// Create a draft page for a candidate, or merge into an existing same-slug draft
+// (a simple cross-chunk consolidation). Returns true only when a NEW page is made.
+async function materializeDraftPage(
+  page: ValidatedPage,
+  scope: string,
+  sourceId: string
+): Promise<boolean> {
+  const faithful = page.excerpts.filter((e) => e.status !== "missing");
+  if (faithful.length === 0) return false; // no usable quotes -> skip
+
+  const blocks = renderExcerptBlocks(page.excerpts);
+  const content = `${page.summary}\n\n${blocks}`;
+  const sourceRefs = [{ documentId: sourceId, excerpts: page.excerpts }];
+
+  const existing = await storage.getWikiPageBySlug(scope, page.slug);
+  if (existing) {
+    if (existing.status === "draft") {
+      // Merge: append this chunk's excerpts to the existing draft for the same concept.
+      const mergedRefs = [...(((existing.sourceRefs as any[]) || [])), ...sourceRefs];
+      await storage.updateWikiPage(existing.id, {
+        content: `${existing.content}\n\n${blocks}`,
+        sourceRefs: mergedRefs,
+      });
+    }
+    // If an approved page already owns this slug, leave it untouched.
+    return false;
+  }
+
+  await storage.createWikiPage({
+    scope,
+    slug: page.slug,
+    title: page.title,
+    summary: page.summary,
+    content,
+    sourceRefs,
+    status: "draft",
+    createdBy: "ai",
+  });
+  return true;
+}
+
+// Fire-and-forget: the caller starts this WITHOUT awaiting and returns the jobId.
+export async function runIngestionJob(jobId: string): Promise<void> {
+  try {
+    const job = await storage.getIngestionJob(jobId);
+    if (!job) return;
+    const source = await storage.getReferenceDocument(job.sourceId);
+    if (!source) {
+      await storage.updateIngestionJob(jobId, { status: "failed", error: "Source document not found" });
+      return;
+    }
+
+    const chunks = chunkText(source.content);
+    await storage.updateIngestionJob(jobId, { status: "running", totalChunks: chunks.length });
+    console.log(`[WikiIngest] job ${jobId}: ${chunks.length} chunks for "${source.title}"`);
+
+    let pagesCreated = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      try {
+        const candidates = await extractCandidatePages(chunks[i].text);
+        const validated = validateExcerpts(candidates, chunks[i].text);
+        for (const vp of validated) {
+          const created = await materializeDraftPage(vp, job.scope, job.sourceId);
+          if (created) pagesCreated++;
+        }
+      } catch (chunkErr: any) {
+        // One bad chunk shouldn't kill the whole run.
+        console.error(`[WikiIngest] job ${jobId} chunk ${i} failed:`, chunkErr?.message || chunkErr);
+      }
+      await storage.updateIngestionJob(jobId, { processedChunks: i + 1, pagesCreated });
+    }
+
+    await storage.updateIngestionJob(jobId, { status: "completed", completedAt: new Date() });
+    console.log(`[WikiIngest] job ${jobId} complete: ${pagesCreated} pages created`);
+  } catch (err: any) {
+    console.error(`[WikiIngest] job ${jobId} failed:`, err?.message || err);
+    try {
+      await storage.updateIngestionJob(jobId, { status: "failed", error: err?.message || "unknown error" });
+    } catch {}
+  }
 }

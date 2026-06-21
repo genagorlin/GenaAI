@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Network,
@@ -13,6 +13,7 @@ import {
   Upload,
   FileText,
   Sparkles,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,6 +163,89 @@ export function WikiManager() {
     previewMutation.mutate({ sourceId, chunkIndex });
   };
 
+  // --- Full background ingestion (all chunks -> draft pages) ---
+  const [ingestJobId, setIngestJobId] = useState<string | null>(null);
+
+  const ingestMutation = useMutation({
+    mutationFn: async (sourceId: string) => {
+      const res = await fetch("/api/coach/wiki/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ sourceId, scope: "global" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to start generation");
+      }
+      return res.json() as Promise<{ jobId: string }>;
+    },
+    onSuccess: ({ jobId }) => {
+      setIngestJobId(jobId);
+      toast.success("Generating pages from the whole book — this runs in the background.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const { data: ingestJob } = useQuery<any>({
+    queryKey: ["/api/coach/wiki/ingest", ingestJobId],
+    queryFn: async () => {
+      const res = await fetch(`/api/coach/wiki/ingest/${ingestJobId}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!ingestJobId,
+    refetchInterval: (q: any) => {
+      const s = q?.state?.data?.status;
+      return s === "completed" || s === "failed" ? false : 2500;
+    },
+  });
+
+  // When a run finishes, refresh the page list so the new drafts appear.
+  useEffect(() => {
+    if (ingestJob?.status === "completed") {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/wiki"] });
+      toast.success(`Generated ${ingestJob.pagesCreated} draft page(s) — review them below.`);
+    } else if (ingestJob?.status === "failed") {
+      toast.error(`Generation failed: ${ingestJob.error || "unknown error"}`);
+    }
+  }, [ingestJob?.status]);
+
+  const approveDraftMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/coach/wiki/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "approved" }),
+      });
+      if (!res.ok) throw new Error("Failed to approve page");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/coach/wiki"] }),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const approveAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/coach/wiki/approve-drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ scope: "global" }),
+      });
+      if (!res.ok) throw new Error("Failed to approve drafts");
+      return res.json() as Promise<{ approved: number }>;
+    },
+    onSuccess: ({ approved }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/coach/wiki"] });
+      toast.success(`Approved ${approved} page(s).`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const ingestRunning = ingestJob && (ingestJob.status === "pending" || ingestJob.status === "running");
+
   const { data: pages = [], isLoading } = useQuery<WikiPage[]>({
     queryKey: ["/api/coach/wiki"],
     queryFn: async () => {
@@ -171,6 +255,8 @@ export function WikiManager() {
     },
     enabled: isOpen,
   });
+
+  const draftCount = pages.filter((p) => p.status === "draft").length;
 
   const createMutation = useMutation({
     mutationFn: async (page: { slug: string; title: string; summary: string; content: string }) => {
@@ -327,8 +413,38 @@ export function WikiManager() {
                     )}
                     Preview pages
                   </Button>
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-xs gap-1 shrink-0"
+                    onClick={() => ingestMutation.mutate(s.id)}
+                    disabled={ingestMutation.isPending || ingestRunning}
+                  >
+                    {ingestMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Network className="h-3 w-3" />}
+                    Generate all
+                  </Button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Background generation progress */}
+          {ingestJob && (
+            <div className="mt-2 text-xs rounded-md border px-3 py-2 bg-background">
+              {ingestRunning ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>
+                    Generating pages… chunk {ingestJob.processedChunks}/{ingestJob.totalChunks || "…"} · {ingestJob.pagesCreated} page(s) so far
+                  </span>
+                </div>
+              ) : ingestJob.status === "completed" ? (
+                <span className="text-emerald-600">✓ Generated {ingestJob.pagesCreated} draft page(s). Review and approve below.</span>
+              ) : ingestJob.status === "failed" ? (
+                <span className="text-red-600">Generation failed: {ingestJob.error || "unknown error"}</span>
+              ) : null}
+              {ingestRunning && (
+                <p className="text-muted-foreground mt-1">Runs in the background — you can close this dialog; progress continues.</p>
+              )}
             </div>
           )}
         </div>
@@ -336,16 +452,31 @@ export function WikiManager() {
         <div className="flex items-center justify-between gap-2 pb-2 border-b">
           <div className="text-sm text-muted-foreground">
             {pages.length} {pages.length === 1 ? "page" : "pages"}
+            {draftCount > 0 && <span className="text-amber-600"> · {draftCount} draft</span>}
           </div>
-          <Button
-            size="sm"
-            onClick={() => setIsCreating(true)}
-            disabled={isCreating}
-            className="gap-1"
-          >
-            <Plus className="h-4 w-4" />
-            New page
-          </Button>
+          <div className="flex items-center gap-2">
+            {draftCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => approveAllMutation.mutate()}
+                disabled={approveAllMutation.isPending}
+                className="gap-1"
+              >
+                {approveAllMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Approve all {draftCount} drafts
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => setIsCreating(true)}
+              disabled={isCreating}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              New page
+            </Button>
+          </div>
         </div>
 
         <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
@@ -552,6 +683,18 @@ export function WikiManager() {
                               )}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                              {page.status === "draft" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                  onClick={() => approveDraftMutation.mutate(page.id)}
+                                  disabled={approveDraftMutation.isPending}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  Approve
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon"

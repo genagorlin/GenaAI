@@ -54,6 +54,8 @@ import {
   type InsertJournalEntry,
   type WikiPage,
   type InsertWikiPage,
+  type WikiIngestionJob,
+  type InsertWikiIngestionJob,
   clients,
   threads,
   messages,
@@ -83,7 +85,8 @@ import {
   clientReminders,
   reminderHistory,
   journalEntries,
-  wikiPages
+  wikiPages,
+  wikiIngestionJobs
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gt, lte, sql } from "drizzle-orm";
@@ -284,6 +287,14 @@ export interface IStorage {
   createWikiPage(page: InsertWikiPage): Promise<WikiPage>;
   updateWikiPage(id: string, updates: Partial<InsertWikiPage>): Promise<WikiPage>;
   deleteWikiPage(id: string): Promise<void>;
+  deleteDraftWikiPages(scope: string): Promise<number>;
+  approveDraftWikiPages(scope: string): Promise<number>;
+
+  // Wiki Ingestion Jobs
+  createIngestionJob(job: InsertWikiIngestionJob): Promise<WikiIngestionJob>;
+  getIngestionJob(id: string): Promise<WikiIngestionJob | undefined>;
+  getLatestIngestionJob(sourceId: string): Promise<WikiIngestionJob | undefined>;
+  updateIngestionJob(id: string, updates: Partial<WikiIngestionJob>): Promise<WikiIngestionJob>;
 
   // Client Timezone
   updateClientTimezone(clientId: string, timezone: string): Promise<void>;
@@ -1450,6 +1461,48 @@ When a client raises a struggle, consider: which mindset is showing up here? Wha
 
   async deleteWikiPage(id: string): Promise<void> {
     await db.delete(wikiPages).where(eq(wikiPages.id, id));
+  }
+
+  async deleteDraftWikiPages(scope: string): Promise<number> {
+    const rows = await db.delete(wikiPages)
+      .where(and(eq(wikiPages.scope, scope), eq(wikiPages.status, "draft")))
+      .returning({ id: wikiPages.id });
+    return rows.length;
+  }
+
+  async approveDraftWikiPages(scope: string): Promise<number> {
+    const rows = await db.update(wikiPages)
+      .set({ status: "approved", updatedAt: new Date() })
+      .where(and(eq(wikiPages.scope, scope), eq(wikiPages.status, "draft")))
+      .returning({ id: wikiPages.id });
+    return rows.length;
+  }
+
+  // Wiki Ingestion Jobs
+  async createIngestionJob(job: InsertWikiIngestionJob): Promise<WikiIngestionJob> {
+    const [result] = await db.insert(wikiIngestionJobs).values(job).returning();
+    return result;
+  }
+
+  async getIngestionJob(id: string): Promise<WikiIngestionJob | undefined> {
+    const [result] = await db.select().from(wikiIngestionJobs).where(eq(wikiIngestionJobs.id, id));
+    return result;
+  }
+
+  async getLatestIngestionJob(sourceId: string): Promise<WikiIngestionJob | undefined> {
+    const [result] = await db.select().from(wikiIngestionJobs)
+      .where(eq(wikiIngestionJobs.sourceId, sourceId))
+      .orderBy(desc(wikiIngestionJobs.startedAt))
+      .limit(1);
+    return result;
+  }
+
+  async updateIngestionJob(id: string, updates: Partial<WikiIngestionJob>): Promise<WikiIngestionJob> {
+    const [result] = await db.update(wikiIngestionJobs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(wikiIngestionJobs.id, id))
+      .returning();
+    return result;
   }
 
   // Client Timezone

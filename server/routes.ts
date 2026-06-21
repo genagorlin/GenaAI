@@ -2846,5 +2846,58 @@ Your role for this thought partnership:
     }
   });
 
+  // Start a full background ingestion run: clears existing DRAFT pages for the
+  // scope (approved pages are kept), creates a job row, and kicks off the runner
+  // WITHOUT awaiting so it isn't bound to this request's lifetime/timeout.
+  app.post("/api/coach/wiki/ingest", isAuthenticated, async (req, res) => {
+    try {
+      const { sourceId, scope = "global" } = req.body;
+      if (!sourceId) return res.status(400).json({ error: "sourceId is required" });
+
+      const source = await storage.getReferenceDocument(sourceId);
+      if (!source) return res.status(404).json({ error: "Source document not found" });
+
+      // Don't allow two runs at once for the same source.
+      const latest = await storage.getLatestIngestionJob(sourceId);
+      if (latest && (latest.status === "pending" || latest.status === "running")) {
+        return res.status(409).json({ error: "An ingestion run is already in progress", jobId: latest.id });
+      }
+
+      const cleared = await storage.deleteDraftWikiPages(scope);
+      const job = await storage.createIngestionJob({ sourceId, scope, status: "pending" } as any);
+      console.log(`[WikiIngest] starting job ${job.id} (cleared ${cleared} old drafts)`);
+
+      const { runIngestionJob } = await import("./wikiIngestion");
+      runIngestionJob(job.id).catch((e) => console.error("[WikiIngest] runner crashed:", e));
+
+      res.status(201).json({ jobId: job.id });
+    } catch (error: any) {
+      console.error("Start wiki ingestion error:", error?.message || error);
+      res.status(500).json({ error: "Failed to start ingestion" });
+    }
+  });
+
+  // Poll a job's progress.
+  app.get("/api/coach/wiki/ingest/:jobId", isAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getIngestionJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      res.json(job);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch job" });
+    }
+  });
+
+  // Bulk-approve all draft pages in a scope (review step).
+  app.post("/api/coach/wiki/approve-drafts", isAuthenticated, async (req, res) => {
+    try {
+      const { scope = "global" } = req.body;
+      const count = await storage.approveDraftWikiPages(scope);
+      res.json({ approved: count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to approve drafts" });
+    }
+  });
+
   return httpServer;
 }

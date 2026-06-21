@@ -478,6 +478,26 @@ export const insertWikiPageSchema = createInsertSchema(wikiPages).omit({ id: tru
 export type InsertWikiPage = z.infer<typeof insertWikiPageSchema>;
 export type WikiPage = typeof wikiPages.$inferSelect;
 
+// Wiki Ingestion Jobs - tracks a background run that turns a source document
+// (e.g. the book) into draft wiki pages, for progress display + resumability.
+export const wikiIngestionJobs = pgTable("wiki_ingestion_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull(),
+  scope: text("scope").notNull().default("global"),
+  status: text("status").notNull().default("pending"), // pending | running | completed | failed
+  totalChunks: integer("total_chunks").notNull().default(0),
+  processedChunks: integer("processed_chunks").notNull().default(0),
+  pagesCreated: integer("pages_created").notNull().default(0),
+  error: text("error"),
+  startedAt: timestamp("started_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertWikiIngestionJobSchema = createInsertSchema(wikiIngestionJobs).omit({ id: true, startedAt: true, updatedAt: true, completedAt: true });
+export type InsertWikiIngestionJob = z.infer<typeof insertWikiIngestionJobSchema>;
+export type WikiIngestionJob = typeof wikiIngestionJobs.$inferSelect;
+
 // Email Reminder Templates - global templates that can be assigned to clients
 export const reminderTemplates = pgTable("reminder_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
