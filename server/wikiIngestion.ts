@@ -141,8 +141,12 @@ export async function extractCandidatePages(
   });
 
   const response = await anthropic.messages.create({
+    // Capped to keep the synchronous preview under the platform's request
+    // timeout — output time scales with tokens generated, and 8000 on a dense
+    // chunk could run ~80-90s. The full background job (not HTTP-bound) can
+    // raise this later.
     model,
-    max_tokens: 8000,
+    max_tokens: 4000,
     system: EXTRACTION_SYSTEM,
     tools: [PROPOSE_TOOL],
     tool_choice: { type: "tool", name: "propose_pages" },

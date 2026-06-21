@@ -655,6 +655,18 @@ export function WikiManager() {
                   </p>
                 </div>
               )}
+              {!preview && !previewMutation.isPending && previewMutation.isError && (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+                  <X className="h-8 w-8 text-red-500" />
+                  <p className="text-sm font-medium">Preview failed</p>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    {(previewMutation.error as Error)?.message || "Something went wrong."}
+                  </p>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    If it spun for about a minute first, the generation likely timed out on a dense section. Try again, or try a different chunk.
+                  </p>
+                </div>
+              )}
               {preview?.pages?.length === 0 && (
                 <p className="text-sm text-muted-foreground py-6 text-center">
                   No pages proposed for this chunk (likely front-matter or transitional text).
