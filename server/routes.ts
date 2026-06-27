@@ -438,7 +438,7 @@ export async function registerRoutes(
 
           const wikiTools = useWiki ? await import("./wikiTools") : null;
 
-          const aiResponseContent = await generateAIResponse({
+          const aiRawContent = await generateAIResponse({
             systemPrompt: assembled.systemPrompt,
             conversationHistory: assembled.conversationHistory,
             model: routing.model,
@@ -448,7 +448,10 @@ export async function registerRoutes(
               executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
             } : {}),
           });
-          
+          // Strip any quote that isn't verbatim in Gena's corpus (fabrication guard).
+          const { sanitizeQuotes } = await import("./quoteGuard");
+          const aiResponseContent = (await sanitizeQuotes(aiRawContent)).text;
+
           const aiMessage = await storage.createMessage({
             clientId: req.params.clientId,
             threadId: validated.threadId,
@@ -1301,7 +1304,7 @@ Your role for this step guidance:
       conversationHistory.push({ role: "user" as const, content: message });
 
       const wikiTools = await import("./wikiTools");
-      const aiResponse = await generateAIResponse({
+      const aiRaw = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
         model: "claude-opus-4-7",
@@ -1309,6 +1312,9 @@ Your role for this step guidance:
         tools: wikiTools.WIKI_TOOLS,
         executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
       });
+      // Strip any quote that isn't verbatim in Gena's corpus (fabrication guard).
+      const { sanitizeQuotes } = await import("./quoteGuard");
+      const aiResponse = (await sanitizeQuotes(aiRaw)).text;
 
       // Add AI response to guidance history
       newGuidance.push({ role: "ai", content: aiResponse, timestamp: new Date().toISOString() });
@@ -2601,7 +2607,7 @@ Your role for this thought partnership:
       conversationHistory.push({ role: "user" as const, content: message });
 
       const wikiTools = await import("./wikiTools");
-      const aiResponse = await generateAIResponse({
+      const aiRaw = await generateAIResponse({
         systemPrompt: fullSystemPrompt,
         conversationHistory,
         model: "claude-opus-4-7",
@@ -2609,6 +2615,9 @@ Your role for this thought partnership:
         tools: wikiTools.WIKI_TOOLS,
         executeTool: (name: string, input: any) => wikiTools.executeWikiTool(name, input, "global"),
       });
+      // Strip any quote that isn't verbatim in Gena's corpus (fabrication guard).
+      const { sanitizeQuotes } = await import("./quoteGuard");
+      const aiResponse = (await sanitizeQuotes(aiRaw)).text;
 
       // Add AI response to guidance history
       newGuidance.push({ role: "ai", content: aiResponse, timestamp: new Date().toISOString() });

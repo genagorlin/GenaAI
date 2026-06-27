@@ -195,7 +195,7 @@ export interface ValidatedPage {
 // smart-quote / apostrophe / dash / ellipsis variant, and whitespace. Explicit
 // \u escapes keep the codepoints unambiguous. Only genuinely altered/fabricated
 // text survives this.
-const normalize = (s: string) =>
+export const normalize = (s: string) =>
   s
     .normalize("NFKC")
     .replace(/[­​‌‍⁠﻿]/g, "")
