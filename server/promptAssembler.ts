@@ -61,23 +61,22 @@ You operate through coach Gena Gorlin's "builder's mindset" framework. This is n
 
 2. **The Psychology of Ambition shapes your questions**: When exploring challenges, naturally draw on concepts like rational ambition, building vs. protecting, creative agency, self-honesty vs self-deception, intellectual ambitiousness vs intellectual humility, "death is the default", etc.
 
-3. **Quote directly — but ONLY when the exact phrase appears verbatim in Gena's Writings below**: Direct quotes from Gena's actual writing ground the conversation in her voice. But fabricated quotes are far worse than no quotes at all — they misrepresent her and erode trust.
+3. **Quote directly — but ONLY text you have actually loaded from a real source**: Direct quotes from Gena's actual writing ground the conversation in her voice. But fabricated quotes are far worse than no quotes at all — they misrepresent her and erode trust.
 
-   **VERIFICATION CHECK — perform this before adding ANY quotation marks**:
-   Before putting any phrase in quotes and attributing it to Gena, locate that EXACT phrase, character-for-character, in the "Gena's Writings" section that appears later in this prompt. If you cannot point to the specific passage you are quoting, DO NOT use quotation marks. Attribute the concept without quoting.
+   **Your quote sources, in order of preference:**
+   - **The book (PRIMARY, most complete):** the framework wiki. When the user asks for quotes, or you are drawing on a concept, CALL the read_wiki_page tool to open the relevant page and quote from its loaded content. Prefer the book — do NOT rely only on whatever essays happen to be inline in the "Gena's Writings" section.
+   - **The essays:** the "Gena's Writings" section later in this prompt (only a small selection of Gena's posts).
+   Both are Gena's real words and may be quoted verbatim.
 
-   **Examples of correct attribution when no verbatim quote is available**:
-   - ✓ "Gena's writing on the builder's mindset explores how emotions function as signals about our values."
-   - ✓ "There's a thread in Gena's work about how disjointed feelings often point to unclarified wants."
+   **NEVER quote from:** the one-line summaries in the wiki index, or any orientation/summary text — those are paraphrases, not Gena's words.
+
+   **VERIFICATION CHECK — before adding ANY quotation marks:** locate the EXACT phrase, character-for-character, in a wiki page you have loaded via read_wiki_page OR in the "Gena's Writings" section. If you cannot point to the specific loaded passage, DO NOT use quotation marks — attribute the concept without quoting.
+
+   **Correct attribution when no verbatim quote is available:**
    - ✓ "Gena's framework distinguishes the builder from the drill sergeant and the Zen mindset."
+   - ✓ "There's a thread in Gena's work about how disjointed feelings often point to unclarified wants."
 
-   **Example of FABRICATION — never do this**:
-   - ✗ As Gena writes: "When we don't know what we want, we may be left with signals like emotions that seem disjointed or out of reach."
-   This is a fabrication. The phrase in quotes does not appear in Gena's writings. Stylistic mimicry presented as a verbatim quote misrepresents her. If you find yourself producing a sentence that *sounds like* Gena would say it but you can't locate it verbatim in her writings below — that is the fabrication failure mode. Drop the quotation marks and rephrase as concept attribution.
-
-   **Allowed sources for quotes**:
-   - Quote ONLY from the "Gena's Writings" section that appears later in this prompt (her actual articles, essays, and books).
-   - NEVER quote from the "Coaching Framework" summary section above — that is paraphrased reference material in someone else's voice, not Gena's words.
+   **Fabrication — never do this:** producing a sentence that *sounds like* Gena and putting it in quotes when you cannot find it verbatim in a loaded source (for example, quoting a wiki-index summary line). Drop the quotation marks and rephrase as concept attribution.
 
    **When in doubt, do not quote.** A paraphrase that attributes the concept is always acceptable. A fabricated quote is never acceptable.
 
@@ -118,17 +117,8 @@ export class PromptAssembler {
 
     const roleSection = truncateToTokenLimit(rolePrompt.content, TOKEN_ALLOCATIONS.rolePrompt);
     
-    let methodologySection = "";
-    // Ensure the client has the default Builder's Mindset methodology assigned
-    await storage.ensureClientHasDefaultMethodology(clientId);
-    const clientMethodologies = await storage.getClientMethodologies(clientId);
-    const activeMethodologies = clientMethodologies.filter(cm => cm.isActive === 1);
-    if (activeMethodologies.length > 0) {
-      const methodologyContent = activeMethodologies
-        .map(cm => `## ${cm.methodology.name}\n${cm.methodology.content}`)
-        .join("\n\n");
-      methodologySection = truncateToTokenLimit(methodologyContent, TOKEN_ALLOCATIONS.methodologyFrame);
-    }
+    // Methodology concept-map intentionally not loaded/injected — superseded by
+    // the framework wiki (real, quotable book pages).
 
     let memorySection = "";
     if (documentSections && documentSections.length > 0) {
@@ -193,12 +183,10 @@ export class PromptAssembler {
       systemPromptParts.push(`# Your Role\n${roleSection}`);
     }
 
-    if (methodologySection) {
-      systemPromptParts.push(`# Coaching Framework (REFERENCE SUMMARY — NOT for quoting)
-The following is a SUMMARY of the coaching framework for your orientation. **The wording in this section is NOT Gena's verbatim writing** — it is paraphrased reference material. NEVER quote from this section as if it were Gena's words. Use it only to understand the framework's structure and concepts. For direct quotes, use ONLY the "Gena's Writings" section below.
-
-${methodologySection}`);
-    }
+    // NOTE: the paraphrased "Coaching Framework" concept-map (methodology frame)
+    // is intentionally NOT injected. It was an early stopgap and the AI kept
+    // quoting its paraphrased wording as if it were Gena's. The framework wiki
+    // (real book pages, quotable verbatim) supersedes it.
 
     // Always include the core operating system instructions, regardless of
     // whether reference documents are present. This is non-negotiable.
@@ -209,8 +197,8 @@ ${methodologySection}`);
       if (fileAttachmentSection) {
         referenceContent += `\n\n## Additional Materials\n${fileAttachmentSection}`;
       }
-      systemPromptParts.push(`# Gena's Writings (YOUR CANON — quote these directly when relevant)
-The following writings by coach Gena Gorlin are the canonical source of your worldview. Stay within their bounds. Quote them verbatim when relevant.
+      systemPromptParts.push(`# Gena's Writings — selected essays (quotable verbatim)
+These are a SMALL SELECTION of Gena's essays/posts. They are her real words and may be quoted verbatim. But they are NOT her full body of work — her book is the primary and most complete source, and it lives in the framework wiki (load pages with read_wiki_page). When the user asks for quotes, draw on the wiki/book too; do not quote only from this short selection.
 
 ${referenceContent}`);
     }
@@ -481,17 +469,8 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
 
     const roleSection = truncateToTokenLimit(rolePrompt.content, TOKEN_ALLOCATIONS.rolePrompt);
     
-    let methodologySection = "";
-    // Ensure the client has the default Builder's Mindset methodology assigned
-    await storage.ensureClientHasDefaultMethodology(clientId);
-    const clientMethodologies = await storage.getClientMethodologies(clientId);
-    const activeMethodologies = clientMethodologies.filter(cm => cm.isActive === 1);
-    if (activeMethodologies.length > 0) {
-      const methodologyContent = activeMethodologies
-        .map(cm => `## ${cm.methodology.name}\n${cm.methodology.content}`)
-        .join("\n\n");
-      methodologySection = truncateToTokenLimit(methodologyContent, TOKEN_ALLOCATIONS.methodologyFrame);
-    }
+    // Methodology concept-map intentionally not loaded/injected — superseded by
+    // the framework wiki (real, quotable book pages).
 
     const clientContext = await this.getClientContext(clientId);
     let memorySection = "";
@@ -518,13 +497,6 @@ Be direct, insightful, and collaborative. You can share observations, patterns y
 
     if (roleSection) {
       systemPromptParts.push(`# Your Role\n${roleSection}`);
-    }
-
-    if (methodologySection) {
-      systemPromptParts.push(`# Coaching Framework (REFERENCE SUMMARY — NOT for quoting)
-The following is a SUMMARY of the coaching framework for your orientation. **The wording in this section is NOT Gena's verbatim writing** — it is paraphrased reference material. NEVER quote from this section as if it were Gena's words. Use it only to understand the framework's structure and concepts. For direct quotes, use ONLY the "Gena's Writings" section below.
-
-${methodologySection}`);
     }
 
     if (memorySection) {

@@ -63,10 +63,13 @@ export async function buildWikiIndexSection(scope: string = "global"): Promise<s
     (p) => `- \`${p.slug}\` — **${p.title}**${p.summary ? `: ${p.summary}` : ""}`
   );
 
-  return `# Framework Wiki Index
-You have a wiki of pages synthesizing Gena's body of work. These are the pages available to you:
+  return `# Framework Wiki Index — Gena's book (PRIMARY source of her writing)
+This wiki is the fullest body of Gena's work. Each page holds verbatim passages from her book. These are the pages available to you:
 
 ${lines.join("\n")}
 
-When one of these concepts is relevant to the conversation, call the \`read_wiki_page\` tool with its slug to load the full page BEFORE relying on its detail or quoting from it. Treat the one-line summaries above as a table of contents only — never quote from a summary, and never quote a passage you have not loaded via \`read_wiki_page\` (or that does not appear in "Gena's Writings"). If no page is relevant, just answer normally.`;
+How to use this:
+- When a concept here is relevant — and ESPECIALLY whenever the user asks for quotes or for what Gena says about something — call the \`read_wiki_page\` tool with the slug to load the full page, then quote from its loaded content. Reach for the book here first; don't quote only from the short "Gena's Writings" essay selection.
+- It's good to open more than one relevant page when the topic spans several concepts.
+- The one-line summaries above are a table of contents ONLY — NEVER quote them. Only quote passages you have actually loaded via \`read_wiki_page\` (or that appear in "Gena's Writings"). If no page is relevant, just answer normally.`;
 }
