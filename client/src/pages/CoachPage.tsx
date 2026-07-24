@@ -24,7 +24,8 @@ import {
   MoreVertical,
   Trash2,
   Send,
-  Loader2
+  Loader2,
+  PenLine
 } from "lucide-react";
 import { MobileCoachView } from "@/components/MobileCoachView";
 import { useAuth } from "@/hooks/useAuth";
@@ -123,7 +124,15 @@ interface DocumentSection {
   sortOrder: number;
 }
 
-type ViewMode = "document" | "signals" | "messages";
+type ViewMode = "document" | "signals" | "messages" | "journal";
+
+interface JournalEntry {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -324,6 +333,17 @@ function DesktopCoachView() {
     },
     enabled: !!selectedClient || !!selectedThreadId,
     refetchInterval: selectedThreadId ? 3000 : false
+  });
+
+  const { data: journalEntries = [] } = useQuery<JournalEntry[]>({
+    queryKey: ["/api/coach/clients", selectedClient?.id, "journal"],
+    queryFn: async () => {
+      if (!selectedClient) return [];
+      const res = await fetch(`/api/coach/clients/${selectedClient.id}/journal`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedClient?.id && viewMode === "journal",
   });
 
   // Fetch exercise session for the selected thread (for coach view)
@@ -584,6 +604,16 @@ function DesktopCoachView() {
                >
                  <MessageSquare className="h-4 w-4" />
                  Messages
+               </Button>
+               <Button
+                 variant={viewMode === "journal" ? "secondary" : "ghost"}
+                 size="sm"
+                 onClick={() => setViewMode("journal")}
+                 className="gap-2 h-8"
+                 data-testid="button-view-journal"
+               >
+                 <PenLine className="h-4 w-4" />
+                 Journal
                </Button>
              </div>
              <Popover>
@@ -848,6 +878,39 @@ function DesktopCoachView() {
                   )}
                 </div>
               </div>
+            ) : viewMode === "journal" ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <PenLine className="h-5 w-5 text-primary" />
+                  <h3 className="font-medium">Journal Entries</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {journalEntries.length} {journalEntries.length === 1 ? "entry" : "entries"}
+                  </span>
+                </div>
+                {journalEntries.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
+                    No journal entries yet from this client.
+                  </div>
+                ) : (
+                  journalEntries.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <h4 className="font-medium text-sm">{entry.title || "Untitled"}</h4>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {new Date(entry.updatedAt).toLocaleString()}
+                        </span>
+                      </div>
+                      {entry.content?.trim() ? (
+                        <p className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">
+                          {entry.content}
+                        </p>
+                      ) : (
+                        <p className="text-sm italic text-muted-foreground">(empty entry)</p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             ) : (
               <>
                 {/* Top Row: Mental Model & Velocity */}
@@ -933,16 +996,16 @@ function DesktopCoachView() {
                   </div>
                 </div>
 
-                {/* Raw Journal Feed Preview */}
+                {/* Recent chat messages (labeled clearly — journal entries live in the Journal tab) */}
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                    <div className="px-6 py-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                     <h3 className="font-medium text-sm">Recent Journal Excerpts (Context)</h3>
-                     <Button variant="ghost" size="sm" className="text-xs h-7">View Full Log</Button>
+                     <h3 className="font-medium text-sm">Recent Chat Excerpts (Context)</h3>
+                     <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setViewMode("messages")}>View Messages</Button>
                    </div>
                    <div className="p-6 space-y-4 bg-background/50">
                      {recentUserMessages.length === 0 ? (
                        <div className="text-center py-8 text-muted-foreground text-sm">
-                         No journal entries yet from this client
+                         No chat activity yet from this client
                        </div>
                      ) : (
                        recentUserMessages.map((msg, index) => (
