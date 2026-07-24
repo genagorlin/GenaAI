@@ -14,7 +14,8 @@ import {
   Check,
   Bot,
   User as UserIcon,
-  Dumbbell
+  Dumbbell,
+  PenLine
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -85,7 +86,7 @@ export function MobileCoachView() {
   const [view, setView] = useState<MobileView>("clients");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [showDocument, setShowDocument] = useState(false);
+  const [detailTab, setDetailTab] = useState<"conversations" | "document" | "journal">("conversations");
   const [coachMessage, setCoachMessage] = useState("");
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -109,6 +110,16 @@ export function MobileCoachView() {
       return res.json();
     },
     enabled: !!selectedClientId,
+  });
+
+  const { data: journalEntries = [] } = useQuery<{ id: string; title: string; content: string; updatedAt: string }[]>({
+    queryKey: ["/api/coach/clients", selectedClientId, "journal"],
+    queryFn: async () => {
+      const res = await fetch(`/api/coach/clients/${selectedClientId}/journal`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedClientId && detailTab === "journal",
   });
 
   const { data: messages = [] } = useQuery<Message[]>({
@@ -162,7 +173,7 @@ export function MobileCoachView() {
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
     setSelectedThreadId(null);
-    setShowDocument(false);
+    setDetailTab("conversations");
     setView("client-detail");
   };
 
@@ -281,21 +292,32 @@ export function MobileCoachView() {
 
         <div className="flex border-b">
           <button
-            onClick={() => setShowDocument(false)}
-            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-              !showDocument 
-                ? "text-primary border-b-2 border-primary" 
+            onClick={() => setDetailTab("conversations")}
+            className={`flex-1 py-3 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+              detailTab === "conversations"
+                ? "text-primary border-b-2 border-primary"
                 : "text-muted-foreground"
             }`}
           >
             <MessageCircle className="h-4 w-4" />
-            Conversations
+            Chats
           </button>
           <button
-            onClick={() => setShowDocument(true)}
-            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-              showDocument 
-                ? "text-primary border-b-2 border-primary" 
+            onClick={() => setDetailTab("journal")}
+            className={`flex-1 py-3 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+              detailTab === "journal"
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <PenLine className="h-4 w-4" />
+            Journal
+          </button>
+          <button
+            onClick={() => setDetailTab("document")}
+            className={`flex-1 py-3 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+              detailTab === "document"
+                ? "text-primary border-b-2 border-primary"
                 : "text-muted-foreground"
             }`}
           >
@@ -304,10 +326,35 @@ export function MobileCoachView() {
           </button>
         </div>
 
-        {showDocument ? (
+        {detailTab === "document" ? (
           <ScrollArea className="flex-1">
             <div className="p-4">
               <LivingDocument clientId={selectedClientId!} clientName={selectedClient?.name || ""} />
+            </div>
+          </ScrollArea>
+        ) : detailTab === "journal" ? (
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-3">
+              {journalEntries.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <PenLine className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p>No journal entries yet</p>
+                </div>
+              ) : (
+                journalEntries.map((entry) => (
+                  <div key={entry.id} className="rounded-xl bg-card border p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="font-medium text-sm truncate">{entry.title || "Untitled"}</div>
+                      <div className="text-xs text-muted-foreground shrink-0">{formatTimeAgo(entry.updatedAt)}</div>
+                    </div>
+                    {entry.content?.trim() ? (
+                      <p className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{entry.content}</p>
+                    ) : (
+                      <p className="text-sm italic text-muted-foreground">(empty entry)</p>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </ScrollArea>
         ) : (
