@@ -199,6 +199,7 @@ function DesktopCoachView() {
   const [isManageClientsOpen, setIsManageClientsOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [coachMessage, setCoachMessage] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
   const { user } = useAuth();
 
   useEffect(() => {
@@ -240,6 +241,14 @@ function DesktopCoachView() {
   });
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || clients[0];
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) =>
+      c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)
+    );
+  }, [clients, clientSearch]);
 
   const { data: insights = [] } = useQuery<Insight[]>({
     queryKey: ["/api/clients", selectedClient?.id, "insights"],
@@ -431,7 +440,12 @@ function DesktopCoachView() {
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search clients..." className="pl-9 bg-background/50 border-sidebar-border" />
+            <Input
+              placeholder="Search clients..."
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="pl-9 bg-background/50 border-sidebar-border"
+            />
           </div>
         </div>
         
@@ -443,7 +457,12 @@ function DesktopCoachView() {
                 API Online
               </Badge>
             </div>
-            {clients.map((client) => (
+            {filteredClients.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No clients match "{clientSearch}"
+              </div>
+            )}
+            {filteredClients.map((client) => (
               <button
                 key={client.id}
                 data-testid={`client-${client.id}`}
