@@ -655,9 +655,10 @@ export default function ChatPage() {
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error("Transcription API error:", response.status, errorData);
-            const errorMsg = errorData?.details || errorData?.error || "Transcription failed";
-            alert(`Voice transcription error: ${errorMsg}`);
-            throw new Error(errorMsg);
+            toast.error("Voice input unavailable", {
+              description: errorData?.error || "Please type your message instead.",
+            });
+            throw new Error(errorData?.error || "Transcription failed");
           }
           
           const { text } = await response.json();

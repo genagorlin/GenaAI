@@ -2457,7 +2457,23 @@ Return ONLY the synthesized content, no explanations.`;
     } catch (error: any) {
       console.error("[Transcribe] Error:", error?.message || error);
       console.error("[Transcribe] Full error:", JSON.stringify(error, null, 2));
-      res.status(500).json({ error: "Failed to transcribe audio", details: error?.message });
+
+      // When the OpenAI account is out of credits (or transiently rate-limited),
+      // Whisper returns a 429. Don't leak OpenAI's raw billing message to clients —
+      // return a friendly, actionable message and a clear code so the UI can steer
+      // the user to typing instead.
+      const status = error?.status ?? error?.response?.status;
+      if (status === 429) {
+        return res.status(503).json({
+          code: "voice_unavailable",
+          error: "Voice input is temporarily unavailable. Please type your message instead.",
+        });
+      }
+
+      res.status(500).json({
+        code: "transcribe_failed",
+        error: "Voice input didn't work this time. Please try again, or type your message instead.",
+      });
     }
   });
 
