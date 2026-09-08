@@ -40,12 +40,19 @@ interface PromptContext {
 const TOKEN_BUDGET = 30000;
 const CHARS_PER_TOKEN = 4;
 
+// These are per-message CEILINGS on each section of the (cached) system prompt.
+// The three big ones (memoryContext, referenceDocuments, fileAttachments) are the
+// dominant input cost. referenceDocuments/fileAttachments were trimmed once the
+// framework wiki became the primary, on-demand source for Gena's corpus — the
+// inline essays are now a small fast-quote selection, not the whole body of work,
+// so they no longer need a 6k cap on every single message. See the token-breakdown
+// log in assemblePrompt() to tune these against real usage.
 const TOKEN_ALLOCATIONS = {
   rolePrompt: 500,
   methodologyFrame: 2000,
   memoryContext: 12000,
-  referenceDocuments: 6000,
-  fileAttachments: 4000,
+  referenceDocuments: 3000,
+  fileAttachments: 2500,
   currentInput: 1000,
   taskPrompt: 500,
   conversationBuffer: 7000,
@@ -206,11 +213,12 @@ ${referenceContent}`);
     // Inject the framework wiki index (a catalog of readable pages) when the
     // caller has enabled wiki navigation. The model reads full pages on demand
     // via the read_wiki_page tool.
+    let wikiIndexSection = "";
     if (context.includeWikiIndex) {
       const { buildWikiIndexSection } = await import("./wikiTools");
-      const wikiIndex = await buildWikiIndexSection("global");
-      if (wikiIndex) {
-        systemPromptParts.push(wikiIndex);
+      wikiIndexSection = await buildWikiIndexSection("global");
+      if (wikiIndexSection) {
+        systemPromptParts.push(wikiIndexSection);
       }
     }
 
@@ -313,6 +321,16 @@ This conversation is primarily between you (the AI thinking partner) and the use
     }
 
     const systemPrompt = systemPromptParts.join("\n\n---\n\n");
+
+    // Token-breakdown log: this is the single biggest input cost per message and
+    // it's cached, so knowing where the tokens actually go (vs. the ceilings above)
+    // is how you tune the caps against real client data. Watch these in prod.
+    console.log(
+      `[PromptAssembler] system prompt ≈ ${estimateTokens(systemPrompt)} tokens ` +
+      `(role=${estimateTokens(roleSection)}, client-memory=${estimateTokens(memorySection)}, ` +
+      `essays=${estimateTokens(referenceSection)}, files=${estimateTokens(fileAttachmentSection)}, ` +
+      `wiki-index=${estimateTokens(wikiIndexSection)}, task=${estimateTokens(taskSection)})`
+    );
 
     const conversationHistory: ConversationMessage[] = [];
     
