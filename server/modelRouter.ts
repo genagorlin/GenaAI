@@ -136,16 +136,11 @@ async function generateAnthropicResponse(params: Omit<GenerateResponseParams, "p
   // caches the ~30k token system prompt (and the tool definitions, which render
   // before it) so back-to-back turns within ~5 minutes only pay ~10% of the
   // input cost on the cached prefix.
-  // 1-hour cache TTL (vs the 5-minute default). The ~30k-token system prompt is
-  // our single biggest input cost. A 1h write costs slightly more up front (~2x
-  // base vs ~1.25x) but means users who send messages minutes-to-an-hour apart
-  // still hit the cache instead of re-paying full input on every turn — which is
-  // exactly the sporadic-usage pattern that otherwise dominates the bill.
   const systemBlocks = [
     {
       type: "text" as const,
       text: systemPrompt,
-      cache_control: { type: "ephemeral" as const, ttl: "1h" as const },
+      cache_control: { type: "ephemeral" as const },
     },
   ];
 
